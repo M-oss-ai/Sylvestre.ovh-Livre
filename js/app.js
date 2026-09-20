@@ -228,7 +228,11 @@
 
     majApercu();
     $overlay.classList.remove("hidden");
-    $fTitle.focus();
+    /* Pas de focus automatique sur un ecran tactile : il ouvre le clavier,
+       qui recouvre aussitot l'apercu de la couverture — precisement ce qu'on
+       vient d'ouvrir la fenetre pour regarder. Au clavier physique, donner le
+       focus reste le bon comportement. */
+    if (!window.matchMedia("(pointer: coarse)").matches) $fTitle.focus();
   }
 
   function fermerModale() {

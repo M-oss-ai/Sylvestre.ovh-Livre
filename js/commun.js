@@ -175,12 +175,112 @@ window.Lib = (() => {
        null (aucune image)
   */
 
+  /* ---------- Réduction de l'image avant l'envoi ----------
+
+     Une photo de téléphone pèse 4 à 12 Mo et peut atteindre 50 millions
+     de pixels. Le serveur la refusait, et l'envoyer telle quelle sur un
+     réseau mobile serait long pour un résultat affiché sur 92 px de
+     large. On la ramène donc ici aux dimensions utiles : ce qui part ne
+     dépasse plus quelques dizaines de kilo-octets, et plus aucune photo
+     n'est refusée pour son poids.
+
+     Effet de bord précieux sur iPhone : les photos y sont en HEIC, que le
+     serveur ne sait pas lire — c'est pourquoi une capture d'écran (PNG)
+     passait quand une photo ne passait pas. Safari, lui, sait décoder le
+     HEIC : en repassant par un canevas, on l'envoie en WebP ou en JPEG.
+
+     Le serveur revalide tout de toute façon : ceci est un confort, pas
+     un contrôle de sécurité. */
+
+  const COTE_MAX_ENVOI = 1200; // large : reste net même sur écran Retina
+
+  /** Décode le fichier, en respectant l'orientation notée dans l'EXIF. */
+  async function decoderImage(file) {
+    if (typeof createImageBitmap === "function") {
+      try {
+        // Les capteurs n'écrivent pas la photo tournée : ils ajoutent une
+        // étiquette « à afficher pivotée ». Sans cette option, toutes les
+        // photos prises en portrait partiraient couchées.
+        return await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch (e) {
+        /* option ou format non gérés : on tente le repli ci-dessous */
+      }
+    }
+    return await new Promise((ok, non) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); ok(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); non(new Error("illisible")); };
+      img.src = url;
+    });
+  }
+
+  /** WebP si le navigateur sait le produire, JPEG sinon. */
+  function versBlob(canvas) {
+    return new Promise((resolve) => {
+      canvas.toBlob(
+        (webp) => {
+          // Un navigateur sans WebP ne renvoie pas null : il retombe
+          // silencieusement sur du PNG, bien plus lourd. D'où le test
+          // sur le type réellement obtenu plutôt que sur la présence.
+          if (webp && webp.type === "image/webp") return resolve(webp);
+          canvas.toBlob((jpeg) => resolve(jpeg || webp), "image/jpeg", 0.85);
+        },
+        "image/webp",
+        0.85
+      );
+    });
+  }
+
+  async function reduireImage(file) {
+    // Un GIF animé perdrait son animation en passant par un canevas.
+    if (file.type === "image/gif") return file;
+
+    let source;
+    try {
+      source = await decoderImage(file);
+    } catch (e) {
+      return file; // format que le navigateur ne sait pas lire : au serveur de trancher
+    }
+
+    const large = source.width;
+    const haut = source.height;
+    const ratio = Math.min(1, COTE_MAX_ENVOI / Math.max(large, haut));
+    const fermer = () => { if (source.close) source.close(); };
+
+    // Déjà petite et déjà légère : on garde l'original, dont l'encodage
+    // est souvent meilleur que ce que produirait un ré-encodage.
+    if (ratio === 1 && file.size <= 600 * 1024) { fermer(); return file; }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(large * ratio));
+    canvas.height = Math.max(1, Math.round(haut * ratio));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { fermer(); return file; }
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    fermer();
+
+    const blob = await versBlob(canvas);
+    if (!blob || blob.size >= file.size) return file; // aucun gain
+    const ext = blob.type === "image/webp" ? "webp" : "jpg";
+    return new File([blob], "photo." + ext, { type: blob.type, lastModified: Date.now() });
+  }
+
   function wireImagePicker({ dropzone, urlInput, fileInput, statusEl, onChange }) {
-    function depuisFichier(file) {
-      if (!file || !file.type.startsWith("image/")) {
+    async function depuisFichier(choisi) {
+      if (!choisi || !choisi.type.startsWith("image/")) {
         if (statusEl) statusEl.textContent = "Ce fichier n'est pas une image.";
         return;
       }
+      if (statusEl) statusEl.textContent = "Préparation de l'image…";
+
+      let file = choisi;
+      try {
+        file = await reduireImage(choisi);
+      } catch (e) {
+        file = choisi; // la réduction est un confort : son échec ne doit rien bloquer
+      }
+
       const max = limite("imageMax", 3 * 1024 * 1024);
       if (file.size > max) {
         if (statusEl) statusEl.textContent = "Image trop lourde (" + tailleLisible(max) + " maximum).";
@@ -188,7 +288,11 @@ window.Lib = (() => {
       }
       if (urlInput) urlInput.value = "";
       onChange({ type: "file", file, apercu: URL.createObjectURL(file) });
-      if (statusEl) statusEl.textContent = "Image prête : " + file.name;
+      if (statusEl) {
+        statusEl.textContent = file === choisi
+          ? "Image prête : " + choisi.name
+          : "Image prête (réduite à " + tailleLisible(file.size) + ")";
+      }
     }
 
     if (urlInput) {

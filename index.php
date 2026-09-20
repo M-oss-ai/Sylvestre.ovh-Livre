@@ -131,7 +131,8 @@ $csrf    = jeton_csrf();
           <img id="cover-preview" class="cover-preview hidden" alt="Aperçu de la couverture">
           <div id="cover-placeholder" class="cover-placeholder">
             <span class="cover-icon" aria-hidden="true">🖼️</span>
-            <span>Glissez-déposez une image ici<br>ou utilisez les options ci-dessous</span>
+            <span class="indice-souris">Glissez-déposez une image ici<br>ou utilisez les options ci-dessous</span>
+            <span class="indice-tactile">Appuyez ici pour choisir une photo</span>
           </div>
         </div>
 

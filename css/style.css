@@ -571,7 +571,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.28);
   color: var(--text);
-  font-size: 15px;
+  /* 16px est un seuil, pas un choix esthetique : en dessous, iOS agrandit
+     la page des qu on touche le champ, et c est ce zoom qui permet ensuite
+     de faire glisser le contenu de gauche a droite. */
+  font-size: 16px;
   font-family: inherit;
   appearance: none;
   -webkit-appearance: none;
@@ -980,13 +983,57 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .about-card .hint { margin-top: 4px; }
 
+/* ---------- Tactile ---------- */
+
+/* Sans ceci, un double-appui rapide sur une carte ou un bouton zoome la
+   page : le navigateur attend un eventuel second appui avant d agir.
+   « manipulation » supprime ce geste-la et garde le pincement, qui reste
+   le moyen d agrandir pour qui en a besoin. */
+button,
+a,
+label,
+input,
+select,
+.card,
+.dropzone,
+.filter-btn,
+.cover-result {
+  touch-action: manipulation;
+}
+
+/* Sur un telephone, la zone de depot EST le selecteur de fichier : on
+   retire le bouton qui refaisait exactement la meme chose juste en
+   dessous, et on remplace le texte qui parle de glisser-deposer. */
+.indice-tactile { display: none; }
+
+@media (pointer: coarse) {
+  .indice-souris { display: none; }
+  .indice-tactile { display: block; }
+  .cover-actions-buttons .file-label { display: none; }
+}
+
 /* ---------- Responsive (l'app est pensée d'abord pour le téléphone) ---------- */
 
 @media (max-width: 640px) {
-  .topbar-row h1 { font-size: 19px; }
-  .topbar-row { flex-wrap: wrap; }
-  #btn-add { padding: 11px 14px; font-size: 13px; }
-  .modal { padding: 16px; }
+  /* En passant a la ligne, le bloc d actions emportait l avatar avec le
+     bouton et le laissait cale a gauche. On repartit donc en grille : titre
+     et avatar sur la premiere ligne, bouton pleine largeur sous eux, a
+     portee du pouce. « display: contents » dissout le conteneur pour que
+     ses deux enfants entrent directement dans la grille. */
+  .topbar-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "titre avatar" "ajout ajout";
+    align-items: center;
+    gap: 10px 12px;
+  }
+  .topbar-row h1 { grid-area: titre; font-size: 19px; }
+  .topbar-actions { display: contents; }
+  .avatar-btn { grid-area: avatar; }
+  #btn-add { grid-area: ajout; width: 100%; padding: 13px 14px; font-size: 14px; }
+  /* Clavier ouvert, « vh » compte toujours l ecran entier et la modale
+     debordait. « dvh » suit la hauteur reellement visible. */
+  .modal { padding: 16px; max-height: 92dvh; }
 }
 
 /* En dessous de ~560px : cartes en liste horizontale (image à gauche),

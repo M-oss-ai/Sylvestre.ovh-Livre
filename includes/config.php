@@ -325,7 +325,7 @@ define('MDP_MAX', min(4096, max(MDP_MIN + 1, (int) env('MDP_MAX', '200'))));
 /* Taille du fichier reçu, en octets, avant traitement. Doit rester
    SOUS « upload_max_filesize » et « post_max_size » du .user.ini :
    au-delà, PHP refuse la requête avant que ce contrôle ne s'exécute. */
-define('IMAGE_TAILLE_MAX', max(65536, (int) env('IMAGE_TAILLE_MAX', '3145728')));
+define('IMAGE_TAILLE_MAX', max(65536, (int) env('IMAGE_TAILLE_MAX', '8388608')));
 
 /* Plus grand côté de l'image stockée, en pixels. Les cartes font 210 à
    280 px de large : 600 px reste net sur un écran Retina. */
