@@ -133,7 +133,7 @@ define('REMEMBER_DUREE_VIP', max(0, (int) env('REMEMBER_DUREE_VIP', '31536000'))
 /* Nombre maximum d'appareils mémorisés (« se souvenir de moi ») par
    compte illimité. Au-delà, le plus ancien jeton est supprimé : un vieux
    téléphone revendu ne garde pas un accès valide un an. */
-define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '10')));
+define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
 
 /* ---------------------------------------------------------------------
    Identification du client — limiteurs et journal de sécurité
