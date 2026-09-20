@@ -82,7 +82,13 @@ sortie d'erreur, uniquement quand quelque chose mérite votre attention :
 - des e-mails ont été définitivement abandonnés après plusieurs essais ;
 - la file n'est toujours pas vide après le passage, ce qui signifie que
   le serveur SMTP refuse — donc plus aucune inscription ni
-  réinitialisation n'aboutit.
+  réinitialisation n'aboutit ;
+- le script n'a pas pu s'exécuter du tout, typiquement parce que la base
+  de données est injoignable. Il se terminait auparavant en **succès**
+  dans ce cas, après avoir écrit une page d'erreur HTML dans le journal
+  de la tâche planifiée : une panne totale de base de données était donc
+  précisément le seul incident dont le réglage « uniquement en cas
+  d'erreur » ne vous prévenait jamais.
 
 Le silence devient alors une information : tout va bien. Sans ce code de
 retour, le réglage « uniquement en cas d'erreur » ne produirait jamais
@@ -148,6 +154,39 @@ importantes :
 | `purger.php` | Entretien de la base, lancé par le cron |
 | `js/*.js` · `css/style.css` | Navigateur |
 | `uploads/` | Images envoyées (exécution de code interdite) |
+| `tests/` | Tests unitaires — voir `tests/LISEZMOI.md` |
+
+---
+
+## Tests
+
+```bash
+php tests/lancer.php
+```
+
+Sans dépendance, comme le reste : le lanceur tient en deux fichiers. Le
+script se termine avec un code de retour non nul en cas d'échec.
+
+Pour n'exécuter qu'une partie des fichiers, passez un fragment de leur
+nom — `php tests/lancer.php mot_de_passe`.
+
+**MySQL doit tourner**, même si aucun de ces tests n'interroge la base :
+`includes/config.php` ouvre une connexion PDO dès son inclusion, et il
+n'y a pas moyen de charger les fonctions du projet sans elle. La
+connexion est ensuite laissée de côté — les tests pointent sur
+`information_schema`, jamais sur la base du site, et l'envoi d'e-mails
+est coupé pour la durée des tests.
+
+Le périmètre est celui des **fonctions pures** : politique de mot de
+passe, échappement HTML, filtrage des URL d'images, traitement des
+images envoyées (y compris la rotation EXIF et le refus des bombes de
+décompression), identification du client derrière un répartiteur,
+journal de sécurité, jeton CSRF, gabarit des cartes, et les planchers de
+toutes les constantes du `.env`.
+
+Ce qui demande la base de données — limiteur anti force brute, jetons,
+sessions persistantes, file d'e-mails, cloisonnement par compte — n'est
+pas couvert. `tests/LISEZMOI.md` en donne la liste exacte.
 
 ---
 

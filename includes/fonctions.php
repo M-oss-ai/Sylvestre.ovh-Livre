@@ -119,7 +119,9 @@ function e(?string $valeur): string
     return htmlspecialchars((string) $valeur, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-/** Nettoie une saisie texte : trim, suppression des caractères de contrôle, longueur bornée. */
+/** Nettoie une saisie d'une seule ligne : les blancs de mise en forme
+    (tabulation, retours à la ligne) deviennent un espace, les autres
+    caractères de contrôle disparaissent, puis trim et longueur bornée. */
 function texte(mixed $valeur, int $max = 190): string
 {
     $s = is_string($valeur) ? $valeur : '';
@@ -133,7 +135,25 @@ function texte(mixed $valeur, int $max = 190): string
         $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
     }
 
-    $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $s) ?? '';
+    /* Tabulation, retour chariot et saut de ligne : remplacés par UN
+       espace, pas supprimés. Tous les champs qui passent par ici sont sur
+       une seule ligne (titre, auteur, prénom, nom, identifiant, adresse) ;
+       un texte collé depuis deux lignes doit donner « Ligne1 Ligne2 » et
+       non « Ligne1Ligne2 », qui soude deux mots sans prévenir.
+
+       Les laisser passer, comme c'était le cas, n'ouvrait aucune faille —
+       journal_securite() neutralise déjà les retours à la ligne, et
+       envoyer_email_smtp() refuse un destinataire ou un sujet qui en
+       contient. Mais un titre de série pouvait en contenir, alors que la
+       fonction annonce le contraire, et personne n'aurait eu de raison
+       d'aller vérifier. */
+    $s = preg_replace('/[\x09\x0A\x0D]+/u', ' ', $s) ?? '';
+
+    /* Les autres caractères de contrôle n'ont, eux, aucune représentation
+       à l'écran : un octet nul ou un échappement ANSI glissé dans un titre
+       finit en base, puis dans le journal, puis dans un e-mail. */
+    $s = preg_replace('/[\x00-\x1F\x7F]/u', '', $s) ?? '';
+
     $s = trim($s);
     if (mb_strlen($s, 'UTF-8') > $max) {
         $s = mb_substr($s, 0, $max, 'UTF-8');
