@@ -653,13 +653,16 @@ switch ($action) {
 
         /* Ce frein protège l'adresse IP du SERVEUR : c'est elle que
            MangaDex verrait s'acharner, et elle que MangaDex bloquerait.
-           Chaque recherche compte, réussie ou non. */
-        $attente = limiteur_bloque_depuis('couverture');
-        if ($attente > 0) {
-            reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
-                'Trop de recherches. Réessayez dans ' . $attente . ' secondes.'], 429);
+           Chaque recherche compte, réussie ou non. Les comptes au forfait
+           illimité en sont exemptés, comme pour les autres plafonds. */
+        if (couverture_recherche_plafonnee($moi)) {
+            $attente = limiteur_bloque_depuis('couverture');
+            if ($attente > 0) {
+                reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
+                    'Trop de recherches. Réessayez dans ' . $attente . ' secondes.'], 429);
+            }
+            limiteur_echec('couverture', COUVERTURE_MAX, COUVERTURE_BLOCAGE);
         }
-        limiteur_echec('couverture', COUVERTURE_MAX, COUVERTURE_BLOCAGE);
 
         /* Trois conditions, toutes nécessaires : le site l'autorise,
            l'utilisateur a déclaré sa majorité, et il a effectivement

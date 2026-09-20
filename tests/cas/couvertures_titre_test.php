@@ -1,6 +1,6 @@
 <?php
 /* =====================================================================
-   includes/couvertures.php — les deux fonctions qui ne parlent pas au
+   includes/couvertures.php — les fonctions qui ne parlent pas au
    réseau.
 
    Le reste du fichier interroge MangaDex : hors du périmètre de cette
@@ -113,4 +113,22 @@ test('un titre vide est ignoré au profit du suivant', function () {
     egale('The Traveller', mangadex_titre(['title' => [
         'fr' => '', 'en' => 'The Traveller',
     ]]), 'fr vide, on passe à en');
+});
+
+groupe('couverture_recherche_plafonnee() — l exemption du forfait illimité');
+
+test('le forfait illimité n est pas plafonné', function () {
+    faux(couverture_recherche_plafonnee(['forfait' => 'illimite']), 'aucun frein pour ce forfait');
+});
+
+test('les autres forfaits restent plafonnés', function () {
+    vrai(couverture_recherche_plafonnee(['forfait' => 'standard']), 'le frein par IP s applique toujours');
+    vrai(couverture_recherche_plafonnee(['forfait' => 'gratuit']), 'idem pour un autre forfait quelconque');
+});
+
+test('un utilisateur sans forfait connu reste plafonné par défaut', function () {
+    /* Absence de donnée = comportement le plus restrictif, jamais
+       l inverse : un défaut permissif exempterait silencieusement
+       n importe qui d un tableau incomplet. */
+    vrai(couverture_recherche_plafonnee([]), 'clé « forfait » absente');
 });

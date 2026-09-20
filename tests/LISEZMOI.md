@@ -186,7 +186,8 @@ de données ni le réseau.
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
-(câblage), `titre_normalise`, `mangadex_titre`, `carte_html`, les
+(câblage), `titre_normalise`, `mangadex_titre`,
+`couverture_recherche_plafonnee`, `carte_html`, les
 planchers de toutes les constantes — y compris `COUVERTURE_*` et le
 défaut restrictif de `COUVERTURE_CONTENU_ADULTE` —, et les contrôles de forme qui
 précèdent une requête (`valider_profil`, `jeton_action_valide`,

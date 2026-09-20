@@ -377,13 +377,16 @@
     majApercu();
   });
 
-  /* Recherche automatique de la couverture DU PROCHAIN TOME.
+  /* Recherche automatique de la couverture d'un tome précis. L'appel passe
+     par notre propre api.php, qui interroge MangaDex depuis le serveur —
+     MangaDex refuse les appels directs du navigateur, et ce détour a
+     l'avantage de ne plus exposer l'adresse IP du visiteur à un tiers.
 
-     On ne cherche plus une série mais un tome précis : celui qu'il reste
-     à emprunter, soit « tome actuel + 1 ». L'appel passe par notre propre
-     api.php, qui interroge MangaDex depuis le serveur — MangaDex refuse
-     les appels directs du navigateur, et ce détour a l'avantage de ne
-     plus exposer l'adresse IP du visiteur à un tiers. */
+     Le tome recherché dépend du statut : une série « terminée » ou
+     « abandonnée » ne sera plus empruntée plus loin que son tome actuel,
+     la couverture cherchée est donc celle-là. Une série « en cours » ou
+     « à commencer » se cherche sur le PROCHAIN tome à emprunter, soit
+     « tome actuel + 1 ». */
   async function chercherCouverture() {
     const titre = $fTitle.value.trim();
     if (!titre) {
@@ -391,7 +394,9 @@
       $fTitle.focus();
       return;
     }
-    const tome = Math.max(1, (parseInt($fVolume.value, 10) || 0) + 1);
+    const volumeActuel = parseInt($fVolume.value, 10) || 0;
+    const statutFini = $fStatus.value === "termine" || $fStatus.value === "abandon";
+    const tome = Math.max(1, statutFini ? volumeActuel : volumeActuel + 1);
 
     $coverStatus.textContent = "Recherche du tome " + tome + "…";
     $coverResults.classList.add("hidden");

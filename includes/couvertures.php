@@ -103,6 +103,22 @@ function titre_normalise(string $t): string
 }
 
 /**
+ * Le frein anti-force-brute de la recherche de couverture (voir
+ * api.php, action couverture.chercher) protège l'adresse IP du serveur
+ * face à MangaDex — pas les comptes entre eux. Le forfait illimité en
+ * est exempté, comme des autres plafonds de l'application.
+ *
+ * Fonction pure — un simple tableau en entrée, aucune base de données —
+ * pour rester testable : c'est le comptage lui-même (limiteur_echec,
+ * la fenêtre glissante) qui exige une base et reste hors de portée des
+ * tests unitaires, pas la décision de l'appliquer ou non.
+ */
+function couverture_recherche_plafonnee(array $utilisateur): bool
+{
+    return ($utilisateur['forfait'] ?? '') !== 'illimite';
+}
+
+/**
  * Cherche la couverture du tome $tome pour les séries correspondant à
  * $titre. Retourne une liste de candidats, le plus probable en premier :
  *
