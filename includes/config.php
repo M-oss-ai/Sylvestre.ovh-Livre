@@ -459,6 +459,11 @@ define('LEGAL_HEBERGEUR_TEL', env('LEGAL_HEBERGEUR_TEL', '1007'));
    correspondante de mentions-legales.php devient fausse. */
 define('LEGAL_HEBERGEUR_PAYS', env('LEGAL_HEBERGEUR_PAYS', 'France'));
 
+/* Quota de la base de donnees de votre hebergement, en Mo, affiche
+   dans le rapport du cron pour situer la taille actuelle. 0 = ne rien
+   afficher. Chez OVH, l'offre d'entree de gamme plafonne souvent a 200. */
+define('QUOTA_BASE_MO', max(0, (int) env('QUOTA_BASE_MO', '200')));
+
 /* Jeton attendu par purger.php quand il est appelé en HTTP (cron OVH). */
 define('CRON_TOKEN', env('CRON_TOKEN', ''));
 

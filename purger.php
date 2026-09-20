@@ -96,6 +96,7 @@ if (!$en_ligne_de_commande) {
     }
 }
 
+$demarre = microtime(true);
 $resume = [];
 
 /* Jetons de confirmation / réinitialisation expirés. */
@@ -171,11 +172,181 @@ foreach (glob($dossier . '/.part-*.tmp') ?: [] as $fichier) {
 }
 $resume[] = $temporaires . ' temporaire(s)';
 
+/* ---------------------------------------------------------------------
+   Anomalies : ce qui merite qu'on vous previenne
+
+   La tache planifiee d'OVH propose « envoyer un e-mail uniquement en cas
+   d'erreur ». Encore faut-il que ce script sache en signaler une : tant
+   qu'il se terminait toujours en succes, ce reglage ne produisait jamais
+   le moindre message, et une file d'e-mails bloquee pouvait grossir des
+   semaines sans que personne ne le sache.
+
+   On separe donc le compte rendu (normal, silencieux) de l'anomalie
+   (bruyante). Le silence devient alors une information : tout va bien.
+   --------------------------------------------------------------------- */
+$anomalies = [];
+
+if ($mails_abandonnes > 0) {
+    $anomalies[] = $mails_abandonnes . ' e-mail(s) définitivement perdu(s) après '
+                 . MAIL_FILE_MAX_ESSAIS . ' tentatives';
+}
+
+/* Une file encore pleine apres le passage signifie que le serveur SMTP a
+   refuse : plus aucune inscription ni reinitialisation de mot de passe
+   n'aboutit, et rien d'autre ne vous le dirait. */
+$en_attente = (int) $pdo->query('SELECT COUNT(*) FROM mail_file')->fetchColumn();
+if ($en_attente > 0) {
+    $anomalies[] = $en_attente . ' e-mail(s) toujours en attente : le serveur SMTP ne répond pas'
+                 . ' (vérifiez les réglages SMTP_* du .env)';
+}
+$resume[] = $en_attente . ' e-mail(s) en attente';
+
+/* ---------------------------------------------------------------------
+   Rapport d'activite
+
+   Le rapport part par envoyer_email_smtp(), qui declare
+   « charset=UTF-8 » et encode le corps en base64 : les accents y sont
+   rendus fidelement. La copie ecrite sur la sortie standard, elle,
+   voyage dans le journal de la tache planifiee d'OVH, dont l'encodage
+   n'est pas sous notre controle — c'est une copie de secours, servant
+   le jour ou le SMTP est en panne, et un accent mal rendu y est un
+   moindre mal.
+
+   ⚠️ L'alignement des colonnes se calcule en CARACTERES : sprintf()
+   et str_pad() comptent les octets, si bien que chaque « e » accentue
+   decalait sa colonne d'un cran vers la gauche.
+   --------------------------------------------------------------------- */
+function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes,
+                       int $perdus, int $en_attente, float $demarre): string
+{
+    /* Alignement compte par CARACTERES et non par octets : sprintf()
+       et str_pad() mesurent en octets, si bien que chaque « é » du
+       libelle decalait sa colonne d'un cran. mb_str_pad() n'existe
+       qu'a partir de PHP 8.3, on le fait donc a la main. */
+    $lit = static function (string $cle, $valeur): string {
+        $remplissage = max(1, 34 - mb_strlen($cle, 'UTF-8'));
+        return '  ' . $cle . str_repeat(' ', $remplissage) . $valeur . "\n";
+    };
+    $un  = static fn (string $sql) => $pdo->query($sql)->fetch(PDO::FETCH_NUM);
+
+    $u = $un("SELECT COUNT(*), SUM(email_verifie), SUM(forfait = 'illimite'),
+                     SUM(cree_le > NOW() - INTERVAL 1 DAY) FROM utilisateur");
+    $s = $un("SELECT COUNT(*), COUNT(DISTINCT utilisateur_id),
+                     SUM(maj_le > NOW() - INTERVAL 1 DAY) FROM serie");
+    $appareils = $un('SELECT COUNT(*) FROM session_persistante
+                       WHERE remplace_le IS NULL AND expire > NOW()');
+    $bloques   = $un('SELECT COUNT(*) FROM tentative_ip WHERE bloque_jusqu > NOW()');
+    $echecs = $pdo->query('SELECT action, COUNT(*) n, SUM(blocages) b FROM tentative_ip
+                            WHERE maj_le > NOW() - INTERVAL 1 DAY
+                            GROUP BY action ORDER BY n DESC')->fetchAll();
+    $base = $un('SELECT ROUND(SUM(data_length + index_length) / 1048576, 2)
+                   FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
+
+    $fichiers = 0;
+    $octets   = 0;
+    foreach (glob(CHEMIN_RACINE . '/uploads/*.{jpg,jpeg,png,gif,webp}', GLOB_BRACE) ?: [] as $f) {
+        $fichiers++;
+        $octets += (int) @filesize($f);
+    }
+
+    $t  = "============================================================\n";
+    $t .= '  Ma Bibliothèque Manga — rapport du ' . date('d/m/Y') . ' à ' . date('H\hi') . "\n";
+    $t .= "============================================================\n\n";
+
+    $t .= "COMPTES\n";
+    $t .= $lit('Total', (int) $u[0] . ' / ' . MAX_UTILISATEURS
+             . ' (' . (int) round($u[0] * 100 / MAX_UTILISATEURS) . ' % du quota)');
+    $t .= $lit('Adresse confirmée', (int) $u[1]);
+    $t .= $lit('En attente de confirmation', (int) $u[0] - (int) $u[1]);
+    $t .= $lit('Forfait illimité', (int) $u[2]);
+    $t .= $lit('Nouveaux comptes (24 h)', (int) $u[3]);
+
+    $t .= "\nBIBLIOTHÈQUES\n";
+    $t .= $lit('Séries au total', (int) $s[0]);
+    $t .= $lit('Comptes ayant au moins 1 série', (int) $s[1]);
+    $t .= $lit('Moyenne par compte actif', $s[1] > 0 ? round($s[0] / $s[1], 1) : 0);
+    $t .= $lit('Ajoutées ou modifiées en 24 h', (int) $s[2]);
+
+    $t .= "\nSÉCURITÉ (24 dernières heures)\n";
+    if ($echecs) {
+        foreach ($echecs as $e) {
+            $t .= $lit('Échecs « ' . $e['action'] . ' »',
+                       $e['n'] . ' source(s), ' . (int) $e['b'] . ' blocage(s)');
+        }
+    } else {
+        $t .= $lit('Aucune tentative échouée', '-');
+    }
+    $t .= $lit('Blocages encore actifs', (int) $bloques[0]);
+    $t .= $lit('Appareils mémorisés', (int) $appareils[0]);
+
+    /* Un e-mail n'entre dans la file QUE si son envoi immediat a echoue :
+       une valeur non nulle signifie que quelqu'un attend un lien qui
+       n'est jamais parti, pas qu'un envoi soit en cours. */
+    $t .= "\nE-MAILS\n";
+    $t .= $lit('Bloqués (envoi immédiat échoué)', $en_attente);
+    $t .= $lit('Rattrapés à ce passage', $rattrapes);
+    $t .= $lit('Perdus définitivement', $perdus);
+
+    $t .= "\nSTOCKAGE\n";
+    $t .= $lit('Base de données', ($base[0] ?? 0) . ' Mo'
+             . (QUOTA_BASE_MO > 0 ? ' / ' . QUOTA_BASE_MO . ' Mo' : ''));
+    $t .= $lit('Images envoyées', $fichiers . ' fichier(s), '
+             . round($octets / 1048576, 2) . ' Mo');
+
+    $t .= "\nMÉNAGE DE CE PASSAGE\n";
+    foreach ($resume as $ligne) {
+        // Les compteurs d'e-mails ont deja leur propre rubrique plus haut.
+        if (str_contains($ligne, 'e-mail')) {
+            continue;
+        }
+        $t .= '  - ' . $ligne . "\n";
+    }
+
+    if ($anomalies) {
+        $t .= "\nANOMALIE\n";
+        foreach ($anomalies as $a) {
+            $t .= '  - ' . $a . "\n";
+        }
+    }
+
+    return $t . sprintf("\nDurée : %.2f s\n", microtime(true) - $demarre);
+}
+
+$rapport = rapport_texte($pdo, $resume, $anomalies, $mails_envoyes,
+                         $mails_abandonnes, $en_attente, $demarre);
+
+/* Envoi DIRECT, sans passer par la file de rattrapage : un rapport est
+   perissable, le suivant arrive au prochain passage. L'empiler ferait
+   grossir la file d'un message par execution le jour ou le SMTP tombe,
+   en noyant justement les e-mails d'utilisateurs qu'elle doit rejouer.
+   S'il echoue, le texte reste dans le journal de la tache planifiee. */
+if (ADMIN_EMAIL !== '') {
+    $sujet = ($anomalies ? '[ANOMALIE] ' : '') . 'Ma Bibliothèque — rapport du ' . date('d/m/Y');
+    if (!envoyer_email_smtp(ADMIN_EMAIL, $sujet, $rapport)) {
+        error_log('purger.php: rapport non envoye a ' . ADMIN_EMAIL);
+    }
+}
+
 $message = 'Purge ' . date('Y-m-d H:i:s') . ' — ' . implode(', ', $resume);
 error_log($message);
 
-if ($en_ligne_de_commande) {
-    echo $message, PHP_EOL;
-} else {
-    echo $message, "\n";
+if ($anomalies) {
+    error_log('purger.php: ANOMALIE - ' . implode(' | ', $anomalies));
 }
+
+if ($en_ligne_de_commande) {
+    echo $rapport;
+    if ($anomalies) {
+        /* Sortie d'erreur ET code de retour non nul : selon les
+           hebergeurs, c'est l'un ou l'autre qui declenche l'envoi du
+           journal. On fait les deux plutot que de parier sur le bon. */
+        fwrite(STDERR, 'ANOMALIE :' . PHP_EOL);
+        foreach ($anomalies as $a) {
+            fwrite(STDERR, '  - ' . $a . PHP_EOL);
+        }
+        exit(1);
+    }
+    exit(0);
+}
+
+echo $rapport;

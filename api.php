@@ -626,6 +626,11 @@ switch ($action) {
         revoquer_session_persistante();
         journal_securite('compte_supprime', ['utilisateur' => $mon_id, 'identifiant' => $moi['identifiant']]);
 
+        /* Après la suppression, pas avant : on ne prévient que d'un
+           effacement qui a réellement eu lieu. $moi est déjà en mémoire,
+           la ligne n'a plus besoin d'exister pour qu'on sache où écrire. */
+        avertir_compte_supprime((string) $moi['email'], (string) $moi['identifiant']);
+
         $_SESSION = [];
         session_destroy();
 
