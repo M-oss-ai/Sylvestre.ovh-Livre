@@ -394,6 +394,43 @@ define('IMAGE_PIXELS_MAX', plafond_pixels(max(1000000, (int) env('IMAGE_PIXELS_M
 /* Taille maximale d'un fichier de sauvegarde à l'import, en octets. */
 define('IMPORT_TAILLE_MAX', max(65536, (int) env('IMPORT_TAILLE_MAX', '5242880')));
 
+/* ---------------------------------------------------------------------
+   Recherche automatique de couverture (voir includes/couvertures.php)
+   --------------------------------------------------------------------- */
+
+/* Délai accordé à MangaDex, en secondes. Court volontairement : l'appel
+   immobilise un processus PHP le temps de la réponse, et un mutualisé
+   n'en a qu'une poignée. Au-delà, la recherche est déclarée
+   indisponible — ce qui vaut mieux qu'une page qui ne répond plus. */
+define('COUVERTURE_TIMEOUT', max(1, (int) env('COUVERTURE_TIMEOUT', '5')));
+
+/* Nombre de séries proposées. Chacune coûte un appel supplémentaire
+   pour aller chercher ses couvertures : au-delà de quelques-unes,
+   l'attente devient sensible sans aider au choix. */
+define('COUVERTURE_MAX_SERIES', min(10, max(1, (int) env('COUVERTURE_MAX_SERIES', '4'))));
+
+/* Autoriser les séries classées « erotica » par MangaDex (nudité, thèmes
+   sexuels marqués) dans la recherche automatique de couverture.
+
+   BLOQUÉ PAR DÉFAUT, et volontairement : c'est le réglage qui engage la
+   responsabilité de l'éditeur du site, il doit donc être un choix
+   explicite et jamais un oubli.
+
+   Même activé ici, rien ne change tant que l'utilisateur n'a pas
+   lui-même déclaré sa majorité (colonne utilisateur.adulte_confirme) :
+   ce réglage ouvre la possibilité, il ne l'accorde pas.
+
+   Conséquence de le laisser à 0 : les séries concernées deviennent
+   introuvables — Berserk, par exemple, que MangaDex classe « erotica »
+   pour des scènes de nudité et non pour sa violence. */
+define('COUVERTURE_CONTENU_ADULTE', env('COUVERTURE_CONTENU_ADULTE', '0') === '1');
+
+/* Recherches autorisées par IP avant blocage. Ce frein ne protège pas
+   le site mais MangaDex : les appels partent de l'adresse du serveur,
+   et c'est elle qui serait bloquée si quelqu'un s'acharnait. */
+define('COUVERTURE_MAX', max(1, (int) env('COUVERTURE_MAX', '30')));
+define('COUVERTURE_BLOCAGE', max(1, (int) env('COUVERTURE_BLOCAGE', '300')));
+
 /* Borne haute du numéro de tome (colonne INT UNSIGNED). */
 define('TOME_MAX', max(1, (int) env('TOME_MAX', '9999')));
 

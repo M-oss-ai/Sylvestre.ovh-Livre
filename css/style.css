@@ -701,9 +701,11 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .cover-results {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  /* Plus large qu avant : chaque vignette porte desormais le nom de la
+     serie et le numero du tome, qu il faut pouvoir lire. */
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 8px;
-  max-height: 220px;
+  max-height: 300px;
   overflow-y: auto;
 }
 
@@ -715,16 +717,132 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   border: 2px solid transparent;
   border-radius: 6px;
   overflow: hidden;
-  aspect-ratio: 3/4;
   background: rgba(0,0,0,0.3);
   padding: 0;
   display: block;
   width: 100%;
+  text-align: left;
   appearance: none;
   -webkit-appearance: none;
 }
 
-.cover-result img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-result img { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; }
+
+/* Nom de la serie et numero du tome : sans eux, rien ne distingue la
+   couverture du tome demande de celle de la serie servie en repli. */
+.cover-result-nom {
+  display: block;
+  padding: 4px 4px 0;
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--text);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.cover-result-tome {
+  display: block;
+  padding: 1px 4px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold-light);
+}
+
+/* Repli : la couverture de la serie, pas celle du tome demande. Le
+   liseré et le libellé grisé le disent avant le clic. */
+.cover-result-approx { border-color: var(--border); opacity: 0.75; }
+
+/* Proposition de déclarer sa majorité, affichée sous les résultats
+   uniquement quand des séries ont été écartées. */
+.majorite {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* Compte à rebours d'un délai d'attente. « tabular-nums » fige la
+   largeur des chiffres : sans cela le texte qui suit tressaute à
+   chaque seconde, le « 1 » étant plus étroit que le « 8 ». */
+.delai {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-light);
+  white-space: nowrap;
+}
+
+.delai-fini { color: var(--cours); }
+
+/* ---------- Interrupteur ----------
+   Une vraie <input type="checkbox">, simplement habillée : elle reste
+   atteignable au clavier, annoncée comme une case à cocher par les
+   lecteurs d'écran, et cochable en cliquant le libellé. Un <div> avec
+   un gestionnaire de clic n'aurait eu aucune de ces qualités. */
+.bascule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  margin-bottom: 12px;
+  user-select: none;
+}
+
+.bascule-case {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.bascule-piste {
+  flex: none;
+  width: 46px;
+  height: 26px;
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.bascule-pastille {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.18s, background 0.18s;
+}
+
+.bascule-case:checked + .bascule-piste {
+  background: rgba(201, 168, 124, 0.32);
+  border-color: var(--gold);
+}
+
+.bascule-case:checked + .bascule-piste .bascule-pastille {
+  transform: translateX(20px);
+  background: var(--gold-light);
+}
+
+/* Le focus doit rester visible alors que la case elle-même est masquée. */
+.bascule-case:focus-visible + .bascule-piste {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.bascule-libelle { font-size: 14px; color: var(--text); }
+
+.majorite-demande {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.majorite-demande .hint { margin-bottom: 10px; }
+.cover-result-approx .cover-result-tome { color: var(--text-dim); font-weight: 600; }
 .cover-result:hover { border-color: var(--gold); }
 .cover-result:focus-visible { border-color: var(--gold-light); outline: 2px solid var(--gold); outline-offset: 2px; }
 

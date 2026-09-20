@@ -185,6 +185,7 @@ $csrf    = jeton_csrf();
 
 <div id="toast" class="toast hidden" role="status"></div>
 
+<script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
 <script src="<?= e(actif('js/app.js')) ?>" defer></script>
 </body>

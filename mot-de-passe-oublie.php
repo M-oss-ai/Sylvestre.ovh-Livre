@@ -11,8 +11,9 @@ if (utilisateur_actuel()) {
     exit;
 }
 
-$info   = '';
-$erreur = '';
+$info    = '';
+$erreur  = '';
+$attente = 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exiger_csrf();
@@ -21,7 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $bloque = limiteur_bloque_depuis('mdp_oublie');
 
     if ($bloque > 0) {
-        $erreur = 'Trop de demandes. Réessayez dans ' . $bloque . ' secondes.';
+        $erreur = 'Trop de demandes. Réessayez dans';
+        $attente = $bloque;
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $erreur = "Adresse e-mail invalide.";
     } else {
@@ -48,6 +50,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Même message que le compte existe ou non : on ne révèle jamais
         // quelles adresses sont enregistrées.
         $info = "Si un compte existe avec cette adresse, un e-mail de réinitialisation vient d'être envoyé.";
+    }
+}
+
+/* Le blocage est relu à CHAQUE affichage, pas seulement après un envoi
+   de formulaire. Sans cela, recharger la page effacerait le compte à
+   rebours alors que l'attente, elle, court toujours — et l'utilisateur
+   croirait pouvoir réessayer. C'est aussi ce qui fait qu'un
+   rechargement reprend au bon chiffre : le serveur recalcule, rien
+   n'est mémorisé côté navigateur. */
+if ($attente === 0 && $erreur === '' && $info === '') {
+    $attente = limiteur_bloque_depuis('mdp_oublie');
+    if ($attente > 0) {
+        $erreur = 'Trop de demandes. Réessayez dans';
     }
 }
 
@@ -78,7 +93,9 @@ $csrf = jeton_csrf();
     <?php endif; ?>
 
     <?php if ($erreur): ?>
-      <div class="alert alert-error" role="alert"><?= e($erreur) ?></div>
+      <div class="alert alert-error" role="alert">
+        <?= e($erreur) ?><?php if ($attente > 0): ?> <b class="delai" data-restant="<?= (int) $attente ?>"><?= (int) $attente ?> secondes</b>.<?php endif; ?>
+      </div>
     <?php endif; ?>
 
     <?php if (!$info): ?>
@@ -98,6 +115,8 @@ $csrf = jeton_csrf();
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
   </section>
 </main>
+
+<script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 
 </body>
 </html>

@@ -14,6 +14,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/carte.php';
+require_once __DIR__ . '/includes/couvertures.php';
 
 $moi    = exiger_connexion_api();
 $mon_id = (int) $moi['id'];
@@ -55,7 +56,9 @@ function exiger_mot_de_passe(int $mon_id): void
         return;
     }
     if ($attente > 0) {
-        reponse_json(['ok' => false, 'erreur' =>
+        /* « attente » accompagne le message : le navigateur en fait un
+           compte à rebours, le message reste lisible sans JavaScript. */
+        reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
             'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'], 429);
     }
     reponse_json(['ok' => false, 'erreur' => 'Mot de passe incorrect.'], 403);
@@ -410,7 +413,7 @@ switch ($action) {
 
         $attente = null;
         if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente)) {
-            reponse_json(['ok' => false, 'erreur' => $attente > 0
+            reponse_json(['ok' => false, 'attente' => $attente, 'erreur' => $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
                 : 'Mot de passe actuel incorrect.'], $attente > 0 ? 429 : 422);
         }
@@ -635,6 +638,101 @@ switch ($action) {
         session_destroy();
 
         reponse_json(['ok' => true, 'message' => 'Compte supprimé.', 'redirection' => 'connexion.php']);
+    }
+
+    /* ---------------- Recherche automatique de couverture ----------------
+       L'appel part du serveur et non du navigateur : MangaDex n'envoie
+       pas d'en-tête « Access-Control-Allow-Origin », un fetch direct
+       serait donc refusé. Voir includes/couvertures.php. */
+    case 'couverture.chercher': {
+        $titre = texte($_POST['titre'] ?? '', 190);
+        if ($titre === '') {
+            reponse_json(['ok' => false, 'erreur' => "Saisissez d'abord un titre."], 422);
+        }
+        $tome = max(1, min(TOME_MAX, (int) ($_POST['tome'] ?? 1)));
+
+        /* Ce frein protège l'adresse IP du SERVEUR : c'est elle que
+           MangaDex verrait s'acharner, et elle que MangaDex bloquerait.
+           Chaque recherche compte, réussie ou non. */
+        $attente = limiteur_bloque_depuis('couverture');
+        if ($attente > 0) {
+            reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
+                'Trop de recherches. Réessayez dans ' . $attente . ' secondes.'], 429);
+        }
+        limiteur_echec('couverture', COUVERTURE_MAX, COUVERTURE_BLOCAGE);
+
+        /* Trois conditions, toutes nécessaires : le site l'autorise,
+           l'utilisateur a déclaré sa majorité, et il a effectivement
+           désactivé le filtre. La déclaration seule ne suffit pas — on
+           peut être majeur et vouloir garder le filtre. */
+        $adulte = COUVERTURE_CONTENU_ADULTE
+            && (int) ($moi['adulte_confirme'] ?? 0) === 1
+            && (int) ($moi['filtre_sensible'] ?? 1) === 0;
+        $resultats = chercher_couvertures($titre, $tome, $adulte);
+
+        reponse_json([
+            'ok'        => true,
+            'tome'      => $tome,
+            'resultats' => $resultats,
+            /* Signaler le filtre seulement quand il a pu retirer quelque
+               chose ET que l'utilisateur peut y faire quelque chose. Si
+               le site n'autorise pas la levée, le mentionner ne serait
+               qu'une frustration sans issue. */
+            'filtre'    => COUVERTURE_CONTENU_ADULTE && !$adulte,
+            'message'   => $resultats
+                ? count($resultats) . ' résultat(s) pour le tome ' . $tome
+                : 'Aucune série trouvée pour « ' . $titre . ' ».',
+        ]);
+    }
+
+    /* ---------------- Filtre des images sensibles ----------------
+       Le filtre est actif par défaut. Le désactiver exige d'avoir
+       déclaré sa majorité — déclaration sur l'honneur, jamais une
+       vérification : elle ne vaut que parce qu'elle est faite
+       sciemment, d'où sa trace au journal.
+
+       Le réglage vient du client, mais il ne décide que de ce que CE
+       compte voit dans SA recherche. Aucun autre droit n'en dépend, et
+       le contenu pornographique reste exclu quoi qu'il arrive. */
+    case 'compte.filtre_sensible': {
+        if (!COUVERTURE_CONTENU_ADULTE) {
+            reponse_json(['ok' => false, 'erreur' => 'Option désactivée sur ce site.'], 403);
+        }
+        $filtrer  = ((string) ($_POST['filtrer'] ?? '1')) === '1';
+        $declare  = ((string) ($_POST['majeur'] ?? '0')) === '1';
+        $confirme = (int) ($moi['adulte_confirme'] ?? 0) === 1;
+
+        /* La déclaration accompagne la première levée du filtre. Une
+           fois acquise, on ne la redemande plus : réactiver puis
+           relever le filtre ne doit pas rejouer la formalité. */
+        if ($declare && !$confirme) {
+            $pdo->prepare('UPDATE utilisateur SET adulte_confirme = 1 WHERE id = ?')
+                ->execute([$mon_id]);
+            journal_securite('majorite_declaree', ['utilisateur' => $mon_id]);
+            $confirme = true;
+        }
+
+        /* Refus net plutôt que correction silencieuse : lever le filtre
+           sans déclaration est une incohérence côté client, pas une
+           préférence à interpréter. */
+        if (!$filtrer && !$confirme) {
+            reponse_json(['ok' => false, 'erreur' =>
+                'Déclarez d\'abord être majeur pour désactiver le filtre.'], 403);
+        }
+
+        $pdo->prepare('UPDATE utilisateur SET filtre_sensible = ? WHERE id = ?')
+            ->execute([$filtrer ? 1 : 0, $mon_id]);
+        journal_securite($filtrer ? 'filtre_sensible_actif' : 'filtre_sensible_leve',
+            ['utilisateur' => $mon_id]);
+
+        reponse_json([
+            'ok'       => true,
+            'filtrer'  => $filtrer,
+            'majeur'   => $confirme,
+            'message'  => $filtrer
+                ? 'Les images sensibles sont filtrées.'
+                : 'Le filtre est désactivé.',
+        ]);
     }
 
     default:

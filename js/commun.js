@@ -67,7 +67,12 @@ window.Lib = (() => {
       if (res.status === 401) {
         window.location.href = "connexion.php";
       }
-      throw new Error(data.erreur || "Une erreur est survenue.");
+      const erreur = new Error(data.erreur || "Une erreur est survenue.");
+      // Les refus pour cause de délai portent le nombre de secondes :
+      // l'appelant peut en faire un compte à rebours plutôt que de
+      // répéter un chiffre qui ne bougera plus.
+      if (data.attente) erreur.attente = data.attente;
+      throw erreur;
     }
     return data;
   }

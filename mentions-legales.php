@@ -182,10 +182,13 @@ $connecte = utilisateur_actuel() !== null;
   <section class="settings-card">
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🌐</span> Services tiers</h2>
     <ul class="legal-puces">
-      <li><b>Jikan / MyAnimeList</b> — la « recherche auto » de couverture envoie le titre
-          que vous avez saisi à <code>api.jikan.moe</code>, depuis votre navigateur. Ce
-          service voit donc ce titre et votre adresse IP. Ne l'utilisez pas si vous
-          préférez l'éviter : toutes les autres fonctions marchent sans.</li>
+      <li><b>MangaDex</b> — la « recherche auto » de couverture envoie le titre que vous
+          avez saisi et le numéro du tome à <code>api.mangadex.org</code>. La requête part
+          de <b>notre serveur, pas de votre navigateur</b> : ce service voit donc le titre
+          recherché, mais <b>pas votre adresse IP</b>. Les vignettes proposées, elles, sont
+          bien chargées depuis <code>uploads.mangadex.org</code> par votre navigateur ; si
+          vous en retenez une, l'adresse de l'image est conservée et rechargée depuis ce
+          site à chaque affichage de la carte. Toutes les autres fonctions marchent sans.</li>
       <li><b>Couvertures liées par URL</b> — si vous enregistrez une couverture pointant
           vers un autre site, votre navigateur la télécharge chez lui à chaque
           affichage. Les images envoyées en fichier, elles, restent sur ce serveur.</li>
