@@ -27,6 +27,11 @@ if (utilisateur_actuel()) {
 
 $erreur      = '';
 $info        = '';
+/* Secondes restantes avant de pouvoir réessayer. Séparé du message :
+   le gabarit en fait un compte à rebours, et le serveur le recalcule à
+   chaque affichage — un rechargement au milieu d'une attente reprend
+   donc au bon chiffre. */
+$attente     = 0;
 $identifiant = '';
 /* Vrai quand les identifiants sont bons mais l'adresse non confirmée :
    c'est ce qui autorise l'affichage du bouton « renvoyer le lien ». */
@@ -51,7 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id <= 0) {
             $erreur = 'Reconnectez-vous pour demander un nouveau lien.';
         } elseif ($bloque > 0) {
-            $erreur = 'Trop de demandes. Réessayez dans ' . $bloque . ' secondes.';
+            $erreur = 'Trop de demandes. Réessayez dans';
+            $attente = $bloque;
         } else {
             limiteur_echec('verif_renvoi', VERIF_RENVOI_MAX, VERIF_RENVOI_BLOCAGE);
 
@@ -78,7 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bloque = limiteur_bloque_depuis('connexion');
 
         if ($bloque > 0) {
-            $erreur = 'Trop de tentatives. Réessayez dans ' . $bloque . ' secondes.';
+            $erreur = 'Trop de tentatives. Réessayez dans';
+            $attente = $bloque;
         } elseif ($identifiant === '' || $mdp === '') {
             $erreur = 'Veuillez remplir les deux champs.';
         } else {
@@ -95,8 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $bloque_compte = $u ? limiteur_bloque_depuis('connexion_compte', 'compte:' . (int) $u['id']) : 0;
 
             if ($bloque_compte > 0) {
-                $erreur = 'Trop de tentatives sur ce compte. Réessayez dans '
-                        . $bloque_compte . ' secondes.';
+                $erreur = 'Trop de tentatives sur ce compte. Réessayez dans';
+                $attente = $bloque_compte;
                 journal_securite('connexion_bloquee_compte', ['utilisateur' => (int) $u['id']]);
             } elseif ($u && password_verify($mdp, $u['mot_de_passe'])) {
                 // Ré-hachage si PHP a changé d'algorithme ou de coût entre-temps
@@ -154,12 +161,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // On note l'identifiant saisi, jamais le mot de passe essayé.
                 journal_securite('connexion_echouee', ['saisie' => $identifiant]);
 
-                $reste  = limiteur_bloque_depuis('connexion');
-                $erreur = $reste > 0
-                    ? 'Trop de tentatives. Réessayez dans ' . $reste . ' secondes.'
+                $reste   = limiteur_bloque_depuis('connexion');
+                $attente = $reste;
+                $erreur  = $reste > 0
+                    ? 'Trop de tentatives. Réessayez dans'
                     : 'Identifiant ou mot de passe incorrect.';
             }
         }
+    }
+}
+
+/* Le blocage est relu à CHAQUE affichage, pas seulement après un envoi
+   de formulaire. Sans cela, recharger la page effacerait le compte à
+   rebours alors que l'attente, elle, court toujours — et l'utilisateur
+   croirait pouvoir réessayer. C'est aussi ce qui fait qu'un
+   rechargement reprend au bon chiffre : le serveur recalcule, rien
+   n'est mémorisé côté navigateur. */
+if ($attente === 0 && $erreur === '') {
+    $attente = limiteur_bloque_depuis('connexion');
+    if ($attente > 0) {
+        $erreur = 'Trop de tentatives. Réessayez dans';
     }
 }
 
@@ -190,7 +211,9 @@ $csrf = jeton_csrf();
     <?php endif; ?>
 
     <?php if ($erreur): ?>
-      <div class="alert alert-error" role="alert"><?= e($erreur) ?></div>
+      <div class="alert alert-error" role="alert">
+        <?= e($erreur) ?><?php if ($attente > 0): ?> <b class="delai" data-restant="<?= (int) $attente ?>"><?= (int) $attente ?> secondes</b>.<?php endif; ?>
+      </div>
     <?php endif; ?>
 
     <?php if ($a_confirmer): ?>
@@ -229,6 +252,7 @@ $csrf = jeton_csrf();
   </section>
 </main>
 
+<script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/auth.js')) ?>" defer></script>
 </body>
 </html>

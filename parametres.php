@@ -348,6 +348,49 @@ $nb_series = (int) $req->fetchColumn();
     <?php endif; ?>
   </section>
 
+  <!-- ---------------- Images sensibles ----------------
+       Affichée seulement si l'administrateur a ouvert la possibilité dans
+       le .env. Sinon la section n'existe pas : proposer un réglage sans
+       effet ne ferait qu'égarer. -->
+  <?php if (COUVERTURE_CONTENU_ADULTE): ?>
+  <?php
+    $majeur  = (int) ($moi['adulte_confirme'] ?? 0) === 1;
+    $filtrer = (int) ($moi['filtre_sensible'] ?? 1) === 1;
+  ?>
+  <section class="settings-card">
+    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🛡️</span> Images sensibles</h2>
+
+    <label class="bascule" for="filtre-sensible">
+      <input type="checkbox" id="filtre-sensible" class="bascule-case"
+             data-majeur="<?= $majeur ? '1' : '0' ?>"
+             <?= $filtrer ? 'checked' : '' ?>>
+      <span class="bascule-piste" aria-hidden="true"><span class="bascule-pastille"></span></span>
+      <span class="bascule-libelle">Filtrer les images sensibles</span>
+    </label>
+
+    <p class="hint">
+      La recherche automatique de couverture écarte les séries classées pour un
+      public adulte par la source : nudité et thèmes sexuels marqués. Ce classement
+      porte sur le contenu sexuel et non sur la violence, si bien que plusieurs
+      seinen courants s'y trouvent et restent introuvables tant que le filtre est
+      actif. Les contenus pornographiques ne sont jamais proposés, filtre actif ou non.
+    </p>
+
+    <!-- Toujours présent dans le HTML, masqué tant qu'il ne sert à rien :
+         c'est le JavaScript qui le révèle quand on tente de lever le
+         filtre sans avoir déclaré sa majorité. -->
+    <!-- Masqué au chargement, quel que soit l'état : il n'apparaît qu'au
+         moment où l'on tente de lever le filtre. L'afficher d'emblée
+         reviendrait à proposer du contenu adulte à quelqu'un qui n'a rien
+         demandé. -->
+    <div id="bloc-majorite" class="majorite-demande hidden">
+      <p class="hint">
+        Désactiver ce filtre affichera des couvertures réservées à un public adulte.
+      </p>
+      <button id="btn-majorite" type="button" class="btn btn-primary full">J'ai 18 ans ou plus</button>
+    </div>
+  </section>
+  <?php endif; ?>
   <!-- ---------------- Données ---------------- -->
   <section class="settings-card">
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">💾</span> Données</h2>
@@ -415,6 +458,7 @@ $nb_series = (int) $req->fetchColumn();
 
 <div id="toast" class="toast hidden" role="status"></div>
 
+<script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
 <script src="<?= e(actif('js/settings.js')) ?>" defer></script>
 </body>

@@ -185,10 +185,17 @@ de données ni le réseau.
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
-`envoyer_email`, `envoyer_email_smtp` (validation), `carte_html`, les
-planchers de toutes les constantes, et les contrôles de forme qui
+`envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
+(câblage), `titre_normalise`, `mangadex_titre`, `carte_html`, les
+planchers de toutes les constantes — y compris `COUVERTURE_*` et le
+défaut restrictif de `COUVERTURE_CONTENU_ADULTE` —, et les contrôles de forme qui
 précèdent une requête (`valider_profil`, `jeton_action_valide`,
 `verifier_session_persistante`, `supprimer_images_locales`).
+
+**Non couvert, faute de réseau** — `mangadex_get` et
+`chercher_couvertures`, qui interrogent MangaDex. Le classement des
+résultats, lui, repose sur `titre_normalise`, qui est testé : c'est la
+partie qui décide quelle série remonte en tête.
 
 **Non couvert, faute de base de données** — le limiteur anti force brute
 (`limiteur_echec`, `limiteur_bloque_depuis`, le doublement des durées, la

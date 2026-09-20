@@ -228,7 +228,11 @@
 
     majApercu();
     $overlay.classList.remove("hidden");
-    $fTitle.focus();
+    /* Pas de focus automatique sur un ecran tactile : il ouvre le clavier,
+       qui recouvre aussitot l'apercu de la couverture — precisement ce qu'on
+       vient d'ouvrir la fenetre pour regarder. Au clavier physique, donner le
+       focus reste le bon comportement. */
+    if (!window.matchMedia("(pointer: coarse)").matches) $fTitle.focus();
   }
 
   function fermerModale() {
@@ -373,62 +377,113 @@
     majApercu();
   });
 
-  // Recherche automatique de couverture (API publique Jikan / MyAnimeList)
-  document.getElementById("btn-search-cover").addEventListener("click", async () => {
-    const q = $fTitle.value.trim();
-    if (!q) {
+  /* Recherche automatique de la couverture DU PROCHAIN TOME.
+
+     On ne cherche plus une série mais un tome précis : celui qu'il reste
+     à emprunter, soit « tome actuel + 1 ». L'appel passe par notre propre
+     api.php, qui interroge MangaDex depuis le serveur — MangaDex refuse
+     les appels directs du navigateur, et ce détour a l'avantage de ne
+     plus exposer l'adresse IP du visiteur à un tiers. */
+  async function chercherCouverture() {
+    const titre = $fTitle.value.trim();
+    if (!titre) {
       $coverStatus.textContent = "Saisissez d'abord un titre.";
       $fTitle.focus();
       return;
     }
-    $coverStatus.textContent = "Recherche en cours…";
+    const tome = Math.max(1, (parseInt($fVolume.value, 10) || 0) + 1);
+
+    $coverStatus.textContent = "Recherche du tome " + tome + "…";
     $coverResults.classList.add("hidden");
     $coverResults.replaceChildren();
+    document.querySelectorAll(".majorite").forEach((n) => n.remove());
 
     try {
-      const res = await fetch(
-        "https://api.jikan.moe/v4/manga?q=" + encodeURIComponent(q) + "&limit=6&sfw=true"
-      );
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
-      const items = (data && data.data) || [];
-      if (!items.length) {
-        $coverStatus.textContent = "Aucun résultat trouvé pour « " + q + " ».";
+      const r = await L.api("couverture.chercher", { titre, tome });
+      const resultats = r.resultats || [];
+      if (!resultats.length) {
+        $coverStatus.textContent = r.message || "Aucun résultat.";
         return;
       }
 
-      // Construction par le DOM (jamais innerHTML) : aucune donnée externe
-      // ne peut être interprétée comme du HTML.
-      let ajoutees = 0;
-      items.forEach((it) => {
-        const url = (it.images && it.images.jpg && (it.images.jpg.image_url || it.images.jpg.large_image_url)) || "";
-        // https seulement : c'est ce que la Content-Security-Policy autorise,
-        // et la seule forme que le serveur acceptera d'enregistrer.
-        if (!/^https:\/\//i.test(url)) return;
+      // Construction par le DOM, jamais innerHTML : aucune donnée venue
+      // d'un service tiers ne peut être interprétée comme du HTML.
+      resultats.forEach((res) => {
+        if (!/^https:\/\//i.test(res.url || "")) return;
+
         const bloc = document.createElement("button");
         bloc.type = "button";
-        bloc.className = "cover-result";
-        bloc.dataset.url = url;
-        bloc.title = it.title || q;
+        bloc.className = "cover-result" + (res.exact ? "" : " cover-result-approx");
+        bloc.dataset.url = res.url;
+        bloc.title = res.exact
+          ? res.serie + " — tome " + res.tome
+          : res.serie + " — couverture de la série (tome " + res.tome + " introuvable)";
+
         const img = document.createElement("img");
-        img.src = url;
-        img.alt = it.title || q;
+        img.src = res.url;
+        img.alt = bloc.title;
         img.loading = "lazy";
         bloc.appendChild(img);
+
+        // Le libellé n'est pas décoratif : sans lui, rien ne distingue la
+        // vraie couverture du tome demandé de celle de la série, servie
+        // en repli. L'utilisateur doit savoir ce qu'il choisit.
+        const nom = document.createElement("span");
+        nom.className = "cover-result-nom";
+        nom.textContent = res.serie;
+        bloc.appendChild(nom);
+
+        const info = document.createElement("span");
+        info.className = "cover-result-tome";
+        info.textContent = res.exact ? "Tome " + res.tome : "Série";
+        bloc.appendChild(info);
+
         $coverResults.appendChild(bloc);
-        ajoutees++;
       });
 
-      if (!ajoutees) {
-        $coverStatus.textContent = "Aucune couverture exploitable pour « " + q + " ».";
+      if (!$coverResults.children.length) {
+        $coverStatus.textContent = "Aucune couverture exploitable.";
         return;
       }
       $coverResults.classList.remove("hidden");
-      $coverStatus.textContent = "Choisissez une couverture ci-dessous.";
+      $coverStatus.textContent = "Choisissez la couverture du tome " + tome + " ci-dessous.";
+
+      /* Certaines séries sont classées « adulte » par la source et ont
+         donc été écartées. Le bouton n'apparaît qu'ici, au moment où
+         l'absence se remarque : proposé en permanence, il ne serait
+         qu'une invitation sans objet. */
+      if (r.filtre) mentionnerFiltre();
     } catch (err) {
-      $coverStatus.textContent = "Recherche indisponible (hors-ligne ou service momentanément inaccessible).";
+      if (err.attente) {
+        $coverStatus.textContent = "Trop de recherches. Réessayez dans ";
+        const compteur = document.createElement("b");
+        compteur.className = "delai";
+        $coverStatus.appendChild(compteur);
+        $coverStatus.appendChild(document.createTextNode("."));
+        window.Delai.lancer(compteur, err.attente);
+      } else {
+        $coverStatus.textContent = err.message || "Recherche indisponible.";
+      }
     }
-  });
+  }
+
+  /* Une mention, pas un bouton : lever le filtre engage l'utilisateur
+     (déclaration de majorité), cela se fait dans les paramètres et en
+     connaissance de cause — pas d'un geste au milieu d'une saisie. */
+  function mentionnerFiltre() {
+    const bloc = document.createElement("p");
+    bloc.className = "majorite";
+    bloc.textContent = "Le filtre des images sensibles a pu écarter des séries. "
+      + "Vous pouvez le désactiver depuis ";
+    const lien = document.createElement("a");
+    lien.href = "parametres.php";
+    lien.textContent = "vos paramètres";
+    bloc.appendChild(lien);
+    bloc.appendChild(document.createTextNode("."));
+    $coverResults.after(bloc);
+  }
+
+  document.getElementById("btn-search-cover").addEventListener("click", chercherCouverture);
 
   $coverResults.addEventListener("click", (e) => {
     const el = e.target.closest(".cover-result");

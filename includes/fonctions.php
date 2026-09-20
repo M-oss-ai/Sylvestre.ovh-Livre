@@ -36,14 +36,17 @@ header('Cache-Control: private, no-cache, must-revalidate');
    - img-src https: → les couvertures peuvent venir d'un site externe
    - img-src blob: → l'aperçu d'un fichier tout juste choisi (avant envoi)
      est affiché via URL.createObjectURL(), qui produit une URL blob:
-   - connect-src api.jikan.moe → recherche automatique de couvertures */
+   - connect-src 'self' uniquement : la recherche automatique de
+     couverture passe désormais par notre propre api.php, qui interroge
+     MangaDex depuis le serveur. Le navigateur ne s'adresse plus à aucun
+     tiers, et l'adresse IP du visiteur n'est plus communiquée. */
 header(
     "Content-Security-Policy: "
     . "default-src 'self'; "
     . "img-src 'self' data: blob: https:; "
     . "style-src 'self'; "
     . "script-src 'self'; "
-    . "connect-src 'self' https://api.jikan.moe; "
+    . "connect-src 'self'; "
     . "form-action 'self'; "
     . "base-uri 'none'; "
     . "object-src 'none'; "
@@ -507,7 +510,7 @@ function utilisateur_actuel(): ?array
 
     $req = $pdo->prepare(
         'SELECT id, identifiant, email, email_verifie, prenom, nom, photo, forfait,
-                session_version, cree_le
+                session_version, adulte_confirme, filtre_sensible, cree_le
            FROM utilisateur WHERE id = ?'
     );
     $req->execute([(int) $id]);

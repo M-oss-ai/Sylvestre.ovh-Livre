@@ -55,6 +55,21 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   -- session est rejetée. C'est ce qui déconnecte RÉELLEMENT les autres
   -- appareils quand on change son mot de passe (voir utilisateur_actuel()).
   `session_version` INT UNSIGNED NOT NULL DEFAULT 0,
+  -- L'utilisateur a-t-il declare etre majeur ? Sert uniquement a la
+  -- recherche automatique de couverture : sans cette declaration, les
+  -- series classees « erotica » par MangaDex ne lui sont pas proposees.
+  -- N'a aucun effet si COUVERTURE_CONTENU_ADULTE vaut 0 dans le .env,
+  -- ce qui est le reglage par defaut.
+  -- Deux colonnes et non une, parce que ce sont deux choses :
+  --   adulte_confirme : l'utilisateur a declare etre majeur. Un fait
+  --     acquis, qu'on ne redemande pas.
+  --   filtre_sensible : le filtre est-il actif en ce moment ? Une
+  --     preference, que l'on rebascule quand on veut — mais seulement
+  --     apres avoir declare sa majorite.
+  -- Les fusionner obligerait a redemander la declaration a chaque fois
+  -- que l'utilisateur reactive le filtre, ce qui n'aurait aucun sens.
+  `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
+  `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1,
   `cree_le`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_utilisateur_identifiant` (`identifiant`),
@@ -212,13 +227,33 @@ CREATE TABLE IF NOT EXISTS `mail_file` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
---  Migration — bases déjà installées
+--  Migrations — bases déjà installées
 --
---  À exécuter UNE FOIS sur une base créée avant la suppression des
---  quotas d'envoi. Sur une base neuve, ces lignes ne font rien (le
---  « IF EXISTS » les rend sans effet), on peut les laisser.
+--  À exécuter sur une base créée avant ces évolutions. Tout est
+--  rejouable sans risque : « IF EXISTS » et « IF NOT EXISTS » rendent
+--  chaque ligne sans effet si elle a déjà été appliquée. Sur une base
+--  neuve, elles ne font rien non plus : on peut les laisser.
 --
---  `mail_envoye` ne servait qu'au comptage des quotas : plus aucun code
---  ne l'écrit ni ne la lit, elle ne ferait que grossir pour rien.
+--  ⚠️ « ADD COLUMN IF NOT EXISTS » est une extension MariaDB, ce qui
+--  couvre les hébergements OVH. Sur un MySQL d'Oracle, retirez le
+--  « IF NOT EXISTS » : la ligne échouera alors si la colonne existe
+--  déjà, ce qui est sans conséquence.
 -- ---------------------------------------------------------------------
+
+--  1. Quotas d'envoi retirés : `mail_envoye` ne servait qu'à leur
+--     comptage. Plus aucun code ne l'écrit ni ne la lit, elle ne ferait
+--     que grossir pour rien.
 DROP TABLE IF EXISTS `mail_envoye`;
+
+--  2. Filtre des images sensibles (recherche automatique de couverture).
+--     Deux colonnes, parce que ce sont deux choses distinctes :
+--       adulte_confirme : l'utilisateur a déclaré être majeur. Un fait
+--         acquis, qu'on ne lui redemande pas.
+--       filtre_sensible : le filtre est-il actif en ce moment ? Une
+--         préférence réversible, modifiable seulement après déclaration.
+--     Les valeurs par défaut sont les plus restrictives : filtre actif,
+--     aucune déclaration. Les comptes existants sont donc protégés sans
+--     que personne ait à intervenir.
+ALTER TABLE `utilisateur`
+  ADD COLUMN IF NOT EXISTS `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1;

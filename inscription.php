@@ -22,6 +22,7 @@ if (utilisateur_actuel()) {
 
 $erreurs = [];
 $envoye  = false;
+$attente = 0;
 $valeurs = ['identifiant' => '', 'email' => '', 'prenom' => '', 'nom' => ''];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -29,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $bloque = limiteur_bloque_depuis('inscription');
     if ($bloque > 0) {
-        $erreurs[] = 'Trop de tentatives depuis cette adresse. Réessayez dans ' . $bloque . ' secondes.';
+        $attente = $bloque;   // affiché en compte à rebours par le gabarit
     } else {
         // Chaque tentative compte (échec ou réussite) : c'est le nombre de
         // comptes créés rapidement depuis une même adresse qu'on limite.
@@ -151,6 +152,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+/* Le blocage est relu à CHAQUE affichage, pas seulement après un envoi
+   de formulaire. Sans cela, recharger la page effacerait le compte à
+   rebours alors que l'attente, elle, court toujours — et l'utilisateur
+   croirait pouvoir réessayer. C'est aussi ce qui fait qu'un
+   rechargement reprend au bon chiffre : le serveur recalcule, rien
+   n'est mémorisé côté navigateur. */
+if ($attente === 0 && !$envoye) {
+    $attente = limiteur_bloque_depuis('inscription');
+}
+
 $csrf = jeton_csrf();
 ?>
 <!DOCTYPE html>
@@ -191,9 +202,12 @@ $csrf = jeton_csrf();
       <p class="hint">Votre bibliothèque vous suit d'un appareil à l'autre.</p>
     </div>
 
-    <?php if ($erreurs): ?>
+    <?php if ($erreurs || $attente > 0): ?>
       <div class="alert alert-error" role="alert">
         <ul>
+          <?php if ($attente > 0): ?>
+            <li>Trop de tentatives depuis cette adresse. Réessayez dans <b class="delai" data-restant="<?= (int) $attente ?>"><?= (int) $attente ?> secondes</b>.</li>
+          <?php endif; ?>
           <?php foreach ($erreurs as $msg): ?>
             <li><?= e($msg) ?></li>
           <?php endforeach; ?>
@@ -260,6 +274,7 @@ $csrf = jeton_csrf();
   </section>
 </main>
 
+<script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/auth.js')) ?>" defer></script>
 </body>
 </html>

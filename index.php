@@ -131,7 +131,8 @@ $csrf    = jeton_csrf();
           <img id="cover-preview" class="cover-preview hidden" alt="Aperçu de la couverture">
           <div id="cover-placeholder" class="cover-placeholder">
             <span class="cover-icon" aria-hidden="true">🖼️</span>
-            <span>Glissez-déposez une image ici<br>ou utilisez les options ci-dessous</span>
+            <span class="indice-souris">Glissez-déposez une image ici<br>ou utilisez les options ci-dessous</span>
+            <span class="indice-tactile">Appuyez ici pour choisir une photo</span>
           </div>
         </div>
 
@@ -184,6 +185,7 @@ $csrf    = jeton_csrf();
 
 <div id="toast" class="toast hidden" role="status"></div>
 
+<script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
 <script src="<?= e(actif('js/app.js')) ?>" defer></script>
 </body>

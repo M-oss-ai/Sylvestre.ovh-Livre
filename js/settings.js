@@ -149,6 +149,69 @@
      Intercepter en AJAX ferait perdre cette proposition — l'utilisateur
      changerait son mot de passe sans que son coffre soit mis à jour. */
 
+  /* ---------------- Filtre des images sensibles ----------------
+     Présent seulement si l'administrateur a ouvert la possibilité dans le
+     .env : sans cela, la carte n'existe pas dans la page.
+
+     Le filtre est actif par défaut. Le lever demande une déclaration de
+     majorité, une seule fois : une fois acquise, l'interrupteur bascule
+     librement dans les deux sens. */
+
+  const $filtre = document.getElementById("filtre-sensible");
+  if ($filtre) {
+    const $demande = document.getElementById("bloc-majorite");
+    const $btnMajeur = document.getElementById("btn-majorite");
+
+    async function enregistrerFiltre(filtrer, majeur) {
+      const r = await L.api("compte.filtre_sensible", {
+        filtrer: filtrer ? "1" : "0",
+        majeur: majeur ? "1" : "0",
+      });
+      $filtre.checked = r.filtrer;
+      $filtre.dataset.majeur = r.majeur ? "1" : "0";
+      $demande.classList.toggle("hidden", r.majeur || r.filtrer);
+      L.toast(r.message);
+    }
+
+    $filtre.addEventListener("change", async () => {
+      const veutLever = !$filtre.checked;
+      const majeur = $filtre.dataset.majeur === "1";
+
+      /* Lever le filtre sans avoir déclaré sa majorité : on repose
+         l'interrupteur et on montre la demande. L'état visible ne doit
+         jamais laisser croire que le filtre est tombé alors qu'il tient
+         toujours côté serveur. */
+      if (veutLever && !majeur) {
+        $filtre.checked = true;
+        $demande.classList.remove("hidden");
+        $btnMajeur.focus();
+        return;
+      }
+
+      $filtre.disabled = true;
+      try {
+        await enregistrerFiltre(!veutLever, majeur);
+      } catch (err) {
+        $filtre.checked = !$filtre.checked; // on rend à l'écran l'état réel
+        L.toast(err.message);
+      } finally {
+        $filtre.disabled = false;
+      }
+    });
+
+    $btnMajeur.addEventListener("click", async () => {
+      $btnMajeur.disabled = true;
+      try {
+        // La déclaration accompagne la levée : c'est ce que l'utilisateur
+        // vient de demander, inutile de lui faire rebasculer l'interrupteur.
+        await enregistrerFiltre(false, true);
+      } catch (err) {
+        L.toast(err.message);
+      } finally {
+        $btnMajeur.disabled = false;
+      }
+    });
+  }
   /* ---------------- Import d'une sauvegarde ---------------- */
 
   const $importInput = document.getElementById("btn-import-all");
@@ -246,10 +309,24 @@
       }
     } catch (err) {
       // Mot de passe refusé : la modale reste ouverte pour réessayer.
+      if (err.attente) {
+        /* Une notification disparaît en trois secondes, or l'attente en
+           dure soixante : elle s'affiche donc sous le champ, où elle
+           reste visible aussi longtemps qu'elle s'applique. */
+        $confirmText.textContent = "Trop de tentatives. Réessayez dans ";
+        const compteur = document.createElement("b");
+        compteur.className = "delai";
+        $confirmText.appendChild(compteur);
+        $confirmText.appendChild(document.createTextNode("."));
+        $confirmOk.disabled = true;
+        compteur.addEventListener("delai-termine", () => { $confirmOk.disabled = false; });
+        window.Delai.lancer(compteur, err.attente);
+        return;
+      }
       L.toast(err.message);
       $confirmPwd.select();
     } finally {
-      $confirmOk.disabled = false;
+      if (!$confirmOk.disabled) $confirmOk.disabled = false;
     }
   }
 
