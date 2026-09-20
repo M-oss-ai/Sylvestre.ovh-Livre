@@ -59,6 +59,40 @@ curl -H "X-Cron-Token: VOTRE_CRON_TOKEN" https://votredomaine.fr/purger.php
 Elle supprime les jetons expirés, les compteurs de tentatives périmés,
 les images orphelines, et rejoue les e-mails qui n'étaient pas partis.
 
+Chaque passage envoie un **rapport d'activité** à `ADMIN_EMAIL` :
+nombre de comptes et de séries, nouveautés des dernières 24 h,
+tentatives de connexion échouées, e-mails bloqués, taille de la base
+et des images, et le détail du ménage effectué.
+
+Ce rapport part en envoi **direct**, sans passer par la file de
+rattrapage : un rapport est périssable, le suivant arrive au passage
+suivant. L'empiler ferait grossir la file d'un message par exécution
+le jour où le SMTP tombe, en noyant les e-mails d'utilisateurs
+qu'elle doit justement rejouer.
+
+Il est aussi écrit sur la sortie standard. **Réglez l'envoi du journal
+OVH sur « uniquement en cas d'erreur »** : vous disposez ainsi d'un
+second canal, indépendant du SMTP de l'application, qui vous atteint
+même le jour où celui-ci est en panne — c'est-à-dire précisément
+quand le rapport ne peut pas vous parvenir autrement.
+
+Le script se termine avec un code de retour non nul, et écrit sur la
+sortie d'erreur, uniquement quand quelque chose mérite votre attention :
+
+- des e-mails ont été définitivement abandonnés après plusieurs essais ;
+- la file n'est toujours pas vide après le passage, ce qui signifie que
+  le serveur SMTP refuse — donc plus aucune inscription ni
+  réinitialisation n'aboutit.
+
+Le silence devient alors une information : tout va bien. Sans ce code de
+retour, le réglage « uniquement en cas d'erreur » ne produirait jamais
+aucun message, et une file bloquée pourrait grossir des semaines sans
+que personne ne le sache.
+
+Le silence ne dit en revanche pas si la tâche s'est bien exécutée : pour
+ça, le manager OVH affiche la date du dernier passage de chaque tâche
+planifiée.
+
 ### Vérifications une fois en ligne
 
 ```bash
@@ -170,8 +204,9 @@ volontairement lent).
 
 Une nouvelle adresse n'est appliquée qu'après confirmation par lien ;
 l'ancienne reste active jusque-là, et **elle est prévenue** — comme elle
-l'est de tout changement de mot de passe. C'est le seul signal qu'a le
-titulaire légitime quand quelqu'un d'autre a son mot de passe.
+l'est de tout changement de mot de passe et de la suppression du compte.
+C'est le seul signal qu'a le titulaire légitime quand quelqu'un d'autre a
+son mot de passe.
 
 **Confidentialité des adresses** — l'inscription répond la même chose que
 l'adresse soit déjà enregistrée ou non, et ne connecte jamais

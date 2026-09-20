@@ -133,7 +133,7 @@ define('REMEMBER_DUREE_VIP', max(0, (int) env('REMEMBER_DUREE_VIP', '31536000'))
 /* Nombre maximum d'appareils mémorisés (« se souvenir de moi ») par
    compte illimité. Au-delà, le plus ancien jeton est supprimé : un vieux
    téléphone revendu ne garde pas un accès valide un an. */
-define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '10')));
+define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
 
 /* ---------------------------------------------------------------------
    Identification du client — limiteurs et journal de sécurité
@@ -458,6 +458,11 @@ define('LEGAL_HEBERGEUR_TEL', env('LEGAL_HEBERGEUR_TEL', '1007'));
    transfert exige des garanties supplémentaires, et la phrase
    correspondante de mentions-legales.php devient fausse. */
 define('LEGAL_HEBERGEUR_PAYS', env('LEGAL_HEBERGEUR_PAYS', 'France'));
+
+/* Quota de la base de donnees de votre hebergement, en Mo, affiche
+   dans le rapport du cron pour situer la taille actuelle. 0 = ne rien
+   afficher. Chez OVH, l'offre d'entree de gamme plafonne souvent a 200. */
+define('QUOTA_BASE_MO', max(0, (int) env('QUOTA_BASE_MO', '200')));
 
 /* Jeton attendu par purger.php quand il est appelé en HTTP (cron OVH). */
 define('CRON_TOKEN', env('CRON_TOKEN', ''));

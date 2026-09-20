@@ -325,6 +325,46 @@ function avertir_mot_de_passe_change(string $email, string $identifiant): void
     );
 }
 
+/**
+ * Prévient qu'un compte vient d'être supprimé.
+ *
+ * C'est l'action la plus irréversible du site, et c'était la seule
+ * sensible qui ne laissait aucune trace chez le titulaire : changer son
+ * mot de passe le prévient, demander un changement d'adresse aussi, mais
+ * tout effacer se faisait en silence.
+ *
+ * Envoyé APRÈS la suppression, et seulement si elle a réussi. La file de
+ * rattrapage (mail_file) ne référence aucun compte : un envoi différé
+ * survit donc à la disparition de celui-ci.
+ */
+function avertir_compte_supprime(string $email, string $identifiant): void
+{
+    envoyer_email(
+        $email,
+        'Votre compte a été supprimé',
+        "Bonjour {$identifiant},
+
+"
+        . "Le compte Ma Bibliothèque Manga associé à cette adresse vient d'être supprimé, "
+        . "ainsi que l'intégralité de la bibliothèque qui lui était rattachée.
+
+"
+        . "Cette suppression est définitive : rien n'a été conservé, et le contenu ne peut "
+        . "pas être restauré.
+
+"
+        . "Si vous êtes à l'origine de cette suppression, vous n'avez rien à faire. Vous "
+        . "pouvez créer un nouveau compte à tout moment :
+"
+        . url_publique('inscription.php') . "
+
+"
+        . "SINON, quelqu'un connaissait votre mot de passe — la suppression l'exige. Le "
+        . "compte étant effacé, il n'y a plus rien à sécuriser ici, mais si vous utilisiez "
+        . "ce mot de passe ailleurs, changez-le sur ces autres sites sans attendre."
+    );
+}
+
 function avertir_changement_email_demande(string $ancien_email, string $identifiant, string $nouveau_email): void
 {
     // L'adresse visée n'est que partiellement affichée : cet e-mail peut

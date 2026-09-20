@@ -670,8 +670,23 @@ function creer_session_persistante(int $utilisateur_id): void
     setcookie('LIVRE_REMEMBER', $jeton, cookie_persistant_params(REMEMBER_DUREE_VIP));
 
     /* Plafond d'appareils : au-delà, les plus anciens jetons partent.
-       Chaque ligne est un accès valide un an, et il s'en créait un par
-       connexion — un vieux téléphone revendu gardait donc son accès.
+       Chaque ligne est un accès valide un an.
+
+       ⚠️ Deux conditions « remplace_le IS NULL », et elles ne font pas la
+       même chose.
+
+       Dans la sous-requête : seuls les jetons ACTIFS occupent une place.
+       Sans elle, les jetons que la rotation vient de remplacer comptaient
+       eux aussi — or il s'en crée un à chaque reconnexion automatique, et
+       purger.php ne les efface qu'une fois par jour. Les 30 emplacements
+       en valaient donc environ 15, et un appareil peu utilisé se faisait
+       éjecter au bout de quelques jours au lieu d'un an.
+
+       Dans le DELETE : un jeton remplacé ne doit JAMAIS être supprimé
+       ici. Il vit encore REMEMBER_SURSIS secondes, le temps qu'une requête
+       parallèle (second onglet, préchargement) qui utilisait l'ancien
+       cookie ne se retrouve pas déconnectée. C'est purger.php qui les
+       ramasse, une fois le sursis écoulé.
 
        La dérivée « AS recents » est obligatoire (MySQL refuse de lire la
        table qu'il modifie), et MAX_APPAREILS est interpolé car un LIMIT
@@ -680,10 +695,12 @@ function creer_session_persistante(int $utilisateur_id): void
     $pdo->prepare(
         "DELETE FROM session_persistante
           WHERE utilisateur_id = ?
+            AND remplace_le IS NULL
             AND id NOT IN (
               SELECT id FROM (
                 SELECT id FROM session_persistante
                  WHERE utilisateur_id = ?
+                   AND remplace_le IS NULL
                  ORDER BY cree_le DESC, id DESC
                  LIMIT {$garde}
               ) AS recents
