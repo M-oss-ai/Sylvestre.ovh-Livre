@@ -488,6 +488,38 @@ function erreur_fatale(string $journal = ''): never
     if ($journal !== '') {
         error_log($journal);
     }
+
+    /* ----------------------------------------------------------------
+       Pas de navigateur au bout du fil ?
+
+       En ligne de commande — purger.php lancé par le cron — ni le code
+       de réponse HTTP ni la page d'erreur ci-dessous n'ont le moindre
+       destinataire. Ce qui en tient lieu est le CODE DE RETOUR, et il
+       doit être NON NUL.
+
+       Sans cette branche, purger.php se terminait en SUCCÈS le jour où
+       la base était injoignable, après avoir écrit une page HTML dans le
+       journal de la tâche planifiée. Le réglage « envoyer le journal
+       uniquement en cas d'erreur » de l'hébergeur ne produisait alors
+       aucun message : une panne totale de base de données passait
+       parfaitement inaperçue, ce qui est exactement ce que le code de
+       retour de purger.php existe pour empêcher (voir sa fin de fichier).
+
+       REQUEST_METHOD est renseigné par tout serveur web, et par lui
+       seul : sa présence signale une vraie requête HTTP. purger.php
+       raisonne déjà de cette façon pour décider s'il doit exiger le
+       jeton du cron.
+       ---------------------------------------------------------------- */
+    if (PHP_SAPI === 'cli' && !isset($_SERVER['REQUEST_METHOD'])) {
+        fwrite(
+            STDERR,
+            'ERREUR FATALE : le script s\'arrête sans avoir fait son travail.'
+            . ($journal !== '' ? PHP_EOL . '  ' . $journal : '')
+            . PHP_EOL
+        );
+        exit(1);
+    }
+
     if (!headers_sent()) {
         http_response_code(500);
         header('Cache-Control: no-store');
