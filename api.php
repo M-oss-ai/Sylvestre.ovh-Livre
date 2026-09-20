@@ -651,17 +651,23 @@ switch ($action) {
         }
         $tome = max(1, min(TOME_MAX, (int) ($_POST['tome'] ?? 1)));
 
-        /* Ce frein protège l'adresse IP du SERVEUR : c'est elle que
-           MangaDex verrait s'acharner, et elle que MangaDex bloquerait.
-           Chaque recherche compte, réussie ou non. Les comptes au forfait
-           illimité en sont exemptés, comme pour les autres plafonds. */
-        if (couverture_recherche_plafonnee($moi)) {
-            $attente = limiteur_bloque_depuis('couverture');
-            if ($attente > 0) {
-                reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
-                    'Trop de recherches. Réessayez dans ' . $attente . ' secondes.'], 429);
-            }
-            limiteur_echec('couverture', COUVERTURE_MAX, COUVERTURE_BLOCAGE);
+        /* Deux protections distinctes, et il faut les distinguer.
+
+           Celle-ci encadre le COMPTE : une règle fixe et annoncée, que
+           l'utilisateur peut vérifier lui-même. La dépasser n'est pas
+           une faute et n'entraîne aucune sanction — ni blocage qui
+           double, ni compteur de récidive : seulement l'attente de la
+           tranche suivante.
+
+           Celle qui protège le SERVEUR vit dans mangadex_get(), sous
+           forme de file d'attente : elle ne compte personne. */
+        $quota   = couverture_quota($moi);
+        $attente = couverture_consommer($mon_id, $quota, COUVERTURE_FENETRE);
+        if ($attente > 0) {
+            reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
+                'Limite atteinte : ' . $quota . ' recherches par '
+                . couverture_tranche_lisible(COUVERTURE_FENETRE)
+                . '. Nouvelle recherche dans ' . $attente . ' secondes.'], 429);
         }
 
         /* Trois conditions, toutes nécessaires : le site l'autorise,
@@ -672,6 +678,22 @@ switch ($action) {
             && (int) ($moi['adulte_confirme'] ?? 0) === 1
             && (int) ($moi['filtre_sensible'] ?? 1) === 0;
         $resultats = chercher_couvertures($titre, $tome, $adulte);
+
+        /* Une liste vide peut vouloir dire deux choses très différentes :
+           la série n'existe pas, ou l'appel n'est jamais parti — file
+           trop longue, ou 429 renvoyé par MangaDex. Dans le second cas
+           l'utilisateur n'y est pour rien : on lui dit quand revenir, et
+           le compte à rebours de js/delai.js s'en charge. */
+        $retard = mangadex_attente_suggeree();
+        if ($resultats === [] && $retard > 0) {
+            /* Rendue, puisqu'elle n'a rien donné et que l'utilisateur
+               n'y est pour rien : son quota ne doit pas payer une
+               indisponibilité du site. */
+            couverture_rendre($mon_id);
+            reponse_json(['ok' => false, 'attente' => $retard, 'erreur' =>
+                'Trop de recherches en cours sur le site. Réessayez dans '
+                . $retard . ' secondes.'], 429);
+        }
 
         reponse_json([
             'ok'        => true,

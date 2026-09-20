@@ -425,11 +425,44 @@ define('COUVERTURE_MAX_SERIES', min(10, max(1, (int) env('COUVERTURE_MAX_SERIES'
    pour des scènes de nudité et non pour sa violence. */
 define('COUVERTURE_CONTENU_ADULTE', env('COUVERTURE_CONTENU_ADULTE', '0') === '1');
 
-/* Recherches autorisées par IP avant blocage. Ce frein ne protège pas
-   le site mais MangaDex : les appels partent de l'adresse du serveur,
-   et c'est elle qui serait bloquée si quelqu'un s'acharnait. */
-define('COUVERTURE_MAX', max(1, (int) env('COUVERTURE_MAX', '30')));
-define('COUVERTURE_BLOCAGE', max(1, (int) env('COUVERTURE_BLOCAGE', '300')));
+/* --- Ce qui protège le SERVEUR ---------------------------------------
+
+   MangaDex tolère environ 5 requêtes par seconde et par adresse IP —
+   celle de l'hébergement, partagée par tous les visiteurs. Une seule
+   recherche coûte 1 + COUVERTURE_MAX_SERIES appels, si bien que deux
+   personnes en même temps suffisent à dépasser la limite sans que
+   personne n'ait rien fait d'anormal.
+
+   D'où une file d'attente et non un quota : les appels sortants sont
+   espacés, et rien n'est compté au nom de qui que ce soit. */
+
+/* Millisecondes entre deux appels sortants, tous visiteurs confondus.
+   250 ms = 4 appels par seconde, sous la limite de 5. */
+define('COUVERTURE_ESPACEMENT', min(2000, max(100, (int) env('COUVERTURE_ESPACEMENT', '250'))));
+
+/* Attente maximale dans cette file, en millisecondes. Au-delà, la
+   recherche répond « réessayez dans N secondes » plutôt que de retenir
+   un processus PHP — denrée rare sur un mutualisé, et la seule
+   ressource que cette borne protège. */
+define('COUVERTURE_FILE_MAX', min(5000, max(200, (int) env('COUVERTURE_FILE_MAX', '2000'))));
+
+/* --- Ce qui encadre chaque COMPTE ------------------------------------
+
+   Une règle fixe et annoncée, sans escalade : COUVERTURE_QUOTA
+   recherches par tranche de COUVERTURE_FENETRE secondes, et au-delà
+   l'attente vaut exactement le temps restant avant la tranche suivante.
+   Rien ne double, rien ne se cumule — se servir d'une fonctionnalité
+   autant qu'elle le permet n'est pas une faute à sanctionner. */
+define('COUVERTURE_FENETRE', min(3600, max(10, (int) env('COUVERTURE_FENETRE', '120'))));
+define('COUVERTURE_QUOTA', min(1000, max(1, (int) env('COUVERTURE_QUOTA', '30'))));
+
+/* Le forfait illimité a un plafond lui aussi, simplement plus haut :
+   sans plafond du tout, une page laissée à boucler occuperait la file
+   toute la journée et en priverait les autres comptes. Jamais sous le
+   quota ordinaire — ce serait un forfait « illimité » plus sévère que
+   les autres. */
+define('COUVERTURE_QUOTA_ILLIMITE',
+    min(5000, max(COUVERTURE_QUOTA, (int) env('COUVERTURE_QUOTA_ILLIMITE', '120'))));
 
 /* Borne haute du numéro de tome (colonne INT UNSIGNED). */
 define('TOME_MAX', max(1, (int) env('TOME_MAX', '9999')));

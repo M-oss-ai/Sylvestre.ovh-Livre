@@ -17,35 +17,100 @@ l'API dépend maintenant du statut du formulaire (`f-status`) :
 - `termine` / `abandon` → le **tome réel** (`tome_actuel`)
 - `cours` / `envie` → **`tome_actuel + 1`** (le prochain à emprunter)
 
-## Recherche de couverture — forfait illimité sans plafond
+## Recherche de couverture — deux protections, et une seule était bonne
 
-**Fichiers** : `api.php` (action `couverture.chercher`),
-`includes/couvertures.php`
+**Fichiers** : `includes/couvertures.php`, `api.php`,
+`includes/config.php`, `livre.sql`, `purger.php`
 
-Le frein anti-force-brute (`limiteur_echec` / `limiteur_bloque_depuis`)
-protège l'adresse IP du **serveur** face à MangaDex, pas les comptes
-entre eux — mais il s'appliquait quand même à tout le monde. Il est
-maintenant ignoré pour les comptes au forfait `illimite`, comme les
-autres plafonds de l'application (nombre de séries, sessions
-persistantes…).
+Vérification faite dans la documentation de MangaDex : la limite est
+d'**environ 5 requêtes par seconde et par adresse IP**, et l'escalade
+en cas de dépassement est `429` → blocage IP temporaire → blocage
+complet de durée non publiée.
 
-La décision (« ce compte est-il exempté ? ») a été extraite dans une
-fonction pure, `couverture_recherche_plafonnee(array $utilisateur): bool`
-(`includes/couvertures.php`), pour rester testable sans base de
-données — le comptage lui-même reste hors de portée des tests unitaires
-(voir `tests/LISEZMOI.md`, section « non couvert, faute de base de
-données »).
+Deux constats ont suivi :
 
-## Tests ajoutés
+1. **Une recherche coûte 1 + `COUVERTURE_MAX_SERIES` appels** (un pour
+   `/manga`, un par série candidate pour `/cover`), soit 5 par défaut.
+   Mesuré : ~1,5 s pour trois appels. Deux personnes qui cherchent en
+   même temps dépassent donc la limite sans avoir rien fait d'anormal.
+2. **L'ancien frein ne protégeait pas ce qu'il prétendait protéger.**
+   `limiteur_echec('couverture', …)` était appelée sans clé, donc
+   indexée sur `ip_client()` — l'IP du **visiteur**. Elle plafonnait
+   chaque visiteur séparément et ne bornait à aucun moment le débit
+   total sortant du serveur. Le commentaire affirmait l'inverse.
 
-**Fichier** : `tests/cas/couvertures_titre_test.php`
+Il y a désormais deux dispositifs, et ils ne font pas le même travail.
 
-Groupe `couverture_recherche_plafonnee() — l'exemption du forfait
-illimité` : forfait illimité non plafonné, autres forfaits plafonnés,
-et défaut restrictif quand le forfait est absent/inconnu (jamais
-permissif par défaut). Suite complète : `php tests/lancer.php` → 332
-tests, tout passe.
+### Ce qui protège le serveur : une file d'attente
+
+`mangadex_attendre_son_tour()` espace les appels sortants de
+`COUVERTURE_ESPACEMENT` millisecondes (250 par défaut, soit 4 appels/s),
+tous visiteurs confondus, via un `flock()` sur un fichier témoin placé
+dans `sys_get_temp_dir()`. **Rien n'est compté, personne n'est
+sanctionné** : les appels attendent leur tour.
+
+L'attente est **bornée** par `COUVERTURE_FILE_MAX` (2 s) : au-delà, la
+recherche répond « réessayez dans N secondes » plutôt que de retenir un
+processus PHP — denrée rare sur un mutualisé, et la seule ressource que
+cette borne protège.
+
+`mangadex_get()` lit aussi l'en-tête `X-RateLimit-Retry-After` des
+réponses 429 et le transforme en délai affichable. Auparavant tout code
+≠ 200 devenait un « recherche indisponible » indifférencié, et
+l'utilisateur réessayait aussitôt — le chemin le plus direct vers le
+blocage complet de l'hébergement.
+
+### Ce qui encadre chaque compte : une règle annoncée
+
+`couverture_quota()` et `couverture_consommer()` : **30 recherches par
+tranche de 2 minutes**, 120 pour le forfait `illimite`. Fenêtre **fixe**
+et non glissante, pour que la règle soit vérifiable de tête.
+
+Dépasser n'est pas une faute : aucune escalade, aucun compteur de
+récidive, l'attente vaut exactement le temps restant avant la tranche
+suivante. C'est ce qui distingue ce quota de `tentative_ip`, qui
+enregistre des **échecs** de mot de passe et double la peine à chaque
+récidive — une mécanique qui n'a rien à faire sur l'usage normal d'une
+fonctionnalité.
+
+Le forfait `illimite` a un plafond lui aussi, simplement plus haut :
+sans plafond du tout, une page laissée à boucler occuperait la file
+toute la journée et en priverait les autres comptes.
+
+### Ce que cela remplace
+
+`COUVERTURE_MAX` et `COUVERTURE_BLOCAGE` n'existent plus, ainsi que
+`couverture_recherche_plafonnee()`. Nouvelles clés `.env` :
+`COUVERTURE_ESPACEMENT`, `COUVERTURE_FILE_MAX`, `COUVERTURE_QUOTA`,
+`COUVERTURE_FENETRE`, `COUVERTURE_QUOTA_ILLIMITE`.
+
+## Tests
+
+**Fichiers** : `tests/cas/couvertures_titre_test.php`,
+`couvertures_reglages_test.php`, `couvertures_rythme_test.php` (nouveau)
+
+Le nouveau fichier a **son propre processus** avec une cadence
+raccourcie (`COUVERTURE_ESPACEMENT=120`, `COUVERTURE_FILE_MAX=300`) :
+il attend réellement, et une suite qui dort deux secondes par cas ne
+serait plus lancée. Il vérifie que l'attente existe pour de bon — sans
+quoi la protection serait décorative — et qu'elle reste bornée.
+
+`couverture_consommer()` n'est pas testée : elle exige une base, comme
+tout ce que liste `tests/LISEZMOI.md` sous « non couvert, faute de base
+de données ». Le **barème** (`couverture_quota`), lui, est une fonction
+pure et il est testé.
+
+Suite complète : `php tests/lancer.php` → **345 tests**, tout passe.
 
 Le changement côté JS (`js/app.js`) n'a pas de test : le projet n'a ni
 Node.js ni harnais de test JS, et `tests/LISEZMOI.md` liste déjà tout
 le JS comme hors périmètre.
+
+## À faire au déploiement
+
+- **Migration SQL obligatoire** : la table `recherche_couverture`
+  (bloc 3 de `livre.sql`, rejouable). Sans elle, toute recherche de
+  couverture tombe en erreur.
+- Nouvelles clés dans le `.env` de production (valeurs par défaut
+  raisonnables si elles sont absentes).
+- `ASSETS_VERSION` à incrémenter dès que `js/` ou `css/` change.

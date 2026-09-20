@@ -15,10 +15,13 @@
 
 declare(strict_types=1);
 
-putenv('COUVERTURE_TIMEOUT=0');        // sans délai, l appel ne partirait jamais
-putenv('COUVERTURE_MAX_SERIES=0');     // zéro série : la recherche n aurait aucun sens
-putenv('COUVERTURE_MAX=0');            // zéro recherche : fonctionnalité morte
-putenv('COUVERTURE_BLOCAGE=0');        // blocage nul : le frein ne freine plus
+putenv('COUVERTURE_TIMEOUT=0');          // sans délai, l appel ne partirait jamais
+putenv('COUVERTURE_MAX_SERIES=0');       // zéro série : la recherche n aurait aucun sens
+putenv('COUVERTURE_ESPACEMENT=0');       // aucun espacement : la file ne freine plus rien
+putenv('COUVERTURE_FILE_MAX=0');         // aucune attente tolérée : la file refuse tout
+putenv('COUVERTURE_QUOTA=0');            // zéro recherche : fonctionnalité morte
+putenv('COUVERTURE_FENETRE=0');          // tranche nulle : la règle n aurait plus de durée
+putenv('COUVERTURE_QUOTA_ILLIMITE=0');   // un « illimité » plus sévère que le standard
 
 require __DIR__ . '/../lanceur.php';
 
@@ -36,12 +39,27 @@ test('COUVERTURE_MAX_SERIES reste entre 1 et 10', function () {
     egale(1, COUVERTURE_MAX_SERIES, 'le .env demandait 0');
 });
 
-test('le frein par IP ne peut pas être supprimé', function () {
-    /* C est le seul garde-fou entre un utilisateur pressé et le blocage
-       de l adresse du serveur par MangaDex — blocage qui priverait
-       TOUS les comptes de la recherche. */
-    egale(1, COUVERTURE_MAX, 'le .env demandait 0 recherche autorisée');
-    egale(1, COUVERTURE_BLOCAGE, 'le .env demandait un blocage de 0 seconde');
+test('la cadence des appels sortants ne peut pas être supprimée', function () {
+    /* C est le seul garde-fou entre le site et le blocage de l adresse
+       du SERVEUR par MangaDex — blocage qui priverait TOUS les comptes
+       de la recherche, pas seulement celui qui a insisté. */
+    egale(100, COUVERTURE_ESPACEMENT, 'le .env demandait 0 ms entre deux appels');
+    egale(200, COUVERTURE_FILE_MAX, 'le .env ne tolérait aucune attente');
+});
+
+test('le quota par compte reste praticable', function () {
+    /* Un quota de zéro ne protégerait rien : il supprimerait la
+       fonctionnalité pour tout le monde, ce qui n est jamais l intention
+       derrière un chiffre mal saisi. */
+    egale(1, COUVERTURE_QUOTA, 'le .env demandait 0 recherche autorisée');
+    egale(10, COUVERTURE_FENETRE, 'le .env demandait une tranche de 0 seconde');
+});
+
+test('« illimité » ne passe jamais sous le quota ordinaire', function () {
+    /* Le .env demandait 0 pour les deux. Un forfait payant plus sévère
+       que le forfait de base serait une régression silencieuse — et
+       personne ne penserait à la chercher là. */
+    vrai(COUVERTURE_QUOTA_ILLIMITE >= COUVERTURE_QUOTA, 'jamais en dessous');
 });
 
 groupe('COUVERTURE_CONTENU_ADULTE — le réglage qui engage l éditeur');

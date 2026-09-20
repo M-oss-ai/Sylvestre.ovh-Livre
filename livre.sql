@@ -257,3 +257,31 @@ DROP TABLE IF EXISTS `mail_envoye`;
 ALTER TABLE `utilisateur`
   ADD COLUMN IF NOT EXISTS `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1;
+
+-- ---------------------------------------------------------------------
+--  3. Quota de recherche de couverture, par compte et par tranche.
+--
+--     Une table à part plutôt qu'une ligne de « tentative_ip » : ce
+--     n'est pas la même chose. « tentative_ip » enregistre des ÉCHECS
+--     et double la peine à chaque récidive, ce qui convient à des mots
+--     de passe essayés au hasard. Chercher une couverture est un usage
+--     normal : on compte des recherches RÉUSSIES, sans escalade, et la
+--     tranche suivante repart entière.
+--
+--     « fenetre_fin » porte la fin de la tranche en cours. Une tranche
+--     échue est repartie à la première recherche suivante, sans qu'un
+--     nettoyage soit nécessaire pour que le compte redevienne bon.
+--
+--     ON DELETE CASCADE : la ligne disparaît avec le compte, comme les
+--     séries et les jetons.
+CREATE TABLE IF NOT EXISTS `recherche_couverture` (
+  `utilisateur_id` INT UNSIGNED NOT NULL,
+  `essais`         INT UNSIGNED NOT NULL DEFAULT 0,
+  `fenetre_fin`    DATETIME     NOT NULL,
+  PRIMARY KEY (`utilisateur_id`),
+  -- Utilisé par purger.php pour effacer les tranches depuis longtemps
+  -- échues : sans purge, une ligne subsiste par compte ayant cherché.
+  KEY `idx_recherche_fenetre` (`fenetre_fin`),
+  CONSTRAINT `fk_recherche_utilisateur` FOREIGN KEY (`utilisateur_id`)
+    REFERENCES `utilisateur` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

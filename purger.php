@@ -126,6 +126,15 @@ $req = $pdo->prepare(
 $req->execute();
 $resume[] = $req->rowCount() . ' compteur(s) de tentatives';
 
+/* Quotas de recherche de couverture : une tranche échue depuis un jour
+   ne sert plus à rien. Rien à conserver au-delà — contrairement aux
+   tentatives, ce compteur ne mémorise aucune récidive. */
+$req = $pdo->prepare(
+    'DELETE FROM recherche_couverture WHERE fenetre_fin < NOW() - INTERVAL 1 DAY'
+);
+$req->execute();
+$resume[] = $req->rowCount() . ' quota(s) de recherche';
+
 /* File de rattrapage : on rejoue ce qui n'était pas parti. Normalement
    vide — elle ne se remplit que quand le serveur SMTP a refusé. */
 [$mails_envoyes, $mails_abandonnes] = traiter_file_mail();

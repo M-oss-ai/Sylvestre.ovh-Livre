@@ -115,20 +115,48 @@ test('un titre vide est ignoré au profit du suivant', function () {
     ]]), 'fr vide, on passe à en');
 });
 
-groupe('couverture_recherche_plafonnee() — l exemption du forfait illimité');
+groupe('couverture_quota() — le barème par compte');
 
-test('le forfait illimité n est pas plafonné', function () {
-    faux(couverture_recherche_plafonnee(['forfait' => 'illimite']), 'aucun frein pour ce forfait');
+test('le forfait illimité a droit à davantage', function () {
+    vrai(couverture_quota(['forfait' => 'illimite']) > couverture_quota(['forfait' => 'standard']),
+        'plus haut que le forfait ordinaire');
+    egale(COUVERTURE_QUOTA_ILLIMITE, couverture_quota(['forfait' => 'illimite']),
+        'exactement le réglage prévu pour lui');
 });
 
-test('les autres forfaits restent plafonnés', function () {
-    vrai(couverture_recherche_plafonnee(['forfait' => 'standard']), 'le frein par IP s applique toujours');
-    vrai(couverture_recherche_plafonnee(['forfait' => 'gratuit']), 'idem pour un autre forfait quelconque');
+test('« illimité » ne veut pas dire sans plafond', function () {
+    /* Sans aucun plafond, une page laissée à boucler occuperait la file
+       toute la journée et en priverait les autres comptes. Le forfait
+       donne droit à plus, pas à tout. */
+    vrai(couverture_quota(['forfait' => 'illimite']) > 0, 'un nombre fini');
+    vrai(is_int(couverture_quota(['forfait' => 'illimite'])), 'un entier de recherches');
 });
 
-test('un utilisateur sans forfait connu reste plafonné par défaut', function () {
-    /* Absence de donnée = comportement le plus restrictif, jamais
-       l inverse : un défaut permissif exempterait silencieusement
-       n importe qui d un tableau incomplet. */
-    vrai(couverture_recherche_plafonnee([]), 'clé « forfait » absente');
+test('les autres forfaits reçoivent le quota ordinaire', function () {
+    egale(COUVERTURE_QUOTA, couverture_quota(['forfait' => 'standard']), 'forfait standard');
+    egale(COUVERTURE_QUOTA, couverture_quota(['forfait' => 'gratuit']), 'forfait quelconque');
+});
+
+test('un forfait absent reçoit le quota ordinaire, pas le plus généreux', function () {
+    /* Absence de donnée = le barème le plus restrictif, jamais
+       l inverse : un défaut permissif accorderait silencieusement le
+       plafond haut à n importe quel tableau incomplet. */
+    egale(COUVERTURE_QUOTA, couverture_quota([]), 'clé « forfait » absente');
+});
+
+groupe('couverture_tranche_lisible() — énoncer la règle');
+
+test('les minutes rondes s écrivent en minutes', function () {
+    /* « 30 recherches par 2 minutes » se vérifie de tête ; « par 120
+       secondes » demande une division avant de savoir si c est
+       raisonnable. */
+    egale('2 minutes', couverture_tranche_lisible(120), 'le réglage par défaut');
+    egale('1 minute', couverture_tranche_lisible(60), 'au singulier');
+    egale('5 minutes', couverture_tranche_lisible(300), 'une tranche plus longue');
+});
+
+test('ce qui ne tombe pas juste reste en secondes', function () {
+    egale('90 secondes', couverture_tranche_lisible(90), 'pas un compte rond de minutes');
+    egale('45 secondes', couverture_tranche_lisible(45), 'moins d une minute');
+    egale('1 seconde', couverture_tranche_lisible(1), 'au singulier');
 });
