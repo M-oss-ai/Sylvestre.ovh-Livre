@@ -1,0 +1,11 @@
+# Configuration locale (identifiants, quotas) — jamais versionnée
+.env
+
+# Images envoyées par les utilisateurs
+/uploads/*
+!/uploads/.htaccess
+
+# Fichiers système / éditeurs
+.DS_Store
+Thumbs.db
+*.log

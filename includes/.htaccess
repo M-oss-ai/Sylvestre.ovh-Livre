@@ -1,0 +1,4 @@
+# Ce dossier ne contient que des fichiers destinés à être chargés par PHP
+# (require_once), jamais demandés directement par un navigateur : accès
+# web totalement bloqué.
+Require all denied

@@ -1,0 +1,45 @@
+# =====================================================================
+# Le dossier uploads/ ne contient que des images envoyées par les
+# utilisateurs. Aucun code ne doit pouvoir y être exécuté, même si un
+# fichier malveillant parvenait à y être déposé.
+#
+# ⚠️ Ne PAS utiliser « php_flag engine off » ici : cette directive
+# n'existe que lorsque PHP tourne en module Apache (mod_php). Chez OVH,
+# comme sur la plupart des hébergements mutualisés, PHP tourne en
+# FPM/CGI : Apache ne connaît pas la directive et renvoie une erreur 500
+# sur TOUT le dossier — donc toutes les images cassées, partout.
+# Les directives ci-dessous font le même travail et fonctionnent dans
+# les deux cas.
+# =====================================================================
+
+Options -Indexes
+
+# Retire l'association « cette extension = à exécuter ». Sans handler,
+# le fichier est servi tel quel, jamais interprété.
+RemoveHandler .php .phtml .phar .php3 .php4 .php5 .php7 .php8 .phps .pht .inc
+RemoveType .php .phtml .phar .php3 .php4 .php5 .php7 .php8 .phps .pht .inc
+
+# Ceinture et bretelles : ces extensions ne sont de toute façon jamais
+# servies. « svg » y figure bien qu'il ne soit pas dans les formats
+# acceptés : un SVG est un document XML qui peut contenir du JavaScript,
+# et servi depuis notre domaine il contournerait la Content-Security-Policy.
+# « tmp » couvre les temporaires d'écriture (.part-xxxx.tmp) : ils ne
+# correspondaient à aucune règle et étaient donc servis tels quels.
+<FilesMatch "\.(?i:php|phtml|phar|php[3-8]|phps|pht|inc|cgi|pl|py|sh|lua|rb|html?|xht|xml|svg|tmp)$">
+  Require all denied
+</FilesMatch>
+
+# Les seuls fichiers légitimes. SetHandler none coupe toute exécution,
+# nosniff empêche le navigateur de « deviner » un autre type que celui
+# annoncé (c'est ce qui transforme une image piégée en page HTML).
+<FilesMatch "\.(?i:jpe?g|png|gif|webp)$">
+  SetHandler none
+  <IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Content-Disposition "inline"
+    # Le nom du fichier est l'empreinte de son contenu : un contenu
+    # différent produit une URL différente. On peut donc mettre en cache
+    # sans limite, sans jamais servir une version périmée.
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </IfModule>
+</FilesMatch>

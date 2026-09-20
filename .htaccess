@@ -1,0 +1,109 @@
+# =====================================================================
+# Fichiers qui ne doivent JAMAIS être servis tels quels au navigateur :
+# ils contiennent des secrets (.env) ou n'ont aucune utilité une fois le
+# site en ligne (documentation, schéma SQL). Les pages PHP, elles, gèrent
+# leur propre protection (voir exiger_connexion() dans fonctions.php).
+# =====================================================================
+
+# Tout fichier « point » : .env, .env.example, .gitignore, .user.ini…
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Les DOSSIERS cachés, que la règle ci-dessus ne couvre pas : FilesMatch
+# ne compare que le nom final, donc « /.git/config » lui échappait — tout
+# l'historique du dépôt (y compris un .env commité par erreur) devenait
+# téléchargeable dès qu'on déploie par « git pull » au lieu du FTP.
+# .well-known en est volontairement absent : c'est par là que passe la
+# validation du certificat SSL (Let's Encrypt).
+<IfModule mod_alias.c>
+    RedirectMatch 404 (?i)/\.(git|svn|hg|bzr|env|idea|vscode)(/|$)
+</IfModule>
+
+# Documentation et schéma de base de données.
+#
+# Ces fichiers restent volontairement présents sur le serveur (c'est
+# pratique pour réinstaller), et c'est cette règle qui les protège :
+# livre.sql décrit tout le schéma, README.md explique en détail comment
+# le site est sécurisé. Ni l'un ni l'autre ne doit être téléchargeable.
+#
+# « \.sql$ » couvre tout fichier SQL, présent ou futur (une sauvegarde
+# déposée à la va-vite, un export oublié) : il vaut mieux une règle trop
+# large qu'un fichier nommé autrement qui passe au travers.
+# Un 404 plutôt qu'un 403 : « accès interdit » confirme que le fichier
+# existe, « introuvable » ne dit rien.
+<IfModule mod_alias.c>
+    RedirectMatch 404 (?i)/(readme\.md|[^/]+\.sql|\.ovhconfig)$
+</IfModule>
+
+# Pas de listing de dossier, et pas de négociation de contenu : sans
+# « -MultiViews », /api peut être servi par api.php, ce qui contourne
+# les règles écrites sur les noms de fichiers.
+Options -Indexes -MultiViews
+
+# Redirige tout accès en http:// vers https:// (le cookie de session n'est
+# marqué "secure" — donc protégé — que sur une connexion chiffrée).
+# localhost/127.0.0.1 exclus : pas de HTTPS en développement local (XAMPP).
+#
+# La condition teste aussi X-Forwarded-Proto : chez OVH, TLS est terminé
+# en amont et la variable HTTPS d'Apache reste vide même sur une
+# connexion chiffrée. Sans ce test, on boucle en redirections infinies.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+    RewriteCond %{HTTP_HOST} !^localhost(:\d+)?$ [NC]
+    RewriteCond %{HTTP_HOST} !^127\.0\.0\.1(:\d+)?$
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+<IfModule mod_headers.c>
+    # N'annonce pas la version de PHP utilisée par le serveur
+    Header always unset X-Powered-By
+    # HSTS : une fois qu'un navigateur a vu ce site en HTTPS, il refuse tout
+    # retour en HTTP pendant 6 mois, même via un lien http:// tapé à la main.
+    # includeSubDomains : sans lui, un sous-domaine oublié servi en clair
+    # reste une porte ouverte pour intercepter les cookies du domaine.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# =====================================================================
+# Performance
+# =====================================================================
+
+# Compression : le HTML, le CSS et le JavaScript perdent 70 à 80 % de
+# leur poids. C'est le réglage avec le meilleur rapport effort/gain de
+# tout ce fichier. (Les images et les polices sont déjà compressées :
+# les repasser à la moulinette coûterait du CPU pour rien.)
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml
+    # « text/javascript » est le type que sert Apache 2.4 récent pour les
+    # .js — sans cette ligne, le JavaScript partait NON compressé, et la
+    # seule mention de « application/javascript » ne servait à rien.
+    AddOutputFilterByType DEFLATE text/javascript application/javascript application/x-javascript
+    AddOutputFilterByType DEFLATE application/json application/xml
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Cache navigateur. css/ et js/ sont servis avec l'empreinte du fichier
+# dans l'URL (voir la fonction actif() dans includes/fonctions.php) :
+# une modification change l'URL, donc un cache d'un an ne risque jamais
+# de servir une version périmée.
+# Les pages PHP, elles, envoient « Cache-Control: no-store » : elles
+# dépendent du compte connecté et ne doivent jamais être mises en cache.
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault                      "access plus 1 hour"
+    ExpiresByType text/css              "access plus 1 year"
+    # Même raison que pour la compression : sans « text/javascript », les
+    # .js retombaient sur ExpiresDefault (1 heure) et tout le travail
+    # autour de ASSETS_VERSION ne servait à rien.
+    ExpiresByType text/javascript       "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/jpeg            "access plus 1 year"
+    ExpiresByType image/png             "access plus 1 year"
+    ExpiresByType image/gif             "access plus 1 year"
+    ExpiresByType image/webp            "access plus 1 year"
+    ExpiresByType image/svg+xml         "access plus 1 year"
+    ExpiresByType text/html             "access plus 0 seconds"
+</IfModule>
