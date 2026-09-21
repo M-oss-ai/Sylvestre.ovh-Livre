@@ -118,6 +118,19 @@ test('chaque statut a un libellé lisible', function () {
     }
 });
 
+test('les libellés restent assez courts pour la pastille', function () {
+    /* Ils s affichent dans la pastille posée sur la couverture, large
+       d une poignée de caractères. « À commencer / envie » y tenait sur
+       trois lignes et recouvrait l image. Le plus long aujourd hui,
+       « Abandonnée », fait dix caractères : douze laisse de la marge
+       sans rouvrir la porte à une phrase entière. */
+    foreach (STATUTS as $cle => $libelle) {
+        vrai(mb_strlen($libelle, 'UTF-8') <= 12,
+            "« {$libelle} » tient dans la pastille ("
+            . mb_strlen($libelle, 'UTF-8') . ' caractères)');
+    }
+});
+
 groupe('actif() — en développement (ASSETS_VERSION vide)');
 
 test('la date de modification du fichier sert de version', function () {

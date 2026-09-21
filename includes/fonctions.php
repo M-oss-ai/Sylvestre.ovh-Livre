@@ -487,9 +487,14 @@ function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$a
    5. Authentification
    --------------------------------------------------------------------- */
 
+/* Ces libellés s'affichent dans la pastille posée sur la couverture,
+   large d'une poignée de caractères. « À commencer / envie » y tenait
+   sur TROIS lignes et recouvrait l'image — d'où des libellés courts,
+   d'un seul mot quand c'est possible. La clé, elle, ne change jamais :
+   c'est la valeur stockée en base. */
 const STATUTS = [
     'cours'   => 'En cours',
-    'envie'   => 'À commencer / envie',
+    'envie'   => 'Envie',
     'termine' => 'Terminée',
     'abandon' => 'Abandonnée',
 ];
