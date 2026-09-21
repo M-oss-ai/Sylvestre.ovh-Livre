@@ -707,6 +707,14 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   gap: 8px;
   max-height: 300px;
   overflow-y: auto;
+  /* Sans ces deux lignes, les lignes de la grille sont dimensionnees
+     contre la HAUTEUR DU CONTENEUR et non contre leur contenu : chaque
+     vignette devient plus courte que ce qu elle porte, et son
+     « overflow: hidden » tranche le titre en deux. Le defaut ne se voit
+     pas sur un ecran large, ou la place ne manque jamais — il se voit
+     sur un telephone, ou le titre disparait a moitie sous le bord. */
+  align-content: start;
+  align-items: start;
 }
 
 /* <button> et non <div> : un résultat de recherche est cliquable, il doit
@@ -1152,6 +1160,12 @@ select,
   /* Clavier ouvert, « vh » compte toujours l ecran entier et la modale
      debordait. « dvh » suit la hauteur reellement visible. */
   .modal { padding: 16px; max-height: 92dvh; }
+  /* Les resultats de recherche ne defilent plus dans leur propre cadre :
+     300 px sur un telephone, c est une ligne et demie de vignettes, et
+     la seconde ligne se devine sous le bord sans qu on sache qu elle est
+     la. Deux zones de defilement imbriquees sont par ailleurs penibles
+     au pouce — on n en garde qu une, celle de la modale. */
+  .cover-results { max-height: none; }
 }
 
 /* En dessous de ~560px : cartes en liste horizontale (image à gauche),

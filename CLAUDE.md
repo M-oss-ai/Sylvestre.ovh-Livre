@@ -143,6 +143,25 @@ fonction indéfinie, ce qu'a révélé une exécution réelle sous `php-cgi`.
 
 `cron_acces_test.php` couvre les trois règles.
 
+## Titres des vignettes tranchés en deux sur téléphone
+
+**Fichier** : `css/style.css`
+
+`.cover-results` est une grille avec `max-height` et `overflow-y: auto`.
+Par défaut une grille aligne ses lignes en `stretch`, si bien qu'elles
+étaient dimensionnées **contre la hauteur du conteneur** et non contre
+leur contenu : chaque vignette devenait plus courte que ce qu'elle
+portait, et son `overflow: hidden` tranchait le titre en deux. Invisible
+sur un écran large, où la place ne manque jamais.
+
+Corrigé par `align-content: start` et `align-items: start`. Et sur
+téléphone, `max-height: none` : 300 px n'y montrent qu'une ligne et
+demie de vignettes, et deux zones de défilement imbriquées sont pénibles
+au pouce — on ne garde que celle de la modale.
+
+Reproduit et vérifié dans le navigateur à 375 px avant et après, en
+chargeant la vraie feuille de style ; contrôlé aussi à 1024 px pour
+s'assurer que le cadre de 300 px y reste.
 ## À faire au déploiement
 
 - **Migration SQL obligatoire** : la table `recherche_couverture`
