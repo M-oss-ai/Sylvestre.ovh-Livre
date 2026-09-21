@@ -1,172 +1,199 @@
 # CLAUDE.md
 
-Journal des dernières actions faites avec Claude Code sur ce dépôt.
-Pas un guide d'architecture (l'ancien a été supprimé volontairement,
-voir le commit « Delete CLAUDE.md ») — juste ce qui a changé récemment
-et pourquoi, pour reprendre le fil sans tout redemander.
+Guide de travail pour Claude Code sur ce dépôt. Ce qui suit est ce qu'on
+ne devine pas en lisant un seul fichier : les commandes, la structure,
+et surtout les règles tacites — celles dont la violation ne casse rien
+tout de suite.
 
-## Recherche de couverture — tome recherché selon le statut
+## Le projet
 
-**Fichier** : `js/app.js` (`chercherCouverture()`)
+« Ma Bibliothèque Manga » : suivi de collection (séries, tome en cours,
+statut, couverture). Interface en français, hébergée chez OVH mutualisé
+sur `livre.sylvestre.ovh`.
 
-Avant, la recherche demandait systématiquement « tome actuel + 1 »,
-même pour une série **terminée** ou **abandonnée** — qui ne sera plus
-empruntée plus loin que son tome actuel. Corrigé : le tome envoyé à
-l'API dépend maintenant du statut du formulaire (`f-status`) :
+PHP 8.1 minimum (8.2 en production), MySQL/MariaDB. **Aucune
+dépendance** : pas de Composer, pas de framework, pas de PHPUnit, pas
+d'étape de compilation. Ce n'est pas un accident, c'est le parti pris du
+projet — un hébergement mutualisé n'offre ni terminal ni gestionnaire de
+paquets, et le code doit rester déployable par simple copie de fichiers.
 
-- `termine` / `abandon` → le **tome réel** (`tome_actuel`)
-- `cours` / `envie` → **`tome_actuel + 1`** (le prochain à emprunter)
+## Commandes
 
-## Recherche de couverture — deux protections, et une seule était bonne
+```bash
+php tests/lancer.php              # toute la suite (357 tests, 32 fichiers de cas)
+php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
+php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
+php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
+php purger.php                    # la tâche planifiée, à la main
+```
 
-**Fichiers** : `includes/couvertures.php`, `api.php`,
-`includes/config.php`, `livre.sql`, `purger.php`
+Le lanceur sort avec le code **0** si tout passe, **1** sinon.
 
-Vérification faite dans la documentation de MangaDex : la limite est
-d'**environ 5 requêtes par seconde et par adresse IP**, et l'escalade
-en cas de dépassement est `429` → blocage IP temporaire → blocage
-complet de durée non publiée.
+**MySQL doit tourner**, même si aucun test n'interroge la base :
+`includes/config.php` ouvre une connexion PDO dès son inclusion, et une
+connexion ratée appelle `erreur_fatale()`, qui coupe le processus.
 
-Deux constats ont suivi :
+Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 
-1. **Une recherche coûte 1 + `COUVERTURE_MAX_SERIES` appels** (un pour
-   `/manga`, un par série candidate pour `/cover`), soit 5 par défaut.
-   Mesuré : ~1,5 s pour trois appels. Deux personnes qui cherchent en
-   même temps dépassent donc la limite sans avoir rien fait d'anormal.
-2. **L'ancien frein ne protégeait pas ce qu'il prétendait protéger.**
-   `limiteur_echec('couverture', …)` était appelée sans clé, donc
-   indexée sur `ip_client()` — l'IP du **visiteur**. Elle plafonnait
-   chaque visiteur séparément et ne bornait à aucun moment le débit
-   total sortant du serveur. Le commentaire affirmait l'inverse.
+## Structure
 
-Il y a désormais deux dispositifs, et ils ne font pas le même travail.
+### Le noyau
 
-### Ce qui protège le serveur : une file d'attente
+| Fichier | Rôle |
+|---|---|
+| `includes/config.php` | **Le seul endroit** où le `.env` devient des constantes. Ouvre aussi la connexion PDO (`$pdo` global), et porte `erreur_fatale()`, `ip_client()`, `taille_lisible()` et les règles d'accès du cron |
+| `includes/fonctions.php` | Bibliothèque partagée **des pages** : CSRF, sessions, limiteur, `STATUTS`, `actif()`. Envoie les en-têtes de sécurité et démarre la session **dès l'inclusion** |
+| `includes/mailer.php` | Envoi SMTP direct + file de rattrapage (`mail_file`) |
+| `includes/images.php` | Chaîne GD : type déduit du contenu, ré-encodage WebP, nom = empreinte salée |
+| `includes/carte.php` | Le HTML d'une carte de série |
+| `includes/couvertures.php` | Client MangaDex. **Inclus par `api.php` seul** — un test qui s'en sert doit le demander explicitement |
 
-`mangadex_attendre_son_tour()` espace les appels sortants de
-`COUVERTURE_ESPACEMENT` millisecondes (250 par défaut, soit 4 appels/s),
-tous visiteurs confondus, via un `flock()` sur un fichier témoin placé
-dans `sys_get_temp_dir()`. **Rien n'est compté, personne n'est
-sanctionné** : les appels attendent leur tour.
+### Les points d'entrée
 
-L'attente est **bornée** par `COUVERTURE_FILE_MAX` (2 s) : au-delà, la
-recherche répond « réessayez dans N secondes » plutôt que de retenir un
-processus PHP — denrée rare sur un mutualisé, et la seule ressource que
-cette borne protège.
+`index.php` (la bibliothèque), `connexion.php`, `inscription.php`,
+`parametres.php`, `mot-de-passe-oublie.php`,
+`reinitialiser-mot-de-passe.php`, `verifier-email.php`,
+`deconnexion.php`, `mentions-legales.php`.
 
-`mangadex_get()` lit aussi l'en-tête `X-RateLimit-Retry-After` des
-réponses 429 et le transforme en délai affichable. Auparavant tout code
-≠ 200 devenait un « recherche indisponible » indifférencié, et
-l'utilisateur réessayait aussitôt — le chemin le plus direct vers le
-blocage complet de l'hébergement.
+`api.php` est le **point d'entrée AJAX unique** : un `switch` sur
+`$_POST['action']`. Chaque branche vérifie le CSRF et cloisonne par
+`utilisateur_id`.
 
-### Ce qui encadre chaque compte : une règle annoncée
+`purger.php` est la tâche planifiée : ménage des tables, rattrapage des
+e-mails, et rapport d'activité envoyé à `ADMIN_EMAIL`.
 
-`couverture_quota()` et `couverture_consommer()` : **30 recherches par
-tranche de 2 minutes**, 120 pour le forfait `illimite`. Fenêtre **fixe**
-et non glissante, pour que la règle soit vérifiable de tête.
+### Le client
 
-Dépasser n'est pas une faute : aucune escalade, aucun compteur de
-récidive, l'attente vaut exactement le temps restant avant la tranche
-suivante. C'est ce qui distingue ce quota de `tentative_ip`, qui
-enregistre des **échecs** de mot de passe et double la peine à chaque
-récidive — une mécanique qui n'a rien à faire sur l'usage normal d'une
-fonctionnalité.
+`js/commun.js` (socle partagé), `js/app.js` (bibliothèque),
+`js/auth.js`, `js/settings.js`, `js/delai.js` (comptes à rebours des
+attentes). `css/style.css` pour tout le style.
 
-Le forfait `illimite` a un plafond lui aussi, simplement plus haut :
-sans plafond du tout, une page laissée à boucler occuperait la file
-toute la journée et en priverait les autres comptes.
+## Règles tacites
 
-### Ce que cela remplace
+**Tout réglage passe par le `.env`, jamais en dur ailleurs.** Et chaque
+constante de `config.php` est bornée par un plancher ou un plafond : un
+`.env` mal rempli ne doit jamais pouvoir *supprimer* une protection.
+`tests/cas/config_planchers_test.php` et `couvertures_reglages_test.php`
+imposent des valeurs absurdes et vérifient qu'elles sont relevées.
 
-`COUVERTURE_MAX` et `COUVERTURE_BLOCAGE` n'existent plus, ainsi que
-`couverture_recherche_plafonnee()`. Nouvelles clés `.env` :
-`COUVERTURE_ESPACEMENT`, `COUVERTURE_FILE_MAX`, `COUVERTURE_QUOTA`,
-`COUVERTURE_FENETRE`, `COUVERTURE_QUOTA_ILLIMITE`.
+**La CSP interdit le JavaScript et le CSS en ligne.** Pas de `onclick=`,
+pas de `<style>`, pas de `style="…"` posé depuis PHP. Les données
+destinées au JS passent par des attributs `data-` sur `<body>`.
+
+**Les quotas s'appliquent dans l'`INSERT` lui-même**
+(`INSERT … SELECT … FROM DUAL WHERE (SELECT COUNT(*)…) < ?`). Un
+contrôle préalable en PHP ne résiste pas à deux requêtes simultanées ;
+quand il y en a un, c'est une optimisation, jamais le garde-fou.
+
+**Les libellés de `STATUTS` restent courts** (≤ 12 caractères, testé) :
+ils s'affichent dans la pastille posée sur la couverture.
+
+**`purger.php` ne charge que `config.php` et `mailer.php`.** Jamais
+`fonctions.php`, qui enverrait des en-têtes HTTP et démarrerait une
+session — ce qu'une tâche planifiée n'a pas à faire. Toute fonction dont
+le cron a besoin va donc dans `config.php`.
+
+**Le dépôt stocke en LF, le répertoire de travail est en CRLF**
+(`core.autocrlf=true`). Un script qui modifie un fichier doit normaliser
+en entrée et restituer les fins de ligne d'origine, sinon le diff devient
+illisible.
+
+**Les messages de commit sont sans accents**, par convention du dépôt.
+
+## Les trois freins, et pourquoi ils ne se ressemblent pas
+
+Les confondre a déjà coûté cher. Ils ne protègent pas les mêmes choses.
+
+| Mécanisme | Protège | Comportement |
+|---|---|---|
+| `limiteur_echec` / `tentative_ip` | les **comptes**, contre la force brute | Compte des **échecs**, double la peine à chaque récidive |
+| `mangadex_attendre_son_tour()` | l'**adresse IP du serveur**, face à MangaDex | File d'attente (`flock`, 250 ms). Ne compte personne, ne sanctionne personne |
+| `couverture_quota()` / `couverture_consommer()` | l'**équité entre comptes** | Règle fixe et annoncée : 30 recherches / 2 min (120 en forfait `illimite`). Aucune escalade |
+
+Le limiteur à peine doublante convient à des mots de passe essayés au
+hasard. L'appliquer à l'usage normal d'une fonctionnalité revient à
+punir quelqu'un qui s'en sert autant qu'elle le permet — ne pas
+recommencer.
+
+## Base de données
+
+Sept tables : `utilisateur`, `serie`, `jeton_action`,
+`session_persistante`, `tentative_ip`, `mail_file`,
+`recherche_couverture`.
+
+`livre.sql` est **entièrement rejouable**. Pour mettre à jour une base
+existante, on rejoue le fichier **en entier** en retirant seulement les
+deux instructions `CREATE DATABASE` et `USE` du début (signalées dans le
+fichier) : chez OVH la base est créée depuis le manager et le `USE`
+échouerait, entraînant tout le reste avec lui.
+
+Ne jamais fournir une liste partielle de migrations : c'est ainsi que
+`mail_file` a été oubliée sur le serveur, et le cron plantait en 500 à
+chaque passage.
+
+`ADD COLUMN IF NOT EXISTS` est une **extension MariaDB** — ce qui couvre
+OVH, mais pas un MySQL d'Oracle.
+
+## Déploiement
+
+Copie de fichiers par FTP, rien d'autre. Dans l'ordre :
+
+1. **Le SQL d'abord**, si le schéma a bougé.
+2. Les fichiers modifiés — et **tous ceux dont ils dépendent**. Les
+   pannes du projet ont presque toutes été des envois partiels.
+3. **`ASSETS_VERSION` à incrémenter** dans le `.env` dès qu'un fichier de
+   `js/` ou `css/` change. `actif()` s'en sert pour casser le cache ;
+   sans l'incrément le correctif reste invisible, et on le croit raté.
+
+**Ne montent jamais sur le serveur** : `tests/` (ses fichiers de cas sont
+du PHP, qu'Apache exécuterait à la demande de n'importe quel visiteur) et
+`.env`. Deux règles `.htaccess` interdisent `tests/` par précaution, à la
+racine et dans le dossier lui-même.
 
 ## Tests
 
-**Fichiers** : `tests/cas/couvertures_titre_test.php`,
-`couvertures_reglages_test.php`, `couvertures_rythme_test.php` (nouveau)
+Lanceur maison, **un processus par fichier de cas** — c'est ce qui permet
+à un fichier de faire `putenv()` avant de charger `lanceur.php`, et donc
+de tester une constante dans un autre état.
 
-Le nouveau fichier a **son propre processus** avec une cadence
-raccourcie (`COUVERTURE_ESPACEMENT=120`, `COUVERTURE_FILE_MAX=300`) :
-il attend réellement, et une suite qui dort deux secondes par cas ne
-serait plus lancée. Il vérifie que l'attente existe pour de bon — sans
-quoi la protection serait décorative — et qu'elle reste bornée.
+L'amorce neutralise l'environnement : `DB_NAME` pointe sur
+`information_schema` (les tables du projet sont hors de portée) et les
+réglages SMTP sont vidés (rien ne part).
 
-`couverture_consommer()` n'est pas testée : elle exige une base, comme
-tout ce que liste `tests/LISEZMOI.md` sous « non couvert, faute de base
-de données ». Le **barème** (`couverture_quota`), lui, est une fonction
-pure et il est testé.
+Le périmètre est celui des **fonctions pures** : rien qui exige la base
+ou le réseau. `tests/LISEZMOI.md` tient la liste de ce qui est couvert,
+de ce qui ne l'est pas, et pourquoi. Le JavaScript est hors périmètre :
+le projet n'a pas Node.
 
-Suite complète : `php tests/lancer.php` → **356 tests**, tout passe.
+Une fonction difficile à tester est souvent une fonction mal placée : les
+règles d'accès du cron ont été extraites de `purger.php` vers
+`config.php` pour cette raison précise.
 
-Le changement côté JS (`js/app.js`) n'a pas de test : le projet n'a ni
-Node.js ni harnais de test JS, et `tests/LISEZMOI.md` liste déjà tout
-le JS comme hors périmètre.
+## Pièges connus
 
-## Cron silencieux, puis 500 opaque
+**Une tâche planifiée refusée doit sortir avec un code non nul.**
+`exit('Not found')` retourne **0**, donc une réussite. Un hébergeur réglé
+sur « envoyer uniquement en cas d'erreur » ne dit alors jamais rien : la
+purge peut ne pas tourner pendant des semaines dans le silence complet.
 
-**Fichiers** : `purger.php`, `includes/config.php`
+**Diagnostiquer un 500 en production.** `erreur_fatale()` montre le
+détail technique (message, fichier, ligne) à l'appelant qui porte le bon
+`CRON_TOKEN`, et à lui seul. `curl.exe -H "X-Cron-Token: …"` affiche le
+corps de la réponse, là où `Invoke-RestMethod` lève une exception et
+cache justement ce qu'on cherche. `purger.php?ip` diagnostique l'adresse
+vue par PHP sans rien purger.
 
-Symptôme : cron réglé sur une exécution par heure, 48 h sans le moindre
-rapport. Deux défauts distincts, tous deux de la famille « échouer sans
-le dire ».
+**L'encodage à l'envoi.** Transférer les fichiers en **binaire**. Coller
+du texte dans l'éditeur ANSI de WinSCP corrompt l'UTF-8 — et le piège est
+que du contenu correct y *paraît* faux.
 
-**1. Un refus se déclarait en réussite.** `purger.php` exige le jeton
-`X-Cron-Token` dès qu'il voit le moindre contexte HTTP — et un simple
-`HTTP_HOST` laissé par un enrobage CGI suffit, ce que font plusieurs
-hébergeurs. Le script répondait « Not found » puis `exit('Not found')`,
-qui retourne le code **0**. L'hébergeur réglé sur « envoyer uniquement
-en cas d'erreur » ne voyait donc rien à signaler.
+**Les grilles CSS étirent leurs lignes par défaut.** Avec un `max-height`
+sur le conteneur, les lignes sont dimensionnées contre la hauteur
+disponible et non contre leur contenu : l'élément devient plus court que
+ce qu'il porte, et son `overflow: hidden` tranche le texte. Invisible sur
+un écran large. D'où `align-content: start` sur `.cover-results`.
 
-Désormais : navigateur (`REQUEST_METHOD` présent) → 404 muet inchangé ;
-tâche planifiée → message sur STDERR, trace au journal, **code 1**.
-
-**2. Un 500 ne disait pas pourquoi.** `erreur_fatale()` n'affiche jamais
-le détail technique — c'est voulu pour un visiteur. Mais l'administrateur
-devait alors aller lire les journaux de l'hébergeur pour diagnostiquer,
-ce qui n'est pas toujours à portée de main.
-
-Désormais, un appel porteur du bon `CRON_TOKEN` reçoit le détail
-(message, fichier, ligne) en plus de la page. `cron_appelant_authentifie()`
-refuse tout si le jeton attendu est **vide** — sans quoi un `.env`
-incomplet exposerait les erreurs internes au premier venu.
-
-Les trois décisions vivent dans `config.php` et non dans `purger.php`,
-qui s'exécute dès qu'on l'inclut et serait intestable — et non dans
-`fonctions.php`, que `purger.php` ne charge jamais (il enverrait des
-en-têtes et démarrerait une session). Un premier jet les avait mises là :
-la suite passait au vert pendant que `purger.php` plantait sur une
-fonction indéfinie, ce qu'a révélé une exécution réelle sous `php-cgi`.
-
-`cron_acces_test.php` couvre les trois règles.
-
-## Titres des vignettes tranchés en deux sur téléphone
-
-**Fichier** : `css/style.css`
-
-`.cover-results` est une grille avec `max-height` et `overflow-y: auto`.
-Par défaut une grille aligne ses lignes en `stretch`, si bien qu'elles
-étaient dimensionnées **contre la hauteur du conteneur** et non contre
-leur contenu : chaque vignette devenait plus courte que ce qu'elle
-portait, et son `overflow: hidden` tranchait le titre en deux. Invisible
-sur un écran large, où la place ne manque jamais.
-
-Corrigé par `align-content: start` et `align-items: start`. Et sur
-téléphone, `max-height: none` : 300 px n'y montrent qu'une ligne et
-demie de vignettes, et deux zones de défilement imbriquées sont pénibles
-au pouce — on ne garde que celle de la modale.
-
-Reproduit et vérifié dans le navigateur à 375 px avant et après, en
-chargeant la vraie feuille de style ; contrôlé aussi à 1024 px pour
-s'assurer que le cadre de 300 px y reste.
-## À faire au déploiement
-
-- **Migration SQL obligatoire** : la table `recherche_couverture`
-  (bloc 3 de `livre.sql`, rejouable). Sans elle, toute recherche de
-  couverture tombe en erreur.
-- Nouvelles clés dans le `.env` de production (valeurs par défaut
-  raisonnables si elles sont absentes).
-- `ASSETS_VERSION` à incrémenter dès que `js/` ou `css/` change.
+**MangaDex** : les endpoints de lecture ne demandent ni compte ni clé,
+mais l'API n'envoie pas d'en-tête CORS — d'où l'appel depuis le serveur.
+Limite d'environ 5 requêtes par seconde et par IP, et une recherche en
+coûte 1 + `COUVERTURE_MAX_SERIES`.
