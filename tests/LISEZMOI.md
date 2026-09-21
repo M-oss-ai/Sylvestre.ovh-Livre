@@ -183,6 +183,7 @@ de données ni le réseau.
 `exiger_csrf`, `post_trop_gros`, `message_post_trop_gros`,
 `journal_securite`, `url_image_sure`, `photo_depuis_formulaire`,
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
+`cron_en_ligne_de_commande`, `cron_refus_navigateur`,
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`

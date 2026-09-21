@@ -22,15 +22,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/mailer.php';
 
-/* Hors requête web ? Tous les hébergeurs n'invoquent pas leurs tâches
-   planifiées en « cli » (certains passent par CGI), d'où le test sur
-   l'absence totale de contexte HTTP. La condition est volontairement
-   restrictive : au moindre doute on exige le jeton, un fail-safe se
-   conçoit fermé. */
-$en_ligne_de_commande = PHP_SAPI === 'cli'
-    || (!isset($_SERVER['REQUEST_METHOD'])
-        && !isset($_SERVER['REMOTE_ADDR'])
-        && !isset($_SERVER['HTTP_HOST']));
+/* Hors requête web ? Voir cron_en_ligne_de_commande() dans
+   includes/fonctions.php : la règle y vit pour être testable. */
+$en_ligne_de_commande = cron_en_ligne_de_commande(PHP_SAPI, $_SERVER);
 
 if (!$en_ligne_de_commande) {
     $fourni = (string) ($_SERVER['HTTP_X_CRON_TOKEN'] ?? '');
@@ -39,8 +33,28 @@ if (!$en_ligne_de_commande) {
        refuse tout. La réponse est un 404 et non un 403 : elle ne
        confirme pas l'existence du script. */
     if (CRON_TOKEN === '' || !hash_equals(CRON_TOKEN, $fourni)) {
-        http_response_code(404);
-        exit('Not found');
+        if (cron_refus_navigateur($_SERVER)) {
+            http_response_code(404);
+            exit('Not found');
+        }
+
+        /* Pas de méthode HTTP : ce n'est pas un visiteur, c'est la tâche
+           planifiée elle-même, invoquée par un enrobage CGI qui a laissé
+           traîner un HTTP_HOST. Le test ci-dessus l'a donc prise pour
+           une requête web et lui a réclamé un jeton qu'un cron n'envoie
+           pas.
+
+           Sortir en 0 ici serait le pire des cas : l'hébergeur, réglé
+           sur « envoyer uniquement en cas d'erreur », verrait une
+           réussite. C'est ainsi qu'une purge peut ne jamais tourner
+           pendant des semaines dans le silence le plus complet. */
+        $err = defined('STDERR') ? STDERR : fopen('php://stderr', 'w');
+        fwrite($err, "purger.php : appel REFUSÉ, jeton absent ou invalide." . PHP_EOL);
+        fwrite($err, "La purge n'a PAS tourné." . PHP_EOL);
+        fwrite($err, "=> lancez la tâche en ligne de commande (php purger.php)," . PHP_EOL);
+        fwrite($err, "   ou faites-lui envoyer l'en-tête X-Cron-Token." . PHP_EOL);
+        error_log("purger.php: appel refusé (jeton absent ou invalide) — la purge n'a pas tourné");
+        exit(1);
     }
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');

@@ -476,6 +476,60 @@ define('SMTP_TIMEOUT', max(1, (int) env('SMTP_TIMEOUT', '5')));
 /* Nombre d'échecs après lequel un message en file est abandonné. */
 define('MAIL_FILE_MAX_ESSAIS', max(1, (int) env('MAIL_FILE_MAX_ESSAIS', '3')));
 
+/* ---------------------------------------------------------------------
+   Accès à la tâche planifiée (purger.php)
+
+   Ici et non dans fonctions.php : purger.php ne charge que ce fichier
+   et mailer.php. fonctions.php, lui, envoie des en-têtes de sécurité et
+   démarre une session dès l'inclusion — deux choses qu'un cron n'a pas
+   à faire.
+
+   Ici et non dans purger.php non plus : ce script s'exécute dès qu'on
+   l'inclut, il est donc intestable. Or ce sont des règles de sécurité,
+   et une règle de sécurité qu'on ne peut pas tester finit par dériver
+   sans qu'on le voie.
+   --------------------------------------------------------------------- */
+
+/**
+ * L'appel a-t-il lieu HORS d'une requête web, c'est-à-dire assez
+ * sûrement pour se passer du jeton ?
+ *
+ * Volontairement restrictif : tous les hébergeurs n'invoquent pas leurs
+ * tâches planifiées en « cli », certains passent par un enrobage CGI
+ * qui laisse traîner des variables HTTP. Au moindre doute on exige le
+ * jeton — un fail-safe se conçoit fermé.
+ */
+function cron_en_ligne_de_commande(string $sapi, array $serveur): bool
+{
+    return $sapi === 'cli'
+        || (!isset($serveur['REQUEST_METHOD'])
+            && !isset($serveur['REMOTE_ADDR'])
+            && !isset($serveur['HTTP_HOST']));
+}
+
+/**
+ * Un appel refusé vient-il d'un NAVIGATEUR, ou d'une tâche planifiée
+ * mal configurée ?
+ *
+ * La distinction décide de la façon d'échouer, et elle compte plus
+ * qu'il n'y paraît :
+ *
+ *   - navigateur ou robot : 404 muet, qui ne confirme pas même
+ *     l'existence du script ;
+ *   - tâche planifiée : message explicite et code de retour NON NUL.
+ *
+ * Sans ce second cas, un cron refusé sortait en 0 — une réussite, pour
+ * l'hébergeur. Réglé sur « envoyer uniquement en cas d'erreur », il ne
+ * disait donc jamais rien, et la purge pouvait ne jamais tourner
+ * pendant des semaines sans que personne s'en aperçoive.
+ *
+ * REQUEST_METHOD est le bon marqueur : aucune requête HTTP réelle n'en
+ * est dépourvue, et aucun cron n'en fabrique.
+ */
+function cron_refus_navigateur(array $serveur): bool
+{
+    return isset($serveur['REQUEST_METHOD']);
+}
 /**
  * « 3 Mo », « 512 Ko » — pour que les messages d'erreur suivent le
  * réglage au lieu de répéter une valeur écrite en dur à côté.
