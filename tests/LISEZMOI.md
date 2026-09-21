@@ -184,6 +184,7 @@ de données ni le réseau.
 `journal_securite`, `url_image_sure`, `photo_depuis_formulaire`,
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
 `cron_en_ligne_de_commande`, `cron_refus_navigateur`,
+`cron_appelant_authentifie`,
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`

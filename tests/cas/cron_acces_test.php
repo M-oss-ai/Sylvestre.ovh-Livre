@@ -83,3 +83,33 @@ test('les deux règles se complètent sans se contredire', function () {
     faux(cron_en_ligne_de_commande('cgi-fcgi', $cron_ovh), 'un jeton est exigé');
     faux(cron_refus_navigateur($cron_ovh), 'et le refus doit être bruyant');
 });
+groupe('cron_appelant_authentifie() — montrer la cause à qui de droit');
+
+test('le bon jeton est reconnu', function () {
+    vrai(cron_appelant_authentifie(['HTTP_X_CRON_TOKEN' => 'secret'], 'secret'),
+        'jeton identique');
+});
+
+test('un mauvais jeton ne l est pas', function () {
+    faux(cron_appelant_authentifie(['HTTP_X_CRON_TOKEN' => 'autre'], 'secret'),
+        'jeton different');
+    faux(cron_appelant_authentifie(['HTTP_X_CRON_TOKEN' => 'secre'], 'secret'),
+        'jeton tronque');
+    faux(cron_appelant_authentifie(['HTTP_X_CRON_TOKEN' => 'secretX'], 'secret'),
+        'jeton rallonge');
+});
+
+test('aucun en-tête, aucune confiance', function () {
+    faux(cron_appelant_authentifie([], 'secret'), 'en-tête absent');
+    faux(cron_appelant_authentifie(['HTTP_X_CRON_TOKEN' => ''], 'secret'), 'en-tête vide');
+});
+
+test('un jeton attendu VIDE n autorise personne', function () {
+    /* La garde qui compte. Sans elle, un site dont le .env n est pas
+       rempli — CRON_TOKEN absent, donc chaîne vide — montrerait le
+       chemin de ses fichiers et ses messages d erreur SQL au premier
+       venu, y compris à qui n envoie aucun en-tête. */
+    faux(cron_appelant_authentifie(['HTTP_X_CRON_TOKEN' => ''], ''), 'vide contre vide');
+    faux(cron_appelant_authentifie([], ''), 'rien contre vide');
+    faux(cron_appelant_authentifie(['HTTP_X_CRON_TOKEN' => 'nimporte'], ''), 'jeton contre vide');
+});

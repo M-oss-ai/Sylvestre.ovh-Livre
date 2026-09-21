@@ -530,6 +530,28 @@ function cron_refus_navigateur(array $serveur): bool
 {
     return isset($serveur['REQUEST_METHOD']);
 }
+
+/**
+ * L'appel porte-t-il le jeton de la tâche planifiée ?
+ *
+ * Sert à décider si l'on peut montrer le DÉTAIL TECHNIQUE d'une erreur
+ * plutôt que la page polie. Qui détient ce jeton est l'administrateur
+ * du site : lui cacher la cause d'un 500 ne protège personne, et lui
+ * coûte des heures — il faut sinon aller lire les journaux de
+ * l'hébergeur, quand on y a accès et qu'on sait où ils sont.
+ *
+ * hash_equals : comparaison à temps constant, pour ne pas laisser
+ * deviner le jeton caractère par caractère. Un jeton vide n'autorise
+ * rien : sans cette garde, un site dont le .env n'est pas rempli
+ * montrerait ses erreurs internes à n'importe qui.
+ */
+function cron_appelant_authentifie(array $serveur, string $jeton_attendu): bool
+{
+    if ($jeton_attendu === '') {
+        return false;
+    }
+    return hash_equals($jeton_attendu, (string) ($serveur['HTTP_X_CRON_TOKEN'] ?? ''));
+}
 /**
  * « 3 Mo », « 512 Ko » — pour que les messages d'erreur suivent le
  * réglage au lieu de répéter une valeur écrite en dur à côté.
@@ -649,6 +671,17 @@ function erreur_fatale(string $journal = ''): never
         header('Cache-Control: no-store');
     }
 
+    /* L'administrateur, lui, a droit à la cause.
+       Diagnostiquer un 500 sur un mutualisé sans cela oblige à aller
+       chercher les journaux de l'hébergeur ; on tourne longtemps à
+       deviner. Le jeton du cron identifie la seule personne qui a le
+       droit de déclencher purger.php : elle peut voir pourquoi il
+       échoue. */
+    $detail = ($journal !== '' && defined('CRON_TOKEN')
+               && cron_appelant_authentifie($_SERVER, CRON_TOKEN))
+        ? $journal
+        : '';
+
     // Une requête AJAX attend du JSON : lui renvoyer du HTML produirait
     // « Réponse inattendue du serveur » côté navigateur au lieu du message.
     $veutJson = str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')
@@ -658,10 +691,14 @@ function erreur_fatale(string $journal = ''): never
         if (!headers_sent()) {
             header('Content-Type: application/json; charset=utf-8');
         }
-        echo json_encode([
+        $corps = [
             'ok'     => false,
             'erreur' => "Une erreur technique est survenue. Réessayez dans quelques instants.",
-        ], JSON_UNESCAPED_UNICODE);
+        ];
+        if ($detail !== '') {
+            $corps['detail'] = $detail;
+        }
+        echo json_encode($corps, JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -673,7 +710,13 @@ function erreur_fatale(string $journal = ''): never
         . "<div style=\"font-family:system-ui;background:#17130f;color:#e6dccf;padding:40px;min-height:100vh\">"
         . "<h1 style=\"color:#f4e4d0\">Service temporairement indisponible</h1>"
         . "<p>Merci de réessayer dans quelques instants. Si le problème persiste, contactez "
-        . "l'administrateur à " . htmlspecialchars(ADMIN_EMAIL, ENT_QUOTES, 'UTF-8') . ".</p></div>"
+        . "l'administrateur à " . htmlspecialchars(ADMIN_EMAIL, ENT_QUOTES, 'UTF-8') . ".</p>"
+        . ($detail !== ''
+            ? "<pre style=\"white-space:pre-wrap;background:#0d0a08;padding:16px;"
+              . "border-radius:8px;color:#f0b8a0\">"
+              . htmlspecialchars($detail, ENT_QUOTES, 'UTF-8') . "</pre>"
+            : '')
+        . "</div>"
     );
 }
 

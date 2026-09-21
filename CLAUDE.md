@@ -100,11 +100,48 @@ tout ce que liste `tests/LISEZMOI.md` sous « non couvert, faute de base
 de données ». Le **barème** (`couverture_quota`), lui, est une fonction
 pure et il est testé.
 
-Suite complète : `php tests/lancer.php` → **345 tests**, tout passe.
+Suite complète : `php tests/lancer.php` → **356 tests**, tout passe.
 
 Le changement côté JS (`js/app.js`) n'a pas de test : le projet n'a ni
 Node.js ni harnais de test JS, et `tests/LISEZMOI.md` liste déjà tout
 le JS comme hors périmètre.
+
+## Cron silencieux, puis 500 opaque
+
+**Fichiers** : `purger.php`, `includes/config.php`
+
+Symptôme : cron réglé sur une exécution par heure, 48 h sans le moindre
+rapport. Deux défauts distincts, tous deux de la famille « échouer sans
+le dire ».
+
+**1. Un refus se déclarait en réussite.** `purger.php` exige le jeton
+`X-Cron-Token` dès qu'il voit le moindre contexte HTTP — et un simple
+`HTTP_HOST` laissé par un enrobage CGI suffit, ce que font plusieurs
+hébergeurs. Le script répondait « Not found » puis `exit('Not found')`,
+qui retourne le code **0**. L'hébergeur réglé sur « envoyer uniquement
+en cas d'erreur » ne voyait donc rien à signaler.
+
+Désormais : navigateur (`REQUEST_METHOD` présent) → 404 muet inchangé ;
+tâche planifiée → message sur STDERR, trace au journal, **code 1**.
+
+**2. Un 500 ne disait pas pourquoi.** `erreur_fatale()` n'affiche jamais
+le détail technique — c'est voulu pour un visiteur. Mais l'administrateur
+devait alors aller lire les journaux de l'hébergeur pour diagnostiquer,
+ce qui n'est pas toujours à portée de main.
+
+Désormais, un appel porteur du bon `CRON_TOKEN` reçoit le détail
+(message, fichier, ligne) en plus de la page. `cron_appelant_authentifie()`
+refuse tout si le jeton attendu est **vide** — sans quoi un `.env`
+incomplet exposerait les erreurs internes au premier venu.
+
+Les trois décisions vivent dans `config.php` et non dans `purger.php`,
+qui s'exécute dès qu'on l'inclut et serait intestable — et non dans
+`fonctions.php`, que `purger.php` ne charge jamais (il enverrait des
+en-têtes et démarrerait une session). Un premier jet les avait mises là :
+la suite passait au vert pendant que `purger.php` plantait sur une
+fonction indéfinie, ce qu'a révélé une exécution réelle sous `php-cgi`.
+
+`cron_acces_test.php` couvre les trois règles.
 
 ## À faire au déploiement
 
