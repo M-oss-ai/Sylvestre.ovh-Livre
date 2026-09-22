@@ -193,6 +193,16 @@ disponible et non contre leur contenu : l'élément devient plus court que
 ce qu'il porte, et son `overflow: hidden` tranche le texte. Invisible sur
 un écran large. D'où `align-content: start` sur `.cover-results`.
 
+**Un rapprochement symétrique a besoin d'un plancher de longueur.** La
+recherche de la bibliothèque (`correspondPrepare`, `js/commun.js`)
+acceptait `qm.startsWith(m)` — l'utilisateur tape plus que le mot
+stocké, « Berserker » pour trouver « Berserk ». Sans longueur minimale,
+un mot d'UNE lettre du titre suffisait : « À toi d'être un héros ! »
+contient le mot « a », donc toute recherche commençant par un « a »
+remontait cette série. Les titres français en sont pleins — « à »,
+« d », « l ». Quatre caractères minimum de ce côté-là ; le sens inverse
+(`m.startsWith(qm)`) reste libre, c'est une recherche par préfixe et
+elle est voulue.
 **MangaDex** : les endpoints de lecture ne demandent ni compte ni clé,
 mais l'API n'envoie pas d'en-tête CORS — d'où l'appel depuis le serveur.
 Limite d'environ 5 requêtes par seconde et par IP, et une recherche en
