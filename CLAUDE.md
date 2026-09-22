@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (357 tests, 32 fichiers de cas)
+php tests/lancer.php              # toute la suite (371 tests, 32 fichiers de cas)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
 php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
@@ -197,3 +197,20 @@ un écran large. D'où `align-content: start` sur `.cover-results`.
 mais l'API n'envoie pas d'en-tête CORS — d'où l'appel depuis le serveur.
 Limite d'environ 5 requêtes par seconde et par IP, et une recherche en
 coûte 1 + `COUVERTURE_MAX_SERIES`.
+
+**Sa pertinence n'est pas la nôtre.** Chercher « Shingeki no Kyojin »
+remontait 130 résultats dont les 25 premiers étaient TOUS des
+doujinshi : la vraie série n'était même pas candidate. D'où trois
+règles, dans `chercher_couvertures()` :
+
+- écarter les étiquettes de format « Doujinshi » et « Oneshot »
+  (`MANGADEX_FORMATS_EXCLUS`) — elles portent le titre de la série
+  dont elles s'inspirent et n'ont pas de tomes à emprunter ;
+- demander `COUVERTURE_CANDIDATS` séries et n'en retenir que
+  `COUVERTURE_MAX_SERIES` après notre propre classement. Élargir ce
+  premier appel ne coûte **aucune requête de plus** — seuls les
+  `/cover` qui suivent se paient à l'unité ;
+- comparer la recherche à **tous** les titres connus
+  (`couverture_titres_connus()`), pas au seul titre affiché :
+  l'utilisateur tape l'écriture qu'il connaît, et MangaDex affiche
+  « Attack on Titan » là où il a tapé « Shingeki no Kyojin ».

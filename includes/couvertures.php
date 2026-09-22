@@ -27,6 +27,23 @@ declare(strict_types=1);
 const MANGADEX_API = 'https://api.mangadex.org';
 const MANGADEX_IMAGES = 'https://uploads.mangadex.org/covers/';
 
+/* Étiquettes de FORMAT écartées de la recherche. Ce sont des
+   identifiants fixes de MangaDex, pas des noms — ils ne changent pas.
+
+   Les doujinshi sont des publications amateur : ils portent le titre de
+   la série dont ils s'inspirent, et MangaDex en compte des centaines.
+   Chercher « Shingeki no Kyojin » remontait 130 résultats dont les 25
+   premiers étaient tous des doujinshi — la vraie série n'était même pas
+   candidate. Ils n'ont par ailleurs pas de tomes à emprunter, ce qui est
+   la seule chose que cette application cherche.
+
+   Les « oneshot » sont écartés pour la même raison : un récit isolé
+   n'a pas de tome 2. */
+const MANGADEX_FORMATS_EXCLUS = [
+    'b13b2a48-c720-44a9-9c77-39c9979373fb',   // Doujinshi
+    '0234a31e-a729-4e28-9d6a-3f87c4966b9e',   // Oneshot
+];
+
 /* --- La cadence des appels --------------------------------------------
 
    MangaDex tolère environ 5 requêtes par seconde et par adresse IP.
@@ -210,6 +227,75 @@ function mangadex_titre(array $attributs): string
 }
 
 /**
+ * Tous les titres connus d'une série, toutes langues confondues :
+ * le titre principal, ses traductions, et les titres alternatifs.
+ *
+ * Indispensable au classement. MangaDex connaît « Ayanashi » sous six
+ * écritures, et mangadex_titre() n'en retient qu'une pour l'affichage.
+ * Comparer la recherche à cette seule écriture fait manquer la série
+ * dès que l'utilisateur en connaît une autre — et elle se retrouve
+ * alors derrière n'importe quel homonyme.
+ */
+function couverture_titres_connus(array $attributs): array
+{
+    $tous = array_values($attributs['title'] ?? []);
+    foreach ($attributs['altTitles'] ?? [] as $entree) {
+        if (is_array($entree)) {
+            $tous = array_merge($tous, array_values($entree));
+        }
+    }
+
+    $propres = [];
+    foreach ($tous as $t) {
+        if (is_string($t) && trim($t) !== '') {
+            $propres[] = $t;
+        }
+    }
+    return $propres;
+}
+
+/**
+ * À quelle distance cette série est-elle du titre cherché ? Plus bas,
+ * plus proche — c'est le terme dominant du classement.
+ *
+ *    0 : un de ses titres correspond exactement ;
+ *    4 : un de ses titres contient la recherche, ou l'inverse ;
+ *   10 : rien ne correspond.
+ *
+ * Le palier intermédiaire évite le tout ou rien : « Ayanashi no Kimi »
+ * doit passer devant une série sans rapport, tout en restant derrière
+ * « Ayanashi » tout court.
+ *
+ * Le fragment comparé doit faire au moins quatre caractères : sans ce
+ * plancher, une série dont un titre alternatif est « Aya » se
+ * retrouverait « proche » de toute recherche contenant ces trois
+ * lettres.
+ */
+function couverture_ecart_titre(array $attributs, string $vise): int
+{
+    if ($vise === '') {
+        return 10;
+    }
+
+    $ecart = 10;
+    foreach (couverture_titres_connus($attributs) as $titre) {
+        $n = titre_normalise($titre);
+        if ($n === '') {
+            continue;
+        }
+        if ($n === $vise) {
+            return 0;                       // rien ne fait mieux, on s'arrête
+        }
+        $court = mb_strlen($n, 'UTF-8') <= mb_strlen($vise, 'UTF-8') ? $n : $vise;
+        if (mb_strlen($court, 'UTF-8') >= 4
+            && (str_contains($n, $vise) || str_contains($vise, $n))) {
+            $ecart = 4;
+        }
+    }
+    return $ecart;
+}
+
+/**
  * Comparaison de titres insensible à la casse, aux accents et à la
  * ponctuation : « Fruits Basket » et « fruits-basket » doivent se
  * reconnaître.
@@ -363,10 +449,17 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
         ? ['safe', 'suggestive', 'erotica']
         : ['safe', 'suggestive'];
 
+    /* On demande LARGE, et on classe nous-mêmes. La pertinence de
+       MangaDex place volontiers les dérivés avant l'original : en ne
+       demandant que quatre séries, la bonne n'était parfois même pas
+       candidate. Ce premier appel coûte le même prix quelle que soit sa
+       limite — seuls les /cover qui suivent se paient à l'unité. */
     $recherche = mangadex_get('/manga', [
         'title' => $titre,
-        'limit' => COUVERTURE_MAX_SERIES,
+        'limit' => COUVERTURE_CANDIDATS,
         'contentRating' => $classements,
+        'excludedTags' => MANGADEX_FORMATS_EXCLUS,
+        'excludedTagsMode' => 'OR',   // l'une OU l'autre suffit à écarter
         'order' => ['relevance' => 'desc'],
     ]);
     if ($recherche === null || empty($recherche['data'])) {
@@ -374,14 +467,41 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
     }
 
     $vise = titre_normalise($titre);
-    $resultats = [];
 
+    /* Premier tri, sur le seul titre : il ne demande aucun réseau et
+       suffit à écarter ce qui n'a rien à voir. À égalité d'écart, on
+       garde l'ordre de MangaDex, qui vaut mieux que rien. */
+    $candidats = [];
     foreach ($recherche['data'] as $rang => $manga) {
         $id = (string) ($manga['id'] ?? '');
         if ($id === '') {
             continue;
         }
-        $nom = mangadex_titre($manga['attributes'] ?? []);
+        $attributs = $manga['attributes'] ?? [];
+        $nom       = mangadex_titre($attributs);
+        $candidats[] = [
+            'id'    => $id,
+            'nom'   => $nom,
+            'ecart' => couverture_ecart_titre($attributs, $vise),
+            /* Départage les titres à égalité d'écart : à contenu égal,
+               le titre le plus court est le plus proche de ce qui a été
+               tapé. « Shingeki no Kyojin » doit passer devant « Shingeki
+               no Kyojin - Nyanko Heichou », qui le contient aussi. */
+            'long'  => mb_strlen(titre_normalise($nom), 'UTF-8'),
+            'rang'  => $rang,
+        ];
+    }
+
+    usort($candidats, static fn (array $a, array $b) =>
+        [$a['ecart'], $a['long'], $a['rang']] <=> [$b['ecart'], $b['long'], $b['rang']]);
+    $candidats = array_slice($candidats, 0, COUVERTURE_MAX_SERIES);
+
+    /* Second temps : une requête de couvertures par série retenue. */
+    $resultats = [];
+
+    foreach ($candidats as $rang => $candidat) {
+        $id  = $candidat['id'];
+        $nom = $candidat['nom'];
 
         /* Les couvertures sont triées par tome : on saute directement à
            la page qui contient celui qu'on cherche, plutôt que de
@@ -426,11 +546,15 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
             'tome'  => $tome,
             'exact' => $choisie !== null,
             'url'   => $url,
-            /* Tri : d'abord le titre qui correspond vraiment, ensuite
-               celui dont le tome a été trouvé, et seulement après le
-               classement de MangaDex — qui place « VRMMO Chronicles of a
-               Solo Cleric » avant « Berserk » quand on cherche Berserk. */
-            '_score' => (titre_normalise($nom) === $vise ? 0 : 10)
+            /* Tri final : d'abord le titre qui correspond vraiment,
+               ensuite celui dont le tome demandé a été trouvé, et
+               seulement après l'ordre du premier tri.
+
+               L'écart de titre se mesure sur TOUS les titres connus de
+               la série et non sur celui qu'on affiche : l'utilisateur
+               tape l'écriture qu'il connaît, pas forcément celle que
+               mangadex_titre() a retenue. */
+            '_score' => $candidat['ecart']
                       + ($choisie !== null ? 0 : 3)
                       + min(2, $rang * 0.1),
         ];

@@ -409,6 +409,23 @@ define('COUVERTURE_TIMEOUT', max(1, (int) env('COUVERTURE_TIMEOUT', '5')));
    l'attente devient sensible sans aider au choix. */
 define('COUVERTURE_MAX_SERIES', min(10, max(1, (int) env('COUVERTURE_MAX_SERIES', '4'))));
 
+/* Nombre de séries EXAMINÉES avant d'en retenir COUVERTURE_MAX_SERIES.
+
+   MangaDex ordonne par sa propre pertinence, qui place volontiers les
+   dérivés et les doujinshi avant la série d'origine : chercher
+   « Shingeki no Kyojin » ne ramenait que des doujinshi dans les quatre
+   premiers résultats, et la vraie série n'était même pas candidate.
+
+   Élargir ici ne coûte AUCUN appel supplémentaire — c'est le même appel
+   avec une limite plus haute. Ce sont les appels /cover qui coûtent, et
+   ils restent limités aux séries retenues.
+
+   Jamais en dessous du nombre de séries proposées, sinon on retiendrait
+   plus de séries qu'on n'en examine. Plafonné à 100, maximum accepté
+   par l'API. */
+define('COUVERTURE_CANDIDATS',
+    min(100, max(COUVERTURE_MAX_SERIES, (int) env('COUVERTURE_CANDIDATS', '25'))));
+
 /* Autoriser les séries classées « erotica » par MangaDex (nudité, thèmes
    sexuels marqués) dans la recherche automatique de couverture.
 

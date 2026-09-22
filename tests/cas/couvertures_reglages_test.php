@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 putenv('COUVERTURE_TIMEOUT=0');          // sans délai, l appel ne partirait jamais
 putenv('COUVERTURE_MAX_SERIES=0');       // zéro série : la recherche n aurait aucun sens
+putenv('COUVERTURE_CANDIDATS=0');        // examiner zéro série pour en retenir une
 putenv('COUVERTURE_ESPACEMENT=0');       // aucun espacement : la file ne freine plus rien
 putenv('COUVERTURE_FILE_MAX=0');         // aucune attente tolérée : la file refuse tout
 putenv('COUVERTURE_QUOTA=0');            // zéro recherche : fonctionnalité morte
@@ -37,6 +38,15 @@ test('COUVERTURE_TIMEOUT ne descend pas à zéro', function () {
 
 test('COUVERTURE_MAX_SERIES reste entre 1 et 10', function () {
     egale(1, COUVERTURE_MAX_SERIES, 'le .env demandait 0');
+});
+
+test('on n examine jamais moins de séries qu on n en retient', function () {
+    /* Retenir quatre séries parmi deux examinées n a pas de sens.
+       Le vivier ne coûte rien — c est le même appel avec une limite
+       plus haute —, il n y a donc aucune raison de le laisser
+       descendre sous le nombre de résultats affichés. */
+    vrai(COUVERTURE_CANDIDATS >= COUVERTURE_MAX_SERIES, 'jamais en dessous');
+    egale(1, COUVERTURE_CANDIDATS, 'le .env demandait 0, relevé au minimum utile');
 });
 
 test('la cadence des appels sortants ne peut pas être supprimée', function () {

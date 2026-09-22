@@ -254,8 +254,21 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
 
     $u = $un("SELECT COUNT(*), SUM(email_verifie), SUM(forfait = 'illimite'),
                      SUM(cree_le > NOW() - INTERVAL 1 DAY) FROM utilisateur");
+    /* « maj_le > cree_le » est ce qui distingue une modification d'une
+       création. La colonne vaut CURRENT_TIMESTAMP à l'insertion, si bien
+       qu'une série ajoutée et jamais retouchée a maj_le = cree_le : sans
+       cette condition elle gonflerait le compteur des modifications le
+       jour même de sa création.
+
+       Conséquence assumée : une série créée puis modifiée dans la MÊME
+       seconde ne compte pas comme modifiée. Les deux colonnes sont des
+       DATETIME, à la seconde près — et une correction faite dans la
+       seconde qui suit la saisie tient plus de la faute de frappe
+       rattrapée que d'une modification. */
     $s = $un("SELECT COUNT(*), COUNT(DISTINCT utilisateur_id),
-                     SUM(maj_le > NOW() - INTERVAL 1 DAY) FROM serie");
+                     SUM(cree_le > NOW() - INTERVAL 1 DAY),
+                     SUM(maj_le > NOW() - INTERVAL 1 DAY AND maj_le > cree_le)
+                FROM serie");
     $appareils = $un('SELECT COUNT(*) FROM session_persistante
                        WHERE remplace_le IS NULL AND expire > NOW()');
     $bloques   = $un('SELECT COUNT(*) FROM tentative_ip WHERE bloque_jusqu > NOW()');
@@ -288,7 +301,8 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
     $t .= $lit('Séries au total', (int) $s[0]);
     $t .= $lit('Comptes ayant au moins 1 série', (int) $s[1]);
     $t .= $lit('Moyenne par compte actif', $s[1] > 0 ? round($s[0] / $s[1], 1) : 0);
-    $t .= $lit('Ajoutées ou modifiées en 24 h', (int) $s[2]);
+    $t .= $lit('Ajoutées (24 h)', (int) $s[2]);
+    $t .= $lit('Modifiées (24 h)', (int) $s[3]);
 
     $t .= "\nSÉCURITÉ (24 dernières heures)\n";
     if ($echecs) {

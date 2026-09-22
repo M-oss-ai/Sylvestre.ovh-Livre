@@ -160,3 +160,105 @@ test('ce qui ne tombe pas juste reste en secondes', function () {
     egale('45 secondes', couverture_tranche_lisible(45), 'moins d une minute');
     egale('1 seconde', couverture_tranche_lisible(1), 'au singulier');
 });
+
+groupe('couverture_titres_connus() — toutes les écritures d une série');
+
+test('le titre principal et ses traductions sont rassemblés', function () {
+    $t = couverture_titres_connus(['title' => ['en' => 'Attack on Titan', 'ja' => '進撃の巨人']]);
+    contient('Attack on Titan', implode('|', $t), 'le titre anglais');
+    contient('進撃の巨人', implode('|', $t), 'le titre japonais');
+});
+
+test('les titres alternatifs comptent autant que les autres', function () {
+    /* C est là que vit « Shingeki no Kyojin » : MangaDex affiche la
+       série sous « Attack on Titan », et l utilisateur tape l autre. */
+    $t = couverture_titres_connus([
+        'title'     => ['en' => 'Attack on Titan'],
+        'altTitles' => [['ja-ro' => 'Shingeki no Kyojin'], ['fr' => "L Attaque des Titans"]],
+    ]);
+    contient('Shingeki no Kyojin', implode('|', $t), 'le titre translittéré');
+    contient('Attaque des Titans', implode('|', $t), 'le titre français');
+});
+
+test('les entrées vides ou mal formées sont ignorées', function () {
+    /* La source n est pas garantie : une clé présente mais vide, ou une
+       entrée qui n est pas un tableau, ne doit pas faire échouer le
+       classement de toute la recherche. */
+    $t = couverture_titres_connus([
+        'title'     => ['en' => 'Vrai', 'fr' => '', 'de' => '   '],
+        'altTitles' => [['ja' => 'Autre'], 'pas un tableau', []],
+    ]);
+    egale(2, count($t), 'seuls les deux titres réels sont retenus');
+});
+
+test('un manga sans aucun titre ne provoque rien', function () {
+    egale([], couverture_titres_connus([]), 'aucune clé');
+    egale([], couverture_titres_connus(['title' => [], 'altTitles' => []]), 'clés vides');
+});
+
+groupe('couverture_ecart_titre() — ce qui décide du classement');
+
+test('un titre exact vaut zéro', function () {
+    egale(0, couverture_ecart_titre(['title' => ['en' => 'Berserk']], titre_normalise('Berserk')),
+        'le titre affiché');
+});
+
+test('un titre exact trouvé dans les alternatifs vaut zéro aussi', function () {
+    /* LE cas qui motive tout ceci. Sans lui, chercher « Shingeki no
+       Kyojin » ne reconnaissait pas « Attack on Titan » et la vraie
+       série tombait derrière n importe quel homonyme. */
+    egale(0, couverture_ecart_titre([
+        'title'     => ['en' => 'Attack on Titan'],
+        'altTitles' => [['ja-ro' => 'Shingeki no Kyojin']],
+    ], titre_normalise('Shingeki no Kyojin')), 'reconnu par son titre alternatif');
+});
+
+test('la casse et les accents ne changent rien', function () {
+    egale(0, couverture_ecart_titre(['title' => ['fr' => 'Détective Conan']],
+        titre_normalise('detective conan')), 'normalisation appliquée des deux côtés');
+});
+
+test('un titre qui contient la recherche vaut le palier intermédiaire', function () {
+    /* Il doit passer devant une série sans rapport, et rester derrière
+       le titre exact. */
+    $e = couverture_ecart_titre(['title' => ['ja-ro' => 'Ayanashi no Kimi']], titre_normalise('Ayanashi'));
+    egale(4, $e, 'contient la recherche');
+    vrai($e > 0 && $e < 10, 'entre l exact et le hors-sujet');
+});
+
+test('une recherche plus longue que le titre compte aussi', function () {
+    egale(4, couverture_ecart_titre(['title' => ['en' => 'Berserk']],
+        titre_normalise('Berserk edition couleur')), 'la recherche contient le titre');
+});
+
+test('une série sans rapport vaut dix', function () {
+    egale(10, couverture_ecart_titre(['title' => ['en' => 'One Piece']], titre_normalise('Berserk')),
+        'rien en commun');
+});
+
+test('un fragment trop court ne rapproche de rien', function () {
+    /* Sans ce plancher, une série dont un titre alternatif est « Aya »
+       serait « proche » de toute recherche contenant ces trois lettres,
+       et remonterait devant des séries réellement pertinentes. */
+    egale(10, couverture_ecart_titre(['title' => ['ja' => 'Aya']], titre_normalise('Ayanashi')),
+        'trois caractères ne suffisent pas');
+    egale(4, couverture_ecart_titre(['title' => ['ja' => 'Ayan']], titre_normalise('Ayanashi')),
+        'quatre caractères suffisent');
+});
+
+test('une recherche vide ne rapproche de rien', function () {
+    /* Un titre en japonais se normalise en chaîne vide : sans cette
+       garde, toute série deviendrait un résultat exact. */
+    egale(10, couverture_ecart_titre(['title' => ['en' => 'Berserk']], ''), 'recherche vide');
+    egale(10, couverture_ecart_titre(['title' => ['ja' => 'アヤナシ']], titre_normalise('Ayanashi')),
+        'un titre non latin ne correspond à rien après normalisation');
+});
+
+test('le meilleur titre l emporte, pas le premier', function () {
+    /* Un exact trouvé en dernière position doit primer sur un simple
+       rapprochement trouvé en première. */
+    egale(0, couverture_ecart_titre([
+        'title'     => ['en' => 'Ayanashi no Kimi'],
+        'altTitles' => [['ja-ro' => 'Ayanashi']],
+    ], titre_normalise('Ayanashi')), 'l exact trouvé après le partiel');
+});
