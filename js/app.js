@@ -19,6 +19,9 @@
 
   let filtreActif = "all";
   let recherche = "";
+  // La grille est-elle actuellement rangée par pertinence plutôt que
+  // dans l'ordre du serveur ? Voir appliquerVue().
+  let ordreBouscule = false;
   let coverEnAttente = null; // null | {type:'url'|'file', …}
   let idEnEdition = "";
   let idASupprimer = "";
@@ -35,10 +38,31 @@
     // Construit depuis data-titre et data-auteur, qui sont déjà là pour
     // remplir la modale d'édition. Un attribut data-recherche séparé
     // répétait ces deux valeurs dans le HTML de chaque carte, pour rien.
-    carte._recherche = L.normalize(
-      (carte.dataset.titre || "") + " " + (carte.dataset.auteur || "")
-    );
+    //
+    // Les deux champs sont gardés séparément : le classement par
+    // pertinence a besoin de savoir si c'est le TITRE qui répond à la
+    // recherche, ou seulement l'auteur.
+    carte._titre = L.normalize(carte.dataset.titre || "");
+    carte._auteur = L.normalize(carte.dataset.auteur || "");
+    carte._recherche = carte._titre + " " + carte._auteur;
     return carte;
+  }
+
+  /**
+   * À quel point cette carte répond-elle à la recherche ? Plus bas, plus
+   * pertinent.
+   *
+   * Sans ce classement, une recherche rendait les cartes dans l'ordre de
+   * la grille — la plus récemment modifiée d'abord — si bien qu'une
+   * série trouvée par son auteur pouvait précéder celle dont le titre
+   * est exactement ce qu'on a tapé.
+   */
+  function pertinence(carte, q) {
+    if (carte._titre === q) return 0;
+    if (carte._titre.startsWith(q)) return 1;
+    if (carte._titre.includes(q)) return 2;
+    if (carte._auteur.includes(q)) return 3;
+    return 4; // trouvée seulement par tolérance aux fautes de frappe
   }
 
   function cartes() {
@@ -50,6 +74,14 @@
     const prep = L.prepareRecherche(recherche);
     let visibles = 0;
 
+    /* Tant qu'aucune recherche n'a bousculé la grille, l'ordre du DOM EST
+       l'ordre d'origine (le plus récemment modifié d'abord, trié par le
+       serveur). On le note au passage : c'est lui qu'on restituera, et
+       c'est aussi ce qui donne sa place à une carte ajoutée entre-temps. */
+    if (!ordreBouscule) {
+      toutes.forEach((c, i) => { c._ordre = i; });
+    }
+
     toutes.forEach((c) => {
       if (c._recherche === undefined) indexer(c);
       const okStatut = filtreActif === "all" || c.dataset.statut === filtreActif;
@@ -58,6 +90,24 @@
       c.classList.toggle("hidden", !visible);
       if (visible) visibles++;
     });
+
+    if (prep.q) {
+      /* Les ex aequo gardent leur ordre d'origine : à pertinence égale,
+         la série modifiée en dernier reste devant. */
+      toutes
+        .filter((c) => !c.classList.contains("hidden"))
+        .map((c) => [pertinence(c, prep.q), c._ordre, c])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+        .forEach(([, , c]) => $grid.appendChild(c));
+      ordreBouscule = true;
+    } else if (ordreBouscule) {
+      // Recherche effacée : la grille retrouve exactement l'ordre du serveur.
+      toutes
+        .slice()
+        .sort((a, b) => a._ordre - b._ordre)
+        .forEach((c) => $grid.appendChild(c));
+      ordreBouscule = false;
+    }
 
     $emptyCollection.classList.toggle("hidden", toutes.length !== 0);
     $emptySearch.classList.toggle("hidden", !(toutes.length > 0 && visibles === 0));
@@ -87,8 +137,13 @@
 
     const ancienne = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
     if (ancienne) {
+      // Une carte remplacée occupe la place de celle qu'elle remplace,
+      // y compris dans l'ordre d'origine mémorisé.
+      nouvelle._ordre = ancienne._ordre;
       ancienne.replaceWith(nouvelle);
     } else {
+      // Ajoutée en fin de grille : son rang d'origine est donc le dernier.
+      nouvelle._ordre = Number.MAX_SAFE_INTEGER;
       $grid.appendChild(nouvelle);
     }
 
