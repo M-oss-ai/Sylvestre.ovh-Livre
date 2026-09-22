@@ -494,13 +494,20 @@
         id: idEnEdition,
         repli: "1",
         enregistrer: "0",
+        /* Ce qui est SAISI, pas ce qui est enregistré : on vient
+           peut-être de corriger le tome, et c'est la couverture
+           correspondante qu'on veut voir sans valider d'abord. */
+        tome_actuel: $fVolume.value || "0",
+        statut: $fStatus.value,
       });
       coverEnAttente = { type: "url", value: r.url };
       $fImageUrl.value = r.url;
       $fImageFile.value = "";
       $fCoverRemoved.value = "0";
       majApercu();
-      $coverStatus.textContent = "Image MangaDex reprise ✅";
+      // Le numéro est annoncé : la règle « prochain tome à emprunter »
+      // surprendrait sinon quelqu'un qui vient de taper 10.
+      $coverStatus.textContent = "Image du tome " + r.tome + " reprise ✅";
     } catch (err) {
       $coverStatus.textContent = err.message;
     } finally {

@@ -744,8 +744,26 @@ switch ($action) {
            n'importe quelle couverture de la série, puisque c'est
            précisément ce qu'on lui demande. */
         $repli = ((string) ($_POST['repli'] ?? '0')) === '1';
-        $tome  = couverture_tome_vise((string) $s['statut'], (int) $s['tome_actuel']);
-        $url   = couverture_liee($lien, $tome, $repli);
+
+        /* Le tome et le statut du FORMULAIRE OUVERT priment sur ceux
+           enregistrés. On vient peut-être de passer du tome 1 au tome 10
+           sans avoir encore validé : demander la couverture du tome 1
+           renverrait l'image qu'on cherche justement à remplacer, et
+           obligerait à enregistrer d'abord pour pouvoir la voir.
+
+           Le rafraîchissement automatique, lui, n'envoie rien : il part
+           de la base, qui est bien son état de référence. */
+        $tome_vu = isset($_POST['tome_actuel'])
+            ? max(0, min(TOME_MAX, (int) $_POST['tome_actuel']))
+            : (int) $s['tome_actuel'];
+
+        $statut_vu = (string) ($_POST['statut'] ?? $s['statut']);
+        if (!isset(STATUTS[$statut_vu])) {
+            $statut_vu = (string) $s['statut'];
+        }
+
+        $tome = couverture_tome_vise($statut_vu, $tome_vu);
+        $url  = couverture_liee($lien, $tome, $repli);
 
         if ($url === '') {
             $attente = mangadex_attente_suggeree();
