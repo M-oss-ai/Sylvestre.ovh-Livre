@@ -183,10 +183,17 @@ de données ni le réseau.
 `exiger_csrf`, `post_trop_gros`, `message_post_trop_gros`,
 `journal_securite`, `url_image_sure`, `photo_depuis_formulaire`,
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
+`cron_en_ligne_de_commande`, `cron_refus_navigateur`,
+`cron_appelant_authentifie`,
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
-(câblage), `titre_normalise`, `mangadex_titre`, `carte_html`, les
+(câblage), `titre_normalise`, `mangadex_titre`,
+`couverture_quota`, `couverture_tranche_lisible`,
+`mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
+qu'il refuse), `couverture_tome_vise`,
+`mangadex_attente_suggeree`, `mangadex_attendre_son_tour` (la file
+d'attente des appels sortants), `carte_html`, les
 planchers de toutes les constantes — y compris `COUVERTURE_*` et le
 défaut restrictif de `COUVERTURE_CONTENU_ADULTE` —, et les contrôles de forme qui
 précèdent une requête (`valider_profil`, `jeton_action_valide`,
@@ -204,7 +211,8 @@ la rotation des jetons, le plafond d'appareils), les jetons d'action
 (`generer_jeton_action`, `consommer_jeton_action`), les comptes
 (`utilisateur_actuel`, `connecter`, `invalider_sessions`,
 `email_disponible`), la file d'e-mails (`empiler_mail`,
-`traiter_file_mail`), `compter_series`, le cloisonnement par
+`traiter_file_mail`), `couverture_consommer` et `couverture_rendre` (le
+quota de recherche par compte : le barème est testé, le comptage non), `compter_series`, le cloisonnement par
 `utilisateur_id` d'`api.php` et le rapport de `purger.php`.
 
 Ces fonctions-là demandent une base de test dédiée, remise à zéro entre

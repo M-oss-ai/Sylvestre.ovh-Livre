@@ -22,15 +22,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/mailer.php';
 
-/* Hors requête web ? Tous les hébergeurs n'invoquent pas leurs tâches
-   planifiées en « cli » (certains passent par CGI), d'où le test sur
-   l'absence totale de contexte HTTP. La condition est volontairement
-   restrictive : au moindre doute on exige le jeton, un fail-safe se
-   conçoit fermé. */
-$en_ligne_de_commande = PHP_SAPI === 'cli'
-    || (!isset($_SERVER['REQUEST_METHOD'])
-        && !isset($_SERVER['REMOTE_ADDR'])
-        && !isset($_SERVER['HTTP_HOST']));
+/* Hors requête web ? Voir cron_en_ligne_de_commande() dans
+   includes/fonctions.php : la règle y vit pour être testable. */
+$en_ligne_de_commande = cron_en_ligne_de_commande(PHP_SAPI, $_SERVER);
 
 if (!$en_ligne_de_commande) {
     $fourni = (string) ($_SERVER['HTTP_X_CRON_TOKEN'] ?? '');
@@ -39,8 +33,28 @@ if (!$en_ligne_de_commande) {
        refuse tout. La réponse est un 404 et non un 403 : elle ne
        confirme pas l'existence du script. */
     if (CRON_TOKEN === '' || !hash_equals(CRON_TOKEN, $fourni)) {
-        http_response_code(404);
-        exit('Not found');
+        if (cron_refus_navigateur($_SERVER)) {
+            http_response_code(404);
+            exit('Not found');
+        }
+
+        /* Pas de méthode HTTP : ce n'est pas un visiteur, c'est la tâche
+           planifiée elle-même, invoquée par un enrobage CGI qui a laissé
+           traîner un HTTP_HOST. Le test ci-dessus l'a donc prise pour
+           une requête web et lui a réclamé un jeton qu'un cron n'envoie
+           pas.
+
+           Sortir en 0 ici serait le pire des cas : l'hébergeur, réglé
+           sur « envoyer uniquement en cas d'erreur », verrait une
+           réussite. C'est ainsi qu'une purge peut ne jamais tourner
+           pendant des semaines dans le silence le plus complet. */
+        $err = defined('STDERR') ? STDERR : fopen('php://stderr', 'w');
+        fwrite($err, "purger.php : appel REFUSÉ, jeton absent ou invalide." . PHP_EOL);
+        fwrite($err, "La purge n'a PAS tourné." . PHP_EOL);
+        fwrite($err, "=> lancez la tâche en ligne de commande (php purger.php)," . PHP_EOL);
+        fwrite($err, "   ou faites-lui envoyer l'en-tête X-Cron-Token." . PHP_EOL);
+        error_log("purger.php: appel refusé (jeton absent ou invalide) — la purge n'a pas tourné");
+        exit(1);
     }
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');
@@ -125,6 +139,15 @@ $req = $pdo->prepare(
 );
 $req->execute();
 $resume[] = $req->rowCount() . ' compteur(s) de tentatives';
+
+/* Quotas de recherche de couverture : une tranche échue depuis un jour
+   ne sert plus à rien. Rien à conserver au-delà — contrairement aux
+   tentatives, ce compteur ne mémorise aucune récidive. */
+$req = $pdo->prepare(
+    'DELETE FROM recherche_couverture WHERE fenetre_fin < NOW() - INTERVAL 1 DAY'
+);
+$req->execute();
+$resume[] = $req->rowCount() . ' quota(s) de recherche';
 
 /* File de rattrapage : on rejoue ce qui n'était pas parti. Normalement
    vide — elle ne se remplit que quand le serveur SMTP a refusé. */
@@ -231,8 +254,21 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
 
     $u = $un("SELECT COUNT(*), SUM(email_verifie), SUM(forfait = 'illimite'),
                      SUM(cree_le > NOW() - INTERVAL 1 DAY) FROM utilisateur");
+    /* « maj_le > cree_le » est ce qui distingue une modification d'une
+       création. La colonne vaut CURRENT_TIMESTAMP à l'insertion, si bien
+       qu'une série ajoutée et jamais retouchée a maj_le = cree_le : sans
+       cette condition elle gonflerait le compteur des modifications le
+       jour même de sa création.
+
+       Conséquence assumée : une série créée puis modifiée dans la MÊME
+       seconde ne compte pas comme modifiée. Les deux colonnes sont des
+       DATETIME, à la seconde près — et une correction faite dans la
+       seconde qui suit la saisie tient plus de la faute de frappe
+       rattrapée que d'une modification. */
     $s = $un("SELECT COUNT(*), COUNT(DISTINCT utilisateur_id),
-                     SUM(maj_le > NOW() - INTERVAL 1 DAY) FROM serie");
+                     SUM(cree_le > NOW() - INTERVAL 1 DAY),
+                     SUM(maj_le > NOW() - INTERVAL 1 DAY AND maj_le > cree_le)
+                FROM serie");
     $appareils = $un('SELECT COUNT(*) FROM session_persistante
                        WHERE remplace_le IS NULL AND expire > NOW()');
     $bloques   = $un('SELECT COUNT(*) FROM tentative_ip WHERE bloque_jusqu > NOW()');
@@ -265,7 +301,8 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
     $t .= $lit('Séries au total', (int) $s[0]);
     $t .= $lit('Comptes ayant au moins 1 série', (int) $s[1]);
     $t .= $lit('Moyenne par compte actif', $s[1] > 0 ? round($s[0] / $s[1], 1) : 0);
-    $t .= $lit('Ajoutées ou modifiées en 24 h', (int) $s[2]);
+    $t .= $lit('Ajoutées (24 h)', (int) $s[2]);
+    $t .= $lit('Modifiées (24 h)', (int) $s[3]);
 
     $t .= "\nSÉCURITÉ (24 dernières heures)\n";
     if ($echecs) {

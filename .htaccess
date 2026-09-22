@@ -36,6 +36,25 @@
     RedirectMatch 404 (?i)/(readme\.md|[^/]+\.sql|\.ovhconfig)$
 </IfModule>
 
+# Le dossier des tests unitaires.
+#
+# Il ne sert qu'au développement, mais un envoi FTP du projet entier
+# l'emporte sans qu'on y pense — et ses fichiers de cas sont du PHP,
+# qu'Apache EXÉCUTE alors à la demande de n'importe quel visiteur. Leur
+# sortie décrit le fonctionnement interne du site, et LISEZMOI.md en
+# documente l'architecture.
+#
+# L'amorce des tests protège la base pendant qu'on code (DB_NAME pointe
+# sur « information_schema », SMTP est vidé) ; ce n'est pas une barrière
+# pour un site public, et elle n'a pas à en tenir lieu.
+#
+# « tests/.htaccess » porte la même interdiction. Les deux se doublent
+# volontairement : ici la règle tient même si le dossier est envoyé sans
+# ses fichiers cachés, là-bas elle tient même si mod_alias manque.
+<IfModule mod_alias.c>
+    RedirectMatch 404 (?i)/tests(/|$)
+</IfModule>
+
 # Pas de listing de dossier, et pas de négociation de contenu : sans
 # « -MultiViews », /api peut être servi par api.php, ce qui contourne
 # les règles écrites sur les noms de fichiers.

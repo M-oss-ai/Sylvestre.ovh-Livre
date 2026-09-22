@@ -19,6 +19,14 @@
 
   let filtreActif = "all";
   let recherche = "";
+  // La grille est-elle actuellement rangée par pertinence plutôt que
+  // dans l'ordre du serveur ? Voir appliquerVue().
+  let ordreBouscule = false;
+  /* Rang d'origine des séries créées depuis le chargement. Négatif et
+     décroissant : elles se placent en tête, la plus récente devant. */
+  let ordreNouveau = -1;
+  // Série MangaDex de la fiche ouverte, ou "" si elle n'est pas liée.
+  let lienMangadex = "";
   let coverEnAttente = null; // null | {type:'url'|'file', …}
   let idEnEdition = "";
   let idASupprimer = "";
@@ -35,10 +43,31 @@
     // Construit depuis data-titre et data-auteur, qui sont déjà là pour
     // remplir la modale d'édition. Un attribut data-recherche séparé
     // répétait ces deux valeurs dans le HTML de chaque carte, pour rien.
-    carte._recherche = L.normalize(
-      (carte.dataset.titre || "") + " " + (carte.dataset.auteur || "")
-    );
+    //
+    // Les deux champs sont gardés séparément : le classement par
+    // pertinence a besoin de savoir si c'est le TITRE qui répond à la
+    // recherche, ou seulement l'auteur.
+    carte._titre = L.normalize(carte.dataset.titre || "");
+    carte._auteur = L.normalize(carte.dataset.auteur || "");
+    carte._recherche = carte._titre + " " + carte._auteur;
     return carte;
+  }
+
+  /**
+   * À quel point cette carte répond-elle à la recherche ? Plus bas, plus
+   * pertinent.
+   *
+   * Sans ce classement, une recherche rendait les cartes dans l'ordre de
+   * la grille — la plus récemment modifiée d'abord — si bien qu'une
+   * série trouvée par son auteur pouvait précéder celle dont le titre
+   * est exactement ce qu'on a tapé.
+   */
+  function pertinence(carte, q) {
+    if (carte._titre === q) return 0;
+    if (carte._titre.startsWith(q)) return 1;
+    if (carte._titre.includes(q)) return 2;
+    if (carte._auteur.includes(q)) return 3;
+    return 4; // trouvée seulement par tolérance aux fautes de frappe
   }
 
   function cartes() {
@@ -50,6 +79,14 @@
     const prep = L.prepareRecherche(recherche);
     let visibles = 0;
 
+    /* Tant qu'aucune recherche n'a bousculé la grille, l'ordre du DOM EST
+       l'ordre d'origine (le plus récemment modifié d'abord, trié par le
+       serveur). On le note au passage : c'est lui qu'on restituera, et
+       c'est aussi ce qui donne sa place à une carte ajoutée entre-temps. */
+    if (!ordreBouscule) {
+      toutes.forEach((c, i) => { c._ordre = i; });
+    }
+
     toutes.forEach((c) => {
       if (c._recherche === undefined) indexer(c);
       const okStatut = filtreActif === "all" || c.dataset.statut === filtreActif;
@@ -58,6 +95,24 @@
       c.classList.toggle("hidden", !visible);
       if (visible) visibles++;
     });
+
+    if (prep.q) {
+      /* Les ex aequo gardent leur ordre d'origine : à pertinence égale,
+         la série modifiée en dernier reste devant. */
+      toutes
+        .filter((c) => !c.classList.contains("hidden"))
+        .map((c) => [pertinence(c, prep.q), c._ordre, c])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+        .forEach(([, , c]) => $grid.appendChild(c));
+      ordreBouscule = true;
+    } else if (ordreBouscule) {
+      // Recherche effacée : la grille retrouve exactement l'ordre du serveur.
+      toutes
+        .slice()
+        .sort((a, b) => a._ordre - b._ordre)
+        .forEach((c) => $grid.appendChild(c));
+      ordreBouscule = false;
+    }
 
     $emptyCollection.classList.toggle("hidden", toutes.length !== 0);
     $emptySearch.classList.toggle("hidden", !(toutes.length > 0 && visibles === 0));
@@ -74,9 +129,15 @@
 
   /**
    * Remplace (ou ajoute) une carte à partir du HTML renvoyé par le serveur.
-   * L'ordre affiché (du plus récemment modifié au plus ancien) vient du tri
-   * serveur au chargement de la page : ici on ne déplace jamais une carte,
-   * pour éviter qu'elle saute sous les yeux pendant qu'on la modifie.
+   *
+   * L'ordre affiché — du plus récemment modifié au plus ancien — vient du
+   * tri serveur au chargement de la page. Les deux cas n'appellent pas le
+   * même traitement :
+   *
+   *   - une série MODIFIÉE garde sa place. La voir sauter ailleurs pendant
+   *     qu'on vient de la changer est désagréable, et on la perd des yeux ;
+   *   - une série NOUVELLE se met en TÊTE. Ajoutée en bas d'une liste de
+   *     cent cinquante, il fallait recharger la page pour la retrouver.
    */
   function poserCarte(html, id) {
     const gabarit = document.createElement("div");
@@ -87,9 +148,15 @@
 
     const ancienne = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
     if (ancienne) {
+      // Une carte remplacée occupe la place de celle qu'elle remplace,
+      // y compris dans l'ordre d'origine mémorisé.
+      nouvelle._ordre = ancienne._ordre;
       ancienne.replaceWith(nouvelle);
     } else {
-      $grid.appendChild(nouvelle);
+      // En tête, et son rang la garde en tête quand une recherche est
+      // effacée — sans quoi elle repartirait se cacher en bas de liste.
+      nouvelle._ordre = ordreNouveau--;
+      $grid.prepend(nouvelle);
     }
 
     // Le fondu ne s'applique qu'ici, et une seule fois : la classe est
@@ -129,6 +196,25 @@
     ouvrirModale(e.target.closest(".card"));
   });
 
+  /**
+   * Une série liée à MangaDex suit son tome : dès qu'il change, on va
+   * chercher la couverture du nouveau tome.
+   *
+   * En arrière-plan et sans rien bloquer — le tome, lui, a déjà changé
+   * sous les yeux. Et en silence : si le tome n'a pas de couverture
+   * chez MangaDex, ou si la file d'attente est pleine, l'image en place
+   * reste, ce qui vaut mieux qu'un message pour une action que
+   * personne n'a demandée.
+   */
+  function rafraichirCouverture(id) {
+    const carte = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
+    if (!carte || !carte.dataset.mangadex) return;
+
+    L.api("couverture.rafraichir", { id })
+      .then((r) => poserCarte(r.carte, id))
+      .catch(() => {});
+  }
+
   async function avancer(id, bouton) {
     bouton.disabled = true;
     try {
@@ -136,6 +222,7 @@
       poserCarte(r.carte, id);
       majCompteurs(r.compte);
       L.toast(r.message);
+      rafraichirCouverture(id);
     } catch (err) {
       bouton.disabled = false;
       L.toast(err.message);
@@ -149,6 +236,8 @@
       poserCarte(r.carte, id);
       majCompteurs(r.compte);
       L.toast(r.message);
+      // Reculer aussi : la couverture redescend avec le tome.
+      rafraichirCouverture(id);
     } catch (err) {
       bouton.disabled = false;
       L.toast(err.message);
@@ -187,6 +276,7 @@
   const $fSubtitle = document.getElementById("f-subtitle");
   const $fVolume = document.getElementById("f-volume");
   const $fStatus = document.getElementById("f-status");
+  const $btnCoverLinked = document.getElementById("btn-cover-linked");
   const $fImageUrl = document.getElementById("f-image-url");
   const $fImageFile = document.getElementById("f-image-file");
   const $fCoverRemoved = document.getElementById("f-cover-removed");
@@ -196,7 +286,13 @@
   const $coverResults = document.getElementById("cover-results");
   const $dropzone = document.getElementById("dropzone");
   const $btnDelete = document.getElementById("btn-delete");
-  const $btnSubmit = $form.querySelector('button[type="submit"]');
+  /* Il y a DEUX boutons d'envoi : celui du bas, et celui de la barre
+     fixe sur téléphone. « form.elements » les rassemble tous les deux,
+     y compris celui qui vit HORS du <form> et n'y est rattaché que par
+     son attribut « form ». Les désactiver ensemble pendant l'envoi
+     évite qu'une double frappe enregistre la série deux fois. */
+  const $boutonsEnvoi = Array.from($form.elements).filter((el) => el.type === "submit");
+  const envoiEnCours = (oui) => $boutonsEnvoi.forEach((b) => { b.disabled = oui; });
 
   // Élément qui avait le focus avant l'ouverture d'une modale : on le lui
   // rend à la fermeture, sinon la navigation au clavier repart du haut de
@@ -222,6 +318,11 @@
     $fImageUrl.value = couverture && /^https:\/\//i.test(couverture) ? couverture : "";
 
     $btnDelete.classList.toggle("hidden", !edition);
+
+    /* Le bouton n'a de sens que pour une série déjà désignée chez
+       MangaDex : ailleurs il n'aurait nulle part où aller chercher. */
+    lienMangadex = edition ? carte.dataset.mangadex || "" : "";
+    $btnCoverLinked.classList.toggle("hidden", lienMangadex === "");
     $coverStatus.textContent = "";
     $coverResults.classList.add("hidden");
     $coverResults.replaceChildren();
@@ -288,17 +389,21 @@
       fd.set("couverture_retiree", "1");
     }
 
-    $btnSubmit.disabled = true;
+    envoiEnCours(true);
     try {
       const r = await L.api("serie.enregistrer", fd);
       poserCarte(r.carte, r.id);
+      /* La carte doit passer par le filtre et la recherche en cours,
+         comme les autres : sans cela elle s'afficherait même sous un
+         filtre qui l'exclut. */
+      appliquerVue();
       majCompteurs(r.compte);
       L.toast(r.message);
       fermerModale();
     } catch (err) {
       L.toast(err.message);
     } finally {
-      $btnSubmit.disabled = false;
+      envoiEnCours(false);
     }
   });
 
@@ -368,6 +473,48 @@
     },
   });
 
+  /* « Image MangaDex » : reprendre l'image de la série liée, même
+     lorsqu'elle ne correspond pas au tome en cours.
+
+     Le rafraîchissement automatique, lui, refuse de se rabattre sur
+     autre chose que le tome exact — il vaut mieux qu'il ne touche à
+     rien que de poser une image trompeuse sans qu'on l'ait demandé.
+     Ici on l'a demandé, d'où « repli ».
+
+     Et « enregistrer: 0 » : on ne fait que proposer l'URL. Écrire tout
+     de suite serait écrasé par le formulaire encore ouvert à la
+     validation. */
+  $btnCoverLinked.addEventListener("click", async () => {
+    if (!lienMangadex || !idEnEdition) return;
+
+    $btnCoverLinked.disabled = true;
+    $coverStatus.textContent = "Recherche de l'image…";
+    try {
+      const r = await L.api("couverture.rafraichir", {
+        id: idEnEdition,
+        repli: "1",
+        enregistrer: "0",
+        /* Ce qui est SAISI, pas ce qui est enregistré : on vient
+           peut-être de corriger le tome, et c'est la couverture
+           correspondante qu'on veut voir sans valider d'abord. */
+        tome_actuel: $fVolume.value || "0",
+        statut: $fStatus.value,
+      });
+      coverEnAttente = { type: "url", value: r.url };
+      $fImageUrl.value = r.url;
+      $fImageFile.value = "";
+      $fCoverRemoved.value = "0";
+      majApercu();
+      // Le numéro est annoncé : la règle « prochain tome à emprunter »
+      // surprendrait sinon quelqu'un qui vient de taper 10.
+      $coverStatus.textContent = "Image du tome " + r.tome + " reprise ✅";
+    } catch (err) {
+      $coverStatus.textContent = err.message;
+    } finally {
+      $btnCoverLinked.disabled = false;
+    }
+  });
+
   document.getElementById("btn-remove-cover").addEventListener("click", () => {
     coverEnAttente = null;
     $fImageUrl.value = "";
@@ -377,13 +524,16 @@
     majApercu();
   });
 
-  /* Recherche automatique de la couverture DU PROCHAIN TOME.
+  /* Recherche automatique de la couverture d'un tome précis. L'appel passe
+     par notre propre api.php, qui interroge MangaDex depuis le serveur —
+     MangaDex refuse les appels directs du navigateur, et ce détour a
+     l'avantage de ne plus exposer l'adresse IP du visiteur à un tiers.
 
-     On ne cherche plus une série mais un tome précis : celui qu'il reste
-     à emprunter, soit « tome actuel + 1 ». L'appel passe par notre propre
-     api.php, qui interroge MangaDex depuis le serveur — MangaDex refuse
-     les appels directs du navigateur, et ce détour a l'avantage de ne
-     plus exposer l'adresse IP du visiteur à un tiers. */
+     Le tome recherché dépend du statut : une série « terminée » ou
+     « abandonnée » ne sera plus empruntée plus loin que son tome actuel,
+     la couverture cherchée est donc celle-là. Une série « en cours » ou
+     « à commencer » se cherche sur le PROCHAIN tome à emprunter, soit
+     « tome actuel + 1 ». */
   async function chercherCouverture() {
     const titre = $fTitle.value.trim();
     if (!titre) {
@@ -391,7 +541,9 @@
       $fTitle.focus();
       return;
     }
-    const tome = Math.max(1, (parseInt($fVolume.value, 10) || 0) + 1);
+    const volumeActuel = parseInt($fVolume.value, 10) || 0;
+    const statutFini = $fStatus.value === "termine" || $fStatus.value === "abandon";
+    const tome = Math.max(1, statutFini ? volumeActuel : volumeActuel + 1);
 
     $coverStatus.textContent = "Recherche du tome " + tome + "…";
     $coverResults.classList.add("hidden");

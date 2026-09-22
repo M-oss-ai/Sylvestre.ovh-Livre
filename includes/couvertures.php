@@ -27,6 +27,126 @@ declare(strict_types=1);
 const MANGADEX_API = 'https://api.mangadex.org';
 const MANGADEX_IMAGES = 'https://uploads.mangadex.org/covers/';
 
+/* Étiquettes de FORMAT écartées de la recherche. Ce sont des
+   identifiants fixes de MangaDex, pas des noms — ils ne changent pas.
+
+   Les doujinshi sont des publications amateur : ils portent le titre de
+   la série dont ils s'inspirent, et MangaDex en compte des centaines.
+   Chercher « Shingeki no Kyojin » remontait 130 résultats dont les 25
+   premiers étaient tous des doujinshi — la vraie série n'était même pas
+   candidate. Ils n'ont par ailleurs pas de tomes à emprunter, ce qui est
+   la seule chose que cette application cherche.
+
+   Les « oneshot » sont écartés pour la même raison : un récit isolé
+   n'a pas de tome 2. */
+const MANGADEX_FORMATS_EXCLUS = [
+    'b13b2a48-c720-44a9-9c77-39c9979373fb',   // Doujinshi
+    '0234a31e-a729-4e28-9d6a-3f87c4966b9e',   // Oneshot
+];
+
+/* --- La cadence des appels --------------------------------------------
+
+   MangaDex tolère environ 5 requêtes par seconde et par adresse IP.
+   L'adresse comptée est celle du SERVEUR, jamais celle du visiteur :
+   tous les comptes partagent donc un seul et même budget. Le dépasser
+   vaut un 429, puis un blocage temporaire de l'hébergement, puis un
+   blocage complet dont la durée n'est pas publiée.
+
+   Une seule recherche coûte un appel, plus un par série proposée —
+   COUVERTURE_MAX_SERIES, ou COUVERTURE_CANDIDATS quand aucune limite
+   n'est fixée. À deux personnes en même temps le budget est dépassé
+   sans que personne n'ait rien fait d'anormal. Tenir la cadence est
+   donc le travail du serveur,
+   pas une raison de rationner l'utilisateur : ici on ne compte rien et
+   on ne sanctionne personne, les appels font la queue.
+
+   Le quota par compte, lui, est une autre affaire et vit plus bas. */
+
+/** Fichier témoin de la file. Hors du site : il ne contient qu'une date,
+    il n'a rien à faire dans une sauvegarde ni derrière une URL. */
+function mangadex_fichier_rythme(): string
+{
+    return sys_get_temp_dir() . '/mangadex-rythme.lock';
+}
+
+/**
+ * Attente à proposer quand un appel n'a pas pu partir, en secondes.
+ * Zéro le reste du temps.
+ *
+ * Une variable statique plutôt qu'une valeur de retour : mangadex_get()
+ * répond déjà null pour toute avarie, et distinguer « indisponible » de
+ * « trop de monde » à l'intérieur de ce null aurait demandé de changer
+ * la signature de toute la chaîne d'appel.
+ */
+function mangadex_attente_suggeree(?int $definir = null): int
+{
+    static $attente = 0;
+    if ($definir !== null) {
+        $attente = max(0, $definir);
+    }
+    return $attente;
+}
+
+/**
+ * Fait attendre son tour à l'appel qui suit, pour que le débit sortant
+ * du serveur reste sous la limite de MangaDex quel que soit le nombre
+ * de visiteurs simultanés.
+ *
+ * Retourne 0 quand le tour est acquis, sinon un nombre de secondes :
+ * mieux vaut répondre « réessayez dans deux secondes » que d'immobiliser
+ * un processus PHP, denrée rare sur un mutualisé — c'est la seule
+ * ressource que cette borne protège.
+ *
+ * Faute de pouvoir écrire le fichier témoin, l'appel part sans attendre :
+ * une précaution en panne ne doit pas emporter la fonctionnalité avec
+ * elle, et le 429 de MangaDex reste là pour rattraper le coup.
+ */
+function mangadex_attendre_son_tour(): int
+{
+    $f = @fopen(mangadex_fichier_rythme(), 'c+');
+    if ($f === false) {
+        return 0;
+    }
+
+    $espacement = COUVERTURE_ESPACEMENT / 1000;   // ms -> s
+    $plafond    = COUVERTURE_FILE_MAX / 1000;
+    $debut      = microtime(true);
+
+    /* Verrou NON bloquant : flock() attendrait sans limite, or c'est
+       justement la limite qui nous intéresse. */
+    while (!flock($f, LOCK_EX | LOCK_NB)) {
+        if (microtime(true) - $debut >= $plafond) {
+            fclose($f);
+            return max(1, (int) ceil($plafond));
+        }
+        usleep(20000);
+    }
+
+    rewind($f);
+    $precedent = (float) stream_get_contents($f);
+    $reste     = $precedent + $espacement - microtime(true);
+
+    /* Si respecter la cadence dépassait l'attente acceptable, on rend la
+       main plutôt que de dormir dessus en retenant un processus. */
+    if ($reste > 0 && (microtime(true) - $debut) + $reste > $plafond) {
+        flock($f, LOCK_UN);
+        fclose($f);
+        return max(1, (int) ceil($reste));
+    }
+    if ($reste > 0) {
+        usleep((int) ($reste * 1000000));
+    }
+
+    ftruncate($f, 0);
+    rewind($f);
+    fwrite($f, (string) microtime(true));
+    fflush($f);
+    flock($f, LOCK_UN);
+    fclose($f);
+
+    return 0;
+}
+
 /**
  * Appel GET sur l'API, en JSON. Retourne null sur le moindre problème :
  * l'appelant affiche alors « recherche indisponible », ce qui est la
@@ -38,6 +158,15 @@ const MANGADEX_IMAGES = 'https://uploads.mangadex.org/covers/';
  */
 function mangadex_get(string $chemin, array $parametres): ?array
 {
+    /* Son tour d'abord : c'est ce qui garantit que le SERVEUR respecte
+       le débit de MangaDex, là où un quota par visiteur ne borne jamais
+       la somme des visiteurs. */
+    $tour = mangadex_attendre_son_tour();
+    if ($tour > 0) {
+        mangadex_attente_suggeree($tour);
+        return null;
+    }
+
     $ch = curl_init(MANGADEX_API . $chemin . '?' . http_build_query($parametres));
     if ($ch === false) {
         return null;
@@ -49,6 +178,18 @@ function mangadex_get(string $chemin, array $parametres): ?array
         CURLOPT_FOLLOWLOCATION => false,   // aucune redirection à suivre
         CURLOPT_USERAGENT      => 'MaBibliothequeManga/1.0',
     ]);
+
+    /* Un seul en-tête nous intéresse, et il n'arrive qu'avec un 429 :
+       MangaDex y donne l'instant de reprise, en horodatage UNIX. */
+    $reprise = 0;
+    curl_setopt($ch, CURLOPT_HEADERFUNCTION,
+        static function ($ch, string $entete) use (&$reprise): int {
+            if (stripos($entete, 'x-ratelimit-retry-after:') === 0) {
+                $reprise = (int) trim(substr($entete, 24));
+            }
+            return strlen($entete);   // cURL exige le nombre d'octets lus
+        });
+
     $reponse = curl_exec($ch);
     $code    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $erreur  = curl_error($ch);
@@ -57,6 +198,15 @@ function mangadex_get(string $chemin, array $parametres): ?array
     if ($code !== 200) {
         error_log('couvertures: ' . $chemin . ' a répondu ' . $code
                 . ($erreur !== '' ? ' (' . $erreur . ')' : ''));
+
+        /* 429 : la cadence n'a pas suffi. L'horodatage de reprise devient
+           un délai, borné — une valeur aberrante ne doit pas afficher
+           « réessayez dans trois heures ». Ignorer ce signal et laisser
+           réessayer aussitôt est exactement ce qui mène au blocage
+           complet de l'hébergement. */
+        if ($code === 429) {
+            mangadex_attente_suggeree(max(1, min(60, $reprise > 0 ? $reprise - time() : 0)));
+        }
         return null;
     }
     $donnees = json_decode((string) $reponse, true);
@@ -76,6 +226,90 @@ function mangadex_titre(array $attributs): string
     }
     $titres = $attributs['title'] ?? [];
     return (string) (reset($titres) ?: '');
+}
+
+/**
+ * Tous les titres connus d'une série, toutes langues confondues :
+ * le titre principal, ses traductions, et les titres alternatifs.
+ *
+ * Indispensable au classement. MangaDex connaît « Ayanashi » sous six
+ * écritures, et mangadex_titre() n'en retient qu'une pour l'affichage.
+ * Comparer la recherche à cette seule écriture fait manquer la série
+ * dès que l'utilisateur en connaît une autre — et elle se retrouve
+ * alors derrière n'importe quel homonyme.
+ */
+function couverture_titres_connus(array $attributs): array
+{
+    $tous = array_values($attributs['title'] ?? []);
+    foreach ($attributs['altTitles'] ?? [] as $entree) {
+        if (is_array($entree)) {
+            $tous = array_merge($tous, array_values($entree));
+        }
+    }
+
+    $propres = [];
+    foreach ($tous as $t) {
+        if (is_string($t) && trim($t) !== '') {
+            $propres[] = $t;
+        }
+    }
+    return $propres;
+}
+
+/**
+ * À quelle distance cette série est-elle du titre cherché ? Plus bas,
+ * plus proche — c'est le terme dominant du classement.
+ *
+ *    0 : un de ses titres correspond exactement ;
+ *    2 : un de ses titres COMMENCE par la recherche, ou l'inverse ;
+ *    4 : un de ses titres la contient, mais ailleurs ;
+ *   10 : rien ne correspond.
+ *
+ * Les paliers intermédiaires évitent le tout ou rien : « Berserk
+ * Gaiden » doit passer devant « Tensei Berserker », qui doit lui-même
+ * passer devant une série sans rapport — et tous restent derrière
+ * « Berserk » tout court.
+ *
+ * Distinguer « commence par » de « contient » n'était pas nécessaire
+ * tant qu'on ne proposait que quatre séries. Sans limite d'affichage,
+ * une recherche courante en remonte une quinzaine qui contiennent
+ * toutes le mot cherché quelque part : le départage se faisait alors
+ * sur la seule longueur du titre, et « Kuro no Shoukanshi » passait
+ * devant « Berserk (Fan Colored) ».
+ *
+ * Le fragment comparé doit faire au moins quatre caractères : sans ce
+ * plancher, une série dont un titre alternatif est « Aya » se
+ * retrouverait « proche » de toute recherche contenant ces trois
+ * lettres.
+ */
+function couverture_ecart_titre(array $attributs, string $vise): int
+{
+    if ($vise === '') {
+        return 10;
+    }
+
+    $ecart = 10;
+    foreach (couverture_titres_connus($attributs) as $titre) {
+        $n = titre_normalise($titre);
+        if ($n === '') {
+            continue;
+        }
+        if ($n === $vise) {
+            return 0;                       // rien ne fait mieux, on s'arrête
+        }
+
+        $court = mb_strlen($n, 'UTF-8') <= mb_strlen($vise, 'UTF-8') ? $n : $vise;
+        if (mb_strlen($court, 'UTF-8') < 4) {
+            continue;
+        }
+
+        if (str_starts_with($n, $vise) || str_starts_with($vise, $n)) {
+            $ecart = min($ecart, 2);
+        } elseif (str_contains($n, $vise) || str_contains($vise, $n)) {
+            $ecart = min($ecart, 4);
+        }
+    }
+    return $ecart;
 }
 
 /**
@@ -103,6 +337,236 @@ function titre_normalise(string $t): string
 }
 
 /**
+ * L'identifiant de la série MangaDex contenu dans une URL de
+ * couverture, ou '' si l'URL vient d'ailleurs.
+ *
+ * Déduire le lien de l'image elle-même, plutôt que de le faire voyager
+ * dans un champ à côté : les deux ne peuvent alors pas se contredire,
+ * et surtout, choisir une image d'une autre source — un fichier envoyé,
+ * une URL collée — coupe le lien sans qu'on ait à y penser. C'est
+ * exactement la règle voulue, et elle n'a aucun code à elle.
+ *
+ * Le motif est volontairement strict : seul l'hôte d'images de MangaDex
+ * est reconnu, et l'identifiant doit avoir la forme d'un UUID. Une URL
+ * fabriquée pour ressembler à celle-là n'ouvrirait de toute façon aucun
+ * droit — le lien ne sert qu'à savoir où chercher l'image suivante.
+ */
+function mangadex_id_depuis_url(string $url): string
+{
+    $motif = '#^https://uploads\.mangadex\.org/covers/'
+           . '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/#i';
+
+    return preg_match($motif, trim($url), $m) ? strtolower($m[1]) : '';
+}
+
+/**
+ * Quel tome faut-il illustrer, pour une série dans cet état ?
+ *
+ * Une série terminée ou abandonnée ne sera plus empruntée plus loin que
+ * le tome qu'on en a : c'est celui-là qu'on montre. Une série en cours
+ * ou à commencer se regarde en avant, vers le prochain à emprunter.
+ *
+ * Jamais sous 1 : le tome 0 n'existe chez personne.
+ *
+ * La même règle vit dans js/app.js, qui l'applique au formulaire ouvert
+ * avant même l'enregistrement. Ici, elle sert au rafraîchissement
+ * automatique, qui part de ce qui est en base.
+ */
+function couverture_tome_vise(string $statut, int $tome_actuel): int
+{
+    $fini = ($statut === 'termine' || $statut === 'abandon');
+    return max(1, $fini ? $tome_actuel : $tome_actuel + 1);
+}
+
+/**
+ * Les deux couvertures qui nous intéressent pour une série déjà
+ * identifiée : celle du tome demandé, et celle qui sert de repli.
+ *
+ * Retourne ['exacte' => url|null, 'repli' => url|null]. Un seul appel
+ * réseau — c'est tout l'intérêt d'avoir identifié la série une fois
+ * pour toutes.
+ */
+function mangadex_couvertures_serie(string $id, int $tome): array
+{
+    /* Les couvertures sont triées par tome : on saute directement à la
+       page qui contient celui qu'on cherche, plutôt que de parcourir les
+       cent premières d'une série qui en compte cent cinquante. */
+    $page = max(0, intdiv(max(0, $tome - 1), 100) * 100);
+    $couvertures = mangadex_get('/cover', [
+        'manga'  => [$id],
+        'limit'  => 100,
+        'offset' => $page,
+        'order'  => ['volume' => 'asc'],
+    ]);
+
+    $choisie = null;
+    $repli   = null;
+    $rangLangue = ['fr' => 0, 'en' => 1, 'ja' => 2];
+
+    foreach ($couvertures['data'] ?? [] as $couverture) {
+        $a = $couverture['attributes'] ?? [];
+        $fichier = (string) ($a['fileName'] ?? '');
+        if ($fichier === '') {
+            continue;
+        }
+        $url = MANGADEX_IMAGES . rawurlencode($id) . '/' . rawurlencode($fichier) . '.512.jpg';
+        $repli ??= $url;
+
+        if (isset($a['volume']) && (int) $a['volume'] === $tome) {
+            $poids = $rangLangue[$a['locale'] ?? ''] ?? 9;
+            if ($choisie === null || $poids < $choisie['poids']) {
+                $choisie = ['url' => $url, 'poids' => $poids];
+            }
+        }
+    }
+
+    return ['exacte' => $choisie['url'] ?? null, 'repli' => $repli];
+}
+
+/**
+ * L'URL à afficher pour une série liée, ou '' si rien n'est trouvé.
+ *
+ * $repli décide de ce qu'on fait quand le tome demandé n'a pas de
+ * couverture — cas fréquent au-delà des premiers tomes :
+ *   false : on ne renvoie rien, et l'appelant garde l'image en place ;
+ *   true  : on accepte n'importe quelle couverture de la série, ce que
+ *           demande le bouton « Image MangaDex ».
+ */
+function couverture_liee(string $manga_id, int $tome, bool $repli = false): string
+{
+    if ($manga_id === '') {
+        return '';
+    }
+
+    $u = mangadex_couvertures_serie($manga_id, $tome);
+    if ($u['exacte'] !== null) {
+        return $u['exacte'];
+    }
+    if (!$repli) {
+        return '';
+    }
+    if ($u['repli'] !== null) {
+        return $u['repli'];
+    }
+
+    /* Rien du tout, et le repli est demandé : la page consultée était
+       peut-être hors de la série. Un tome 999 fait demander la page 900,
+       vide, alors que la série a bien des couvertures — on retombe donc
+       sur son début. Une requête de plus, et seulement dans ce cas. */
+    if ($tome > 100) {
+        return (string) (mangadex_couvertures_serie($manga_id, 1)['repli'] ?? '');
+    }
+    return '';
+}
+
+/**
+ * Nombre de recherches autorisées à ce compte par tranche de
+ * COUVERTURE_FENETRE secondes.
+ *
+ * Une règle annoncée, fixe, sans escalade : trente recherches par deux
+ * minutes, et au-delà l'attente vaut exactement le temps restant avant
+ * la tranche suivante. Chercher une couverture n'est pas une faute, et
+ * la mécanique précédente — celle des mots de passe, qui double la peine
+ * à chaque récidive — punissait l'usage normal d'une fonctionnalité.
+ *
+ * Le forfait illimité a un plafond lui aussi, simplement plus haut :
+ * sans aucun plafond, une page laissée à boucler suffirait à occuper la
+ * file toute la journée et à en priver les autres comptes.
+ *
+ * Fonction pure, donc testable sans base : c'est le comptage qui exige
+ * une base, pas le barème.
+ */
+function couverture_quota(array $utilisateur): int
+{
+    return ($utilisateur['forfait'] ?? '') === 'illimite'
+        ? COUVERTURE_QUOTA_ILLIMITE
+        : COUVERTURE_QUOTA;
+}
+
+/**
+ * La durée d'une tranche, en toutes lettres, pour l'annoncer à
+ * l'utilisateur : « 30 recherches par 2 minutes ».
+ *
+ * Une règle qu'on ne sait pas énoncer n'est pas une règle claire — d'où
+ * cette fonction plutôt qu'un nombre de secondes brut dans le message.
+ */
+function couverture_tranche_lisible(int $secondes): string
+{
+    if ($secondes % 60 !== 0) {
+        return $secondes . ' seconde' . ($secondes > 1 ? 's' : '');
+    }
+    $minutes = intdiv($secondes, 60);
+    return $minutes . ' minute' . ($minutes > 1 ? 's' : '');
+}
+
+/**
+ * Compte une recherche pour ce compte et dit s'il peut la faire.
+ * Retourne 0 si oui, sinon le nombre de secondes avant la tranche
+ * suivante — une information, pas une sanction : rien ne s'aggrave, rien
+ * ne se cumule, la tranche suivante repart entière.
+ *
+ * Fenêtre FIXE et non glissante : c'est ce qui permet d'annoncer une
+ * règle vérifiable par l'utilisateur (« trente par deux minutes »)
+ * plutôt qu'un solde dont personne ne peut suivre le calcul.
+ *
+ * L'incrément tient en une instruction : deux recherches simultanées
+ * liraient sinon le même compteur et le réécriraient à l'identique, si
+ * bien que deux recherches n'en compteraient qu'une.
+ */
+function couverture_consommer(int $utilisateur_id, int $quota, int $fenetre): int
+{
+    global $pdo;
+
+    $req = $pdo->prepare(
+        'INSERT INTO recherche_couverture (utilisateur_id, essais, fenetre_fin)
+         VALUES (?, 1, NOW() + INTERVAL ? SECOND)
+         ON DUPLICATE KEY UPDATE
+           essais      = IF(fenetre_fin <= NOW(), 1, essais + 1),
+           fenetre_fin = IF(fenetre_fin <= NOW(), NOW() + INTERVAL ? SECOND, fenetre_fin)'
+    );
+    $req->execute([$utilisateur_id, $fenetre, $fenetre]);
+
+    $req = $pdo->prepare(
+        'SELECT essais, GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), fenetre_fin)) AS reste
+           FROM recherche_couverture WHERE utilisateur_id = ?'
+    );
+    $req->execute([$utilisateur_id]);
+    $ligne = $req->fetch();
+
+    if (!$ligne || (int) $ligne['essais'] <= $quota) {
+        return 0;
+    }
+    /* Au moins une seconde : « réessayez dans 0 seconde » ne veut rien
+       dire, et le compte à rebours n'aurait rien à afficher. */
+    return max(1, (int) $ligne['reste']);
+}
+
+/**
+ * Rend la recherche décomptée par couverture_consommer() lorsque
+ * l'appel n'est finalement pas parti — file d'attente saturée, ou 429
+ * renvoyé par MangaDex.
+ *
+ * Sans cela, une indisponibilité du site entamerait le quota de
+ * quelqu'un qui n'a rien obtenu en échange. Le quota mesure des
+ * recherches faites, pas des tentatives : c'est exactement la nuance
+ * qui sépare ce compteur de celui des mots de passe.
+ *
+ * GREATEST(0, …) plutôt qu'une soustraction nue : deux restitutions
+ * concurrentes ne doivent pas faire passer le compteur sous zéro, et
+ * une tranche échue entre-temps ne doit pas être entamée à rebours.
+ */
+function couverture_rendre(int $utilisateur_id): void
+{
+    global $pdo;
+
+    $pdo->prepare(
+        'UPDATE recherche_couverture
+            SET essais = GREATEST(0, essais - 1)
+          WHERE utilisateur_id = ? AND fenetre_fin > NOW()'
+    )->execute([$utilisateur_id]);
+}
+
+/**
  * Cherche la couverture du tome $tome pour les séries correspondant à
  * $titre. Retourne une liste de candidats, le plus probable en premier :
  *
@@ -125,10 +589,17 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
         ? ['safe', 'suggestive', 'erotica']
         : ['safe', 'suggestive'];
 
+    /* On demande LARGE, et on classe nous-mêmes. La pertinence de
+       MangaDex place volontiers les dérivés avant l'original : en ne
+       demandant que quatre séries, la bonne n'était parfois même pas
+       candidate. Ce premier appel coûte le même prix quelle que soit sa
+       limite — seuls les /cover qui suivent se paient à l'unité. */
     $recherche = mangadex_get('/manga', [
         'title' => $titre,
-        'limit' => COUVERTURE_MAX_SERIES,
+        'limit' => COUVERTURE_CANDIDATS,
         'contentRating' => $classements,
+        'excludedTags' => MANGADEX_FORMATS_EXCLUS,
+        'excludedTagsMode' => 'OR',   // l'une OU l'autre suffit à écarter
         'order' => ['relevance' => 'desc'],
     ]);
     if ($recherche === null || empty($recherche['data'])) {
@@ -136,63 +607,73 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
     }
 
     $vise = titre_normalise($titre);
-    $resultats = [];
 
+    /* Premier tri, sur le seul titre : il ne demande aucun réseau et
+       suffit à écarter ce qui n'a rien à voir. À égalité d'écart, on
+       garde l'ordre de MangaDex, qui vaut mieux que rien. */
+    $candidats = [];
     foreach ($recherche['data'] as $rang => $manga) {
         $id = (string) ($manga['id'] ?? '');
         if ($id === '') {
             continue;
         }
-        $nom = mangadex_titre($manga['attributes'] ?? []);
+        $attributs = $manga['attributes'] ?? [];
+        $nom       = mangadex_titre($attributs);
+        $candidats[] = [
+            'id'    => $id,
+            'nom'   => $nom,
+            'ecart' => couverture_ecart_titre($attributs, $vise),
+            /* Départage les titres à égalité d'écart : à contenu égal,
+               le titre le plus court est le plus proche de ce qui a été
+               tapé. « Shingeki no Kyojin » doit passer devant « Shingeki
+               no Kyojin - Nyanko Heichou », qui le contient aussi. */
+            'long'  => mb_strlen(titre_normalise($nom), 'UTF-8'),
+            'rang'  => $rang,
+        ];
+    }
 
-        /* Les couvertures sont triées par tome : on saute directement à
-           la page qui contient celui qu'on cherche, plutôt que de
-           parcourir les cent premières d'une série qui en compte cent
-           cinquante. */
-        $page = max(0, intdiv(max(0, $tome - 1), 100) * 100);
-        $couvertures = mangadex_get('/cover', [
-            'manga'  => [$id],
-            'limit'  => 100,
-            'offset' => $page,
-            'order'  => ['volume' => 'asc'],
-        ]);
+    usort($candidats, static fn (array $a, array $b) =>
+        [$a['ecart'], $a['long'], $a['rang']] <=> [$b['ecart'], $b['long'], $b['rang']]);
 
-        $choisie = null;
-        $repli   = null;
-        $rangLangue = ['fr' => 0, 'en' => 1, 'ja' => 2];
+    /* Zéro = pas de limite : tout ce qui a été examiné est proposé. Le
+       classement ci-dessus garde son intérêt même alors — il décide de
+       l'ORDRE, et le bon résultat reste en tête d'une longue liste. */
+    if (COUVERTURE_MAX_SERIES > 0) {
+        $candidats = array_slice($candidats, 0, COUVERTURE_MAX_SERIES);
+    }
 
-        foreach ($couvertures['data'] ?? [] as $couverture) {
-            $a = $couverture['attributes'] ?? [];
-            $fichier = (string) ($a['fileName'] ?? '');
-            if ($fichier === '') {
-                continue;
-            }
-            $url = MANGADEX_IMAGES . rawurlencode($id) . '/' . rawurlencode($fichier) . '.512.jpg';
-            $repli ??= $url;
+    /* Second temps : une requête de couvertures par série retenue. */
+    $resultats = [];
 
-            if (isset($a['volume']) && (int) $a['volume'] === $tome) {
-                $poids = $rangLangue[$a['locale'] ?? ''] ?? 9;
-                if ($choisie === null || $poids < $choisie['poids']) {
-                    $choisie = ['url' => $url, 'poids' => $poids];
-                }
-            }
-        }
+    foreach ($candidats as $rang => $candidat) {
+        $id  = $candidat['id'];
+        $nom = $candidat['nom'];
 
-        $url = $choisie['url'] ?? $repli;
+        $u       = mangadex_couvertures_serie($id, $tome);
+        $choisie = $u['exacte'];
+        $url     = $choisie ?? $u['repli'];
         if ($url === null) {
             continue;
         }
 
         $resultats[] = [
             'serie' => $nom,
+            /* L'identifiant voyage jusqu'au navigateur : c'est lui qui
+               sera enregistré si l'utilisateur choisit cette série, et
+               qui évitera toutes les recherches suivantes. */
+            'id'    => $id,
             'tome'  => $tome,
             'exact' => $choisie !== null,
             'url'   => $url,
-            /* Tri : d'abord le titre qui correspond vraiment, ensuite
-               celui dont le tome a été trouvé, et seulement après le
-               classement de MangaDex — qui place « VRMMO Chronicles of a
-               Solo Cleric » avant « Berserk » quand on cherche Berserk. */
-            '_score' => (titre_normalise($nom) === $vise ? 0 : 10)
+            /* Tri final : d'abord le titre qui correspond vraiment,
+               ensuite celui dont le tome demandé a été trouvé, et
+               seulement après l'ordre du premier tri.
+
+               L'écart de titre se mesure sur TOUS les titres connus de
+               la série et non sur celui qu'on affiche : l'utilisateur
+               tape l'écriture qu'il connaît, pas forcément celle que
+               mangadex_titre() a retenue. */
+            '_score' => $candidat['ecart']
                       + ($choisie !== null ? 0 : 3)
                       + min(2, $rang * 0.1),
         ];
@@ -201,8 +682,9 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
     usort($resultats, static fn (array $a, array $b) => $a['_score'] <=> $b['_score']);
 
     return array_map(
-        static fn (array $r) => ['serie' => $r['serie'], 'tome' => $r['tome'],
-                                 'exact' => $r['exact'], 'url' => $r['url']],
+        static fn (array $r) => ['serie' => $r['serie'], 'id' => $r['id'],
+                                 'tome' => $r['tome'], 'exact' => $r['exact'],
+                                 'url' => $r['url']],
         $resultats
     );
 }

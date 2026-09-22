@@ -11,7 +11,7 @@ require_once __DIR__ . '/includes/carte.php';
 $moi = exiger_connexion();
 
 $req = $pdo->prepare(
-    'SELECT id, titre, auteur, tome_actuel, statut, couverture
+    'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id
        FROM serie
       WHERE utilisateur_id = ?
       ORDER BY maj_le DESC, id DESC'
@@ -63,7 +63,7 @@ $csrf    = jeton_csrf();
   <nav class="filters" id="filters" aria-label="Filtrer par statut">
     <button class="filter-btn active" data-filter="all" type="button" aria-pressed="true">Toutes<span class="count" id="count-all"><?= (int) $compte['all'] ?></span></button>
     <button class="filter-btn status-cours" data-filter="cours" type="button" aria-pressed="false">En cours<span class="count" id="count-cours"><?= (int) $compte['cours'] ?></span></button>
-    <button class="filter-btn status-envie" data-filter="envie" type="button" aria-pressed="false">À commencer<span class="count" id="count-envie"><?= (int) $compte['envie'] ?></span></button>
+    <button class="filter-btn status-envie" data-filter="envie" type="button" aria-pressed="false">Envie<span class="count" id="count-envie"><?= (int) $compte['envie'] ?></span></button>
     <button class="filter-btn status-termine" data-filter="termine" type="button" aria-pressed="false">Terminée<span class="count" id="count-termine"><?= (int) $compte['termine'] ?></span></button>
     <button class="filter-btn status-abandon" data-filter="abandon" type="button" aria-pressed="false">Abandonnée<span class="count" id="count-abandon"><?= (int) $compte['abandon'] ?></span></button>
   </nav>
@@ -92,8 +92,15 @@ $csrf    = jeton_csrf();
 <div id="overlay" class="overlay hidden">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-head">
-      <h2 id="modal-title">Nouvelle série</h2>
       <button id="btn-close" class="icon-btn" type="button" aria-label="Fermer">✕</button>
+      <h2 id="modal-title">Nouvelle série</h2>
+      <!-- Hors du <form>, d'où l'attribut « form » : il suffit à en faire
+           le bouton d'envoi. Caché sur grand écran, où celui du bas est
+           tout de suite visible ; sur téléphone il prend sa place, parce
+           que les résultats de recherche repoussent le bas de la modale
+           hors de vue. -->
+      <button id="btn-save-top" class="icon-btn icon-btn-valider" type="submit"
+              form="series-form" aria-label="Enregistrer" title="Enregistrer">✓</button>
     </div>
 
     <form id="series-form" enctype="multipart/form-data">
@@ -145,6 +152,7 @@ $csrf    = jeton_csrf();
               📁 Choisir un fichier
               <input id="f-image-file" name="couverture_fichier" type="file" accept="image/*" class="visually-hidden">
             </label>
+            <button type="button" id="btn-cover-linked" class="btn btn-ghost small hidden">🖼️ Image MangaDex</button>
             <button type="button" id="btn-remove-cover" class="btn btn-ghost small danger-text">Retirer l'image</button>
           </div>
         </div>

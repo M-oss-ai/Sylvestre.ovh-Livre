@@ -158,7 +158,21 @@ window.Lib = (() => {
       if (cible.includes(qm)) return true;
       const seuil = qm.length <= 3 ? 1 : qm.length <= 6 ? 2 : 3;
       return mots.some((m) => {
-        if (m.startsWith(qm) || qm.startsWith(m)) return true;
+        // L'utilisateur a tapé un début de mot : c'est une recherche par
+        // préfixe, elle est voulue, et même « on » pour « One Piece ».
+        if (m.startsWith(qm)) return true;
+
+        /* Le cas inverse — l'utilisateur en tape PLUS que le mot stocké,
+           « Berserker » pour trouver « Berserk ».
+
+           Sans plancher de longueur, un mot d'UNE lettre du titre
+           suffisait : « À toi d'être un héros ! » contient le mot « a »,
+           et « a » est bien le début de « ayanashi ». Toute recherche
+           commençant par un « a » remontait donc cette série — et le même
+           piège valait pour « à », « d », « l », « y », omniprésents dans
+           les titres français. */
+        if (m.length >= 4 && qm.startsWith(m)) return true;
+
         // Filtre bon marché avant le calcul coûteux : deux mots dont les
         // longueurs diffèrent de plus que le seuil ne peuvent pas
         // correspondre, quelle que soit leur composition.

@@ -137,7 +137,7 @@ if ($action === 'donnees.exporter') {
 function ma_serie(PDO $pdo, int $mon_id, int $id): array
 {
     $req = $pdo->prepare(
-        'SELECT id, titre, auteur, tome_actuel, statut, couverture
+        'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id
            FROM serie WHERE id = ? AND utilisateur_id = ?'
     );
     $req->execute([$id, $mon_id]);
@@ -202,12 +202,19 @@ switch ($action) {
             $couverture = url_image_sure($ancienne);
         }
 
+        /* Le lien vers MangaDex se LIT dans l'image retenue. Rien à
+           transmettre depuis le formulaire, rien qui puisse diverger :
+           une image envoyée ou une URL d'ailleurs donne une chaîne vide,
+           et le lien disparaît de lui-même. */
+        $lien = mangadex_id_depuis_url($couverture);
+
         if ($id > 0) {
             $req = $pdo->prepare(
-                'UPDATE serie SET titre = ?, auteur = ?, tome_actuel = ?, statut = ?, couverture = ?
+                'UPDATE serie SET titre = ?, auteur = ?, tome_actuel = ?, statut = ?,
+                        couverture = ?, mangadex_id = ?
                   WHERE id = ? AND utilisateur_id = ?'
             );
-            $req->execute([$titre, $auteur, $tome, $statut, $couverture, $id, $mon_id]);
+            $req->execute([$titre, $auteur, $tome, $statut, $couverture, $lien, $id, $mon_id]);
             $message = 'Série mise à jour ✅';
         } else {
             /* Le quota est appliqué PAR LA BASE, dans l'insertion elle-même.
@@ -216,14 +223,14 @@ switch ($action) {
                compte finissait à 151. Ici MySQL compte et insère d'un seul
                tenant, la course n'existe plus. */
             $req = $pdo->prepare(
-                'INSERT INTO serie (utilisateur_id, titre, auteur, tome_actuel, statut, couverture)
-                 SELECT ?, ?, ?, ?, ?, ?
+                'INSERT INTO serie (utilisateur_id, titre, auteur, tome_actuel, statut, couverture, mangadex_id)
+                 SELECT ?, ?, ?, ?, ?, ?, ?
                    FROM DUAL
                   WHERE ? = 1
                      OR (SELECT n FROM (SELECT COUNT(*) AS n FROM serie WHERE utilisateur_id = ?) AS c) < ?'
             );
             $req->execute([
-                $mon_id, $titre, $auteur, $tome, $statut, $couverture,
+                $mon_id, $titre, $auteur, $tome, $statut, $couverture, $lien,
                 $moi['forfait'] === 'illimite' ? 1 : 0,
                 $mon_id, MAX_SERIES_PAR_UTILISATEUR,
             ]);
@@ -651,15 +658,24 @@ switch ($action) {
         }
         $tome = max(1, min(TOME_MAX, (int) ($_POST['tome'] ?? 1)));
 
-        /* Ce frein protège l'adresse IP du SERVEUR : c'est elle que
-           MangaDex verrait s'acharner, et elle que MangaDex bloquerait.
-           Chaque recherche compte, réussie ou non. */
-        $attente = limiteur_bloque_depuis('couverture');
+        /* Deux protections distinctes, et il faut les distinguer.
+
+           Celle-ci encadre le COMPTE : une règle fixe et annoncée, que
+           l'utilisateur peut vérifier lui-même. La dépasser n'est pas
+           une faute et n'entraîne aucune sanction — ni blocage qui
+           double, ni compteur de récidive : seulement l'attente de la
+           tranche suivante.
+
+           Celle qui protège le SERVEUR vit dans mangadex_get(), sous
+           forme de file d'attente : elle ne compte personne. */
+        $quota   = couverture_quota($moi);
+        $attente = couverture_consommer($mon_id, $quota, COUVERTURE_FENETRE);
         if ($attente > 0) {
             reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
-                'Trop de recherches. Réessayez dans ' . $attente . ' secondes.'], 429);
+                'Limite atteinte : ' . $quota . ' recherches par '
+                . couverture_tranche_lisible(COUVERTURE_FENETRE)
+                . '. Nouvelle recherche dans ' . $attente . ' secondes.'], 429);
         }
-        limiteur_echec('couverture', COUVERTURE_MAX, COUVERTURE_BLOCAGE);
 
         /* Trois conditions, toutes nécessaires : le site l'autorise,
            l'utilisateur a déclaré sa majorité, et il a effectivement
@@ -669,6 +685,22 @@ switch ($action) {
             && (int) ($moi['adulte_confirme'] ?? 0) === 1
             && (int) ($moi['filtre_sensible'] ?? 1) === 0;
         $resultats = chercher_couvertures($titre, $tome, $adulte);
+
+        /* Une liste vide peut vouloir dire deux choses très différentes :
+           la série n'existe pas, ou l'appel n'est jamais parti — file
+           trop longue, ou 429 renvoyé par MangaDex. Dans le second cas
+           l'utilisateur n'y est pour rien : on lui dit quand revenir, et
+           le compte à rebours de js/delai.js s'en charge. */
+        $retard = mangadex_attente_suggeree();
+        if ($resultats === [] && $retard > 0) {
+            /* Rendue, puisqu'elle n'a rien donné et que l'utilisateur
+               n'y est pour rien : son quota ne doit pas payer une
+               indisponibilité du site. */
+            couverture_rendre($mon_id);
+            reponse_json(['ok' => false, 'attente' => $retard, 'erreur' =>
+                'Trop de recherches en cours sur le site. Réessayez dans '
+                . $retard . ' secondes.'], 429);
+        }
 
         reponse_json([
             'ok'        => true,
@@ -682,6 +714,88 @@ switch ($action) {
             'message'   => $resultats
                 ? count($resultats) . ' résultat(s) pour le tome ' . $tome
                 : 'Aucune série trouvée pour « ' . $titre . ' ».',
+        ]);
+    }
+
+    /* ---------------- Couverture d'une série déjà liée ----------------
+       Une fois la série désignée chez MangaDex, retrouver la couverture
+       du tome suivant ne demande plus de chercher ni de deviner : un
+       seul appel, et il ne se trompe pas.
+
+       Cette action ne consomme PAS le quota de recherche. Un quota sert
+       à répartir équitablement une ressource coûteuse ; ici il s'agit
+       d'un appel unique, souvent déclenché automatiquement en avançant
+       d'un tome. Le faire payer au tarif d'une recherche — dix-huit
+       appels — bloquerait la recherche manuelle de quelqu'un qui ne fait
+       que rattraper sa série. La file d'attente, elle, s'applique : c'est
+       elle qui protège l'adresse du serveur, et c'est ce qui compte. */
+    case 'couverture.rafraichir': {
+        $id = (int) ($_POST['id'] ?? 0);
+        $s  = ma_serie($pdo, $mon_id, $id);
+
+        $lien = (string) ($s['mangadex_id'] ?? '');
+        if ($lien === '') {
+            reponse_json(['ok' => false, 'erreur' => "Cette série n'est liée à aucune série MangaDex."], 422);
+        }
+
+        /* « repli » distingue les deux appelants : le rafraîchissement
+           automatique n'accepte que la couverture du tome exact et laisse
+           l'image en place sinon ; le bouton « Image MangaDex » accepte
+           n'importe quelle couverture de la série, puisque c'est
+           précisément ce qu'on lui demande. */
+        $repli = ((string) ($_POST['repli'] ?? '0')) === '1';
+
+        /* Le tome et le statut du FORMULAIRE OUVERT priment sur ceux
+           enregistrés. On vient peut-être de passer du tome 1 au tome 10
+           sans avoir encore validé : demander la couverture du tome 1
+           renverrait l'image qu'on cherche justement à remplacer, et
+           obligerait à enregistrer d'abord pour pouvoir la voir.
+
+           Le rafraîchissement automatique, lui, n'envoie rien : il part
+           de la base, qui est bien son état de référence. */
+        $tome_vu = isset($_POST['tome_actuel'])
+            ? max(0, min(TOME_MAX, (int) $_POST['tome_actuel']))
+            : (int) $s['tome_actuel'];
+
+        $statut_vu = (string) ($_POST['statut'] ?? $s['statut']);
+        if (!isset(STATUTS[$statut_vu])) {
+            $statut_vu = (string) $s['statut'];
+        }
+
+        $tome = couverture_tome_vise($statut_vu, $tome_vu);
+        $url  = couverture_liee($lien, $tome, $repli);
+
+        if ($url === '') {
+            $attente = mangadex_attente_suggeree();
+            reponse_json([
+                'ok'      => false,
+                'attente' => $attente,
+                'erreur'  => $attente > 0
+                    ? 'Trop de recherches en cours. Réessayez dans ' . $attente . ' secondes.'
+                    : 'Aucune couverture trouvée pour le tome ' . $tome . '.',
+            ], $attente > 0 ? 429 : 404);
+        }
+
+        /* Le rafraîchissement automatique écrit en base : sans cela la
+           couverture reviendrait en arrière au prochain chargement.
+
+           Le bouton du formulaire, lui, n'écrit rien — il se contente de
+           proposer l'URL, que l'utilisateur garde ou non en validant la
+           modale. Écrire tout de suite ferait écraser ce choix par ce que
+           le formulaire encore ouvert renverrait ensuite. */
+        $persister = ((string) ($_POST['enregistrer'] ?? '1')) === '1';
+
+        if ($persister && $url !== url_image_sure((string) $s['couverture'])) {
+            $pdo->prepare('UPDATE serie SET couverture = ? WHERE id = ? AND utilisateur_id = ?')
+                ->execute([$url, $id, $mon_id]);
+            $s['couverture'] = $url;
+        }
+
+        reponse_json([
+            'ok'    => true,
+            'url'   => $url,
+            'carte' => carte_html($s),
+            'tome'  => $tome,
         ]);
     }
 

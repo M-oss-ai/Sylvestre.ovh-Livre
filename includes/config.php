@@ -404,10 +404,42 @@ define('IMPORT_TAILLE_MAX', max(65536, (int) env('IMPORT_TAILLE_MAX', '5242880')
    indisponible — ce qui vaut mieux qu'une page qui ne répond plus. */
 define('COUVERTURE_TIMEOUT', max(1, (int) env('COUVERTURE_TIMEOUT', '5')));
 
-/* Nombre de séries proposées. Chacune coûte un appel supplémentaire
-   pour aller chercher ses couvertures : au-delà de quelques-unes,
-   l'attente devient sensible sans aider au choix. */
-define('COUVERTURE_MAX_SERIES', min(10, max(1, (int) env('COUVERTURE_MAX_SERIES', '4'))));
+/* Nombre de séries proposées à la recherche de couverture.
+
+   ZÉRO — ou la clé absente — signifie « pas de limite » : toutes les
+   séries examinées sont proposées. C'est le réglage par défaut, pour
+   qu'aucune proposition ne soit cachée.
+
+   Ce que cela coûte, et il faut le savoir : chaque série proposée
+   demande un appel de plus pour aller chercher ses couvertures, et ces
+   appels sont espacés par la file d'attente (voir COUVERTURE_ESPACEMENT).
+   Sans limite, une recherche coûte donc 1 + COUVERTURE_CANDIDATS appels
+   au lieu de 1 + 4, et dure quelques secondes au lieu d'une.
+
+   La borne réelle reste COUVERTURE_CANDIDATS : on ne propose jamais plus
+   de séries qu'on n'en a examinées. */
+define('COUVERTURE_MAX_SERIES', max(0, (int) env('COUVERTURE_MAX_SERIES', '0')));
+
+/* Nombre de séries EXAMINÉES avant d'en retenir COUVERTURE_MAX_SERIES.
+
+   MangaDex ordonne par sa propre pertinence, qui place volontiers les
+   dérivés et les doujinshi avant la série d'origine : chercher
+   « Shingeki no Kyojin » ne ramenait que des doujinshi dans les quatre
+   premiers résultats, et la vraie série n'était même pas candidate.
+
+   Élargir ici ne coûte AUCUN appel supplémentaire — c'est le même appel
+   avec une limite plus haute. Ce sont les appels /cover qui coûtent, et
+   ils restent limités aux séries retenues.
+
+   Jamais en dessous du nombre de séries proposées, sinon on retiendrait
+   plus de séries qu'on n'en examine — sans objet quand ce nombre est
+   illimité, d'où le « max » avec 1 dans ce cas. Plafonné à 100, maximum
+   accepté par l'API.
+
+   C'est ce réglage, et non COUVERTURE_MAX_SERIES, qui borne réellement
+   le coût d'une recherche sans limite d'affichage. */
+define('COUVERTURE_CANDIDATS',
+    min(100, max(max(1, COUVERTURE_MAX_SERIES), (int) env('COUVERTURE_CANDIDATS', '25'))));
 
 /* Autoriser les séries classées « erotica » par MangaDex (nudité, thèmes
    sexuels marqués) dans la recherche automatique de couverture.
@@ -425,11 +457,44 @@ define('COUVERTURE_MAX_SERIES', min(10, max(1, (int) env('COUVERTURE_MAX_SERIES'
    pour des scènes de nudité et non pour sa violence. */
 define('COUVERTURE_CONTENU_ADULTE', env('COUVERTURE_CONTENU_ADULTE', '0') === '1');
 
-/* Recherches autorisées par IP avant blocage. Ce frein ne protège pas
-   le site mais MangaDex : les appels partent de l'adresse du serveur,
-   et c'est elle qui serait bloquée si quelqu'un s'acharnait. */
-define('COUVERTURE_MAX', max(1, (int) env('COUVERTURE_MAX', '30')));
-define('COUVERTURE_BLOCAGE', max(1, (int) env('COUVERTURE_BLOCAGE', '300')));
+/* --- Ce qui protège le SERVEUR ---------------------------------------
+
+   MangaDex tolère environ 5 requêtes par seconde et par adresse IP —
+   celle de l'hébergement, partagée par tous les visiteurs. Une seule
+   recherche coûte 1 + COUVERTURE_MAX_SERIES appels, si bien que deux
+   personnes en même temps suffisent à dépasser la limite sans que
+   personne n'ait rien fait d'anormal.
+
+   D'où une file d'attente et non un quota : les appels sortants sont
+   espacés, et rien n'est compté au nom de qui que ce soit. */
+
+/* Millisecondes entre deux appels sortants, tous visiteurs confondus.
+   250 ms = 4 appels par seconde, sous la limite de 5. */
+define('COUVERTURE_ESPACEMENT', min(2000, max(100, (int) env('COUVERTURE_ESPACEMENT', '250'))));
+
+/* Attente maximale dans cette file, en millisecondes. Au-delà, la
+   recherche répond « réessayez dans N secondes » plutôt que de retenir
+   un processus PHP — denrée rare sur un mutualisé, et la seule
+   ressource que cette borne protège. */
+define('COUVERTURE_FILE_MAX', min(5000, max(200, (int) env('COUVERTURE_FILE_MAX', '2000'))));
+
+/* --- Ce qui encadre chaque COMPTE ------------------------------------
+
+   Une règle fixe et annoncée, sans escalade : COUVERTURE_QUOTA
+   recherches par tranche de COUVERTURE_FENETRE secondes, et au-delà
+   l'attente vaut exactement le temps restant avant la tranche suivante.
+   Rien ne double, rien ne se cumule — se servir d'une fonctionnalité
+   autant qu'elle le permet n'est pas une faute à sanctionner. */
+define('COUVERTURE_FENETRE', min(3600, max(10, (int) env('COUVERTURE_FENETRE', '120'))));
+define('COUVERTURE_QUOTA', min(1000, max(1, (int) env('COUVERTURE_QUOTA', '30'))));
+
+/* Le forfait illimité a un plafond lui aussi, simplement plus haut :
+   sans plafond du tout, une page laissée à boucler occuperait la file
+   toute la journée et en priverait les autres comptes. Jamais sous le
+   quota ordinaire — ce serait un forfait « illimité » plus sévère que
+   les autres. */
+define('COUVERTURE_QUOTA_ILLIMITE',
+    min(5000, max(COUVERTURE_QUOTA, (int) env('COUVERTURE_QUOTA_ILLIMITE', '120'))));
 
 /* Borne haute du numéro de tome (colonne INT UNSIGNED). */
 define('TOME_MAX', max(1, (int) env('TOME_MAX', '9999')));
@@ -443,6 +508,82 @@ define('SMTP_TIMEOUT', max(1, (int) env('SMTP_TIMEOUT', '5')));
 /* Nombre d'échecs après lequel un message en file est abandonné. */
 define('MAIL_FILE_MAX_ESSAIS', max(1, (int) env('MAIL_FILE_MAX_ESSAIS', '3')));
 
+/* ---------------------------------------------------------------------
+   Accès à la tâche planifiée (purger.php)
+
+   Ici et non dans fonctions.php : purger.php ne charge que ce fichier
+   et mailer.php. fonctions.php, lui, envoie des en-têtes de sécurité et
+   démarre une session dès l'inclusion — deux choses qu'un cron n'a pas
+   à faire.
+
+   Ici et non dans purger.php non plus : ce script s'exécute dès qu'on
+   l'inclut, il est donc intestable. Or ce sont des règles de sécurité,
+   et une règle de sécurité qu'on ne peut pas tester finit par dériver
+   sans qu'on le voie.
+   --------------------------------------------------------------------- */
+
+/**
+ * L'appel a-t-il lieu HORS d'une requête web, c'est-à-dire assez
+ * sûrement pour se passer du jeton ?
+ *
+ * Volontairement restrictif : tous les hébergeurs n'invoquent pas leurs
+ * tâches planifiées en « cli », certains passent par un enrobage CGI
+ * qui laisse traîner des variables HTTP. Au moindre doute on exige le
+ * jeton — un fail-safe se conçoit fermé.
+ */
+function cron_en_ligne_de_commande(string $sapi, array $serveur): bool
+{
+    return $sapi === 'cli'
+        || (!isset($serveur['REQUEST_METHOD'])
+            && !isset($serveur['REMOTE_ADDR'])
+            && !isset($serveur['HTTP_HOST']));
+}
+
+/**
+ * Un appel refusé vient-il d'un NAVIGATEUR, ou d'une tâche planifiée
+ * mal configurée ?
+ *
+ * La distinction décide de la façon d'échouer, et elle compte plus
+ * qu'il n'y paraît :
+ *
+ *   - navigateur ou robot : 404 muet, qui ne confirme pas même
+ *     l'existence du script ;
+ *   - tâche planifiée : message explicite et code de retour NON NUL.
+ *
+ * Sans ce second cas, un cron refusé sortait en 0 — une réussite, pour
+ * l'hébergeur. Réglé sur « envoyer uniquement en cas d'erreur », il ne
+ * disait donc jamais rien, et la purge pouvait ne jamais tourner
+ * pendant des semaines sans que personne s'en aperçoive.
+ *
+ * REQUEST_METHOD est le bon marqueur : aucune requête HTTP réelle n'en
+ * est dépourvue, et aucun cron n'en fabrique.
+ */
+function cron_refus_navigateur(array $serveur): bool
+{
+    return isset($serveur['REQUEST_METHOD']);
+}
+
+/**
+ * L'appel porte-t-il le jeton de la tâche planifiée ?
+ *
+ * Sert à décider si l'on peut montrer le DÉTAIL TECHNIQUE d'une erreur
+ * plutôt que la page polie. Qui détient ce jeton est l'administrateur
+ * du site : lui cacher la cause d'un 500 ne protège personne, et lui
+ * coûte des heures — il faut sinon aller lire les journaux de
+ * l'hébergeur, quand on y a accès et qu'on sait où ils sont.
+ *
+ * hash_equals : comparaison à temps constant, pour ne pas laisser
+ * deviner le jeton caractère par caractère. Un jeton vide n'autorise
+ * rien : sans cette garde, un site dont le .env n'est pas rempli
+ * montrerait ses erreurs internes à n'importe qui.
+ */
+function cron_appelant_authentifie(array $serveur, string $jeton_attendu): bool
+{
+    if ($jeton_attendu === '') {
+        return false;
+    }
+    return hash_equals($jeton_attendu, (string) ($serveur['HTTP_X_CRON_TOKEN'] ?? ''));
+}
 /**
  * « 3 Mo », « 512 Ko » — pour que les messages d'erreur suivent le
  * réglage au lieu de répéter une valeur écrite en dur à côté.
@@ -562,6 +703,17 @@ function erreur_fatale(string $journal = ''): never
         header('Cache-Control: no-store');
     }
 
+    /* L'administrateur, lui, a droit à la cause.
+       Diagnostiquer un 500 sur un mutualisé sans cela oblige à aller
+       chercher les journaux de l'hébergeur ; on tourne longtemps à
+       deviner. Le jeton du cron identifie la seule personne qui a le
+       droit de déclencher purger.php : elle peut voir pourquoi il
+       échoue. */
+    $detail = ($journal !== '' && defined('CRON_TOKEN')
+               && cron_appelant_authentifie($_SERVER, CRON_TOKEN))
+        ? $journal
+        : '';
+
     // Une requête AJAX attend du JSON : lui renvoyer du HTML produirait
     // « Réponse inattendue du serveur » côté navigateur au lieu du message.
     $veutJson = str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')
@@ -571,10 +723,14 @@ function erreur_fatale(string $journal = ''): never
         if (!headers_sent()) {
             header('Content-Type: application/json; charset=utf-8');
         }
-        echo json_encode([
+        $corps = [
             'ok'     => false,
             'erreur' => "Une erreur technique est survenue. Réessayez dans quelques instants.",
-        ], JSON_UNESCAPED_UNICODE);
+        ];
+        if ($detail !== '') {
+            $corps['detail'] = $detail;
+        }
+        echo json_encode($corps, JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -586,7 +742,13 @@ function erreur_fatale(string $journal = ''): never
         . "<div style=\"font-family:system-ui;background:#17130f;color:#e6dccf;padding:40px;min-height:100vh\">"
         . "<h1 style=\"color:#f4e4d0\">Service temporairement indisponible</h1>"
         . "<p>Merci de réessayer dans quelques instants. Si le problème persiste, contactez "
-        . "l'administrateur à " . htmlspecialchars(ADMIN_EMAIL, ENT_QUOTES, 'UTF-8') . ".</p></div>"
+        . "l'administrateur à " . htmlspecialchars(ADMIN_EMAIL, ENT_QUOTES, 'UTF-8') . ".</p>"
+        . ($detail !== ''
+            ? "<pre style=\"white-space:pre-wrap;background:#0d0a08;padding:16px;"
+              . "border-radius:8px;color:#f0b8a0\">"
+              . htmlspecialchars($detail, ENT_QUOTES, 'UTF-8') . "</pre>"
+            : '')
+        . "</div>"
     );
 }
 

@@ -1,0 +1,21 @@
+# =====================================================================
+# Ce dossier ne sert qu'au développement : il n'a rien à faire sur un
+# serveur en ligne. Mais un envoi FTP du projet entier l'emporte sans
+# qu'on y pense — et Apache sert alors ce qu'il contient. Les fichiers
+# de cas sont du PHP : n'importe quel visiteur peut les EXÉCUTER à la
+# demande, simplement en demandant leur URL.
+#
+# L'amorce des tests limite déjà les dégâts (DB_NAME pointe sur
+# « information_schema », SMTP est vidé), mais elle est écrite pour
+# protéger la base pendant qu'on code. Elle n'a pas à tenir lieu de
+# barrière sur un site public.
+#
+# Le .htaccess de la racine porte la même interdiction, en 404. Les deux
+# se doublent volontairement : un dossier copié sans ses fichiers cachés
+# est vite arrivé, et une configuration d'hébergeur peut ignorer l'une
+# ou l'autre des directives.
+# =====================================================================
+
+Options -Indexes
+
+Require all denied

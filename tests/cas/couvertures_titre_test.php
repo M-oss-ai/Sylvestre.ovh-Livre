@@ -1,6 +1,6 @@
 <?php
 /* =====================================================================
-   includes/couvertures.php — les deux fonctions qui ne parlent pas au
+   includes/couvertures.php — les fonctions qui ne parlent pas au
    réseau.
 
    Le reste du fichier interroge MangaDex : hors du périmètre de cette
@@ -113,4 +113,184 @@ test('un titre vide est ignoré au profit du suivant', function () {
     egale('The Traveller', mangadex_titre(['title' => [
         'fr' => '', 'en' => 'The Traveller',
     ]]), 'fr vide, on passe à en');
+});
+
+groupe('couverture_quota() — le barème par compte');
+
+test('le forfait illimité a droit à davantage', function () {
+    vrai(couverture_quota(['forfait' => 'illimite']) > couverture_quota(['forfait' => 'standard']),
+        'plus haut que le forfait ordinaire');
+    egale(COUVERTURE_QUOTA_ILLIMITE, couverture_quota(['forfait' => 'illimite']),
+        'exactement le réglage prévu pour lui');
+});
+
+test('« illimité » ne veut pas dire sans plafond', function () {
+    /* Sans aucun plafond, une page laissée à boucler occuperait la file
+       toute la journée et en priverait les autres comptes. Le forfait
+       donne droit à plus, pas à tout. */
+    vrai(couverture_quota(['forfait' => 'illimite']) > 0, 'un nombre fini');
+    vrai(is_int(couverture_quota(['forfait' => 'illimite'])), 'un entier de recherches');
+});
+
+test('les autres forfaits reçoivent le quota ordinaire', function () {
+    egale(COUVERTURE_QUOTA, couverture_quota(['forfait' => 'standard']), 'forfait standard');
+    egale(COUVERTURE_QUOTA, couverture_quota(['forfait' => 'gratuit']), 'forfait quelconque');
+});
+
+test('un forfait absent reçoit le quota ordinaire, pas le plus généreux', function () {
+    /* Absence de donnée = le barème le plus restrictif, jamais
+       l inverse : un défaut permissif accorderait silencieusement le
+       plafond haut à n importe quel tableau incomplet. */
+    egale(COUVERTURE_QUOTA, couverture_quota([]), 'clé « forfait » absente');
+});
+
+groupe('couverture_tranche_lisible() — énoncer la règle');
+
+test('les minutes rondes s écrivent en minutes', function () {
+    /* « 30 recherches par 2 minutes » se vérifie de tête ; « par 120
+       secondes » demande une division avant de savoir si c est
+       raisonnable. */
+    egale('2 minutes', couverture_tranche_lisible(120), 'le réglage par défaut');
+    egale('1 minute', couverture_tranche_lisible(60), 'au singulier');
+    egale('5 minutes', couverture_tranche_lisible(300), 'une tranche plus longue');
+});
+
+test('ce qui ne tombe pas juste reste en secondes', function () {
+    egale('90 secondes', couverture_tranche_lisible(90), 'pas un compte rond de minutes');
+    egale('45 secondes', couverture_tranche_lisible(45), 'moins d une minute');
+    egale('1 seconde', couverture_tranche_lisible(1), 'au singulier');
+});
+
+groupe('couverture_titres_connus() — toutes les écritures d une série');
+
+test('le titre principal et ses traductions sont rassemblés', function () {
+    $t = couverture_titres_connus(['title' => ['en' => 'Attack on Titan', 'ja' => '進撃の巨人']]);
+    contient('Attack on Titan', implode('|', $t), 'le titre anglais');
+    contient('進撃の巨人', implode('|', $t), 'le titre japonais');
+});
+
+test('les titres alternatifs comptent autant que les autres', function () {
+    /* C est là que vit « Shingeki no Kyojin » : MangaDex affiche la
+       série sous « Attack on Titan », et l utilisateur tape l autre. */
+    $t = couverture_titres_connus([
+        'title'     => ['en' => 'Attack on Titan'],
+        'altTitles' => [['ja-ro' => 'Shingeki no Kyojin'], ['fr' => "L Attaque des Titans"]],
+    ]);
+    contient('Shingeki no Kyojin', implode('|', $t), 'le titre translittéré');
+    contient('Attaque des Titans', implode('|', $t), 'le titre français');
+});
+
+test('les entrées vides ou mal formées sont ignorées', function () {
+    /* La source n est pas garantie : une clé présente mais vide, ou une
+       entrée qui n est pas un tableau, ne doit pas faire échouer le
+       classement de toute la recherche. */
+    $t = couverture_titres_connus([
+        'title'     => ['en' => 'Vrai', 'fr' => '', 'de' => '   '],
+        'altTitles' => [['ja' => 'Autre'], 'pas un tableau', []],
+    ]);
+    egale(2, count($t), 'seuls les deux titres réels sont retenus');
+});
+
+test('un manga sans aucun titre ne provoque rien', function () {
+    egale([], couverture_titres_connus([]), 'aucune clé');
+    egale([], couverture_titres_connus(['title' => [], 'altTitles' => []]), 'clés vides');
+});
+
+groupe('couverture_ecart_titre() — ce qui décide du classement');
+
+test('un titre exact vaut zéro', function () {
+    egale(0, couverture_ecart_titre(['title' => ['en' => 'Berserk']], titre_normalise('Berserk')),
+        'le titre affiché');
+});
+
+test('un titre exact trouvé dans les alternatifs vaut zéro aussi', function () {
+    /* LE cas qui motive tout ceci. Sans lui, chercher « Shingeki no
+       Kyojin » ne reconnaissait pas « Attack on Titan » et la vraie
+       série tombait derrière n importe quel homonyme. */
+    egale(0, couverture_ecart_titre([
+        'title'     => ['en' => 'Attack on Titan'],
+        'altTitles' => [['ja-ro' => 'Shingeki no Kyojin']],
+    ], titre_normalise('Shingeki no Kyojin')), 'reconnu par son titre alternatif');
+});
+
+test('la casse et les accents ne changent rien', function () {
+    egale(0, couverture_ecart_titre(['title' => ['fr' => 'Détective Conan']],
+        titre_normalise('detective conan')), 'normalisation appliquée des deux côtés');
+});
+
+test('un titre qui COMMENCE par la recherche vaut le meilleur palier', function () {
+    $e = couverture_ecart_titre(['title' => ['ja-ro' => 'Ayanashi no Kimi']], titre_normalise('Ayanashi'));
+    egale(2, $e, 'commence par la recherche');
+    vrai($e > 0 && $e < 10, 'entre l exact et le hors-sujet');
+});
+
+test('un titre qui la contient AILLEURS vaut le palier suivant', function () {
+    /* La distinction compte des que la liste s allonge : « Berserk
+       Gaiden » doit passer devant « Tensei Berserker ». */
+    egale(4, couverture_ecart_titre(['title' => ['en' => 'Tensei Berserker']],
+        titre_normalise('Berserk')), 'la recherche est au milieu du titre');
+
+    $debut  = couverture_ecart_titre(['title' => ['en' => 'Berserk Gaiden']], titre_normalise('Berserk'));
+    $milieu = couverture_ecart_titre(['title' => ['en' => 'Tensei Berserker']], titre_normalise('Berserk'));
+    vrai($debut < $milieu, 'commencer par vaut mieux que contenir');
+});
+
+test('une recherche plus longue que le titre compte aussi', function () {
+    egale(2, couverture_ecart_titre(['title' => ['en' => 'Berserk']],
+        titre_normalise('Berserk edition couleur')), 'la recherche commence par le titre');
+});
+
+test('une série sans rapport vaut dix', function () {
+    egale(10, couverture_ecart_titre(['title' => ['en' => 'One Piece']], titre_normalise('Berserk')),
+        'rien en commun');
+});
+
+test('un fragment trop court ne rapproche de rien', function () {
+    /* Sans ce plancher, une série dont un titre alternatif est « Aya »
+       serait « proche » de toute recherche contenant ces trois lettres,
+       et remonterait devant des séries réellement pertinentes. */
+    egale(10, couverture_ecart_titre(['title' => ['ja' => 'Aya']], titre_normalise('Ayanashi')),
+        'trois caractères ne suffisent pas');
+    egale(2, couverture_ecart_titre(['title' => ['ja' => 'Ayan']], titre_normalise('Ayanashi')),
+        'quatre caractères suffisent');
+});
+
+test('une recherche vide ne rapproche de rien', function () {
+    /* Un titre en japonais se normalise en chaîne vide : sans cette
+       garde, toute série deviendrait un résultat exact. */
+    egale(10, couverture_ecart_titre(['title' => ['en' => 'Berserk']], ''), 'recherche vide');
+    egale(10, couverture_ecart_titre(['title' => ['ja' => 'アヤナシ']], titre_normalise('Ayanashi')),
+        'un titre non latin ne correspond à rien après normalisation');
+});
+
+test('le meilleur titre l emporte, pas le premier', function () {
+    /* Un exact trouvé en dernière position doit primer sur un simple
+       rapprochement trouvé en première. */
+    egale(0, couverture_ecart_titre([
+        'title'     => ['en' => 'Ayanashi no Kimi'],
+        'altTitles' => [['ja-ro' => 'Ayanashi']],
+    ], titre_normalise('Ayanashi')), 'l exact trouvé après le partiel');
+
+    /* Et de même entre les deux paliers intermédiaires. */
+    egale(2, couverture_ecart_titre([
+        'title'     => ['en' => 'Tensei Berserker'],
+        'altTitles' => [['ja-ro' => 'Berserk Gaiden']],
+    ], titre_normalise('Berserk')), 'le meilleur des deux paliers');
+});
+
+groupe('COUVERTURE_MAX_SERIES — zéro veut dire « pas de limite »');
+
+test('la valeur par défaut n impose aucune limite', function () {
+    /* Le .env des tests ne définit pas la clé : c est le défaut du code
+       qui s applique, et il doit tout proposer. Rien ne doit être caché
+       à l utilisateur sans qu il l ait demandé. */
+    egale(0, COUVERTURE_MAX_SERIES, 'zéro, donc sans limite');
+});
+
+test('le vivier reste borné même sans limite d affichage', function () {
+    /* C est lui qui borne réellement le coût : une série proposée est un
+       appel réseau de plus. Sans cette borne, une recherche courante
+       partirait pour une centaine d appels. */
+    vrai(COUVERTURE_CANDIDATS >= 1, 'au moins une série examinée');
+    vrai(COUVERTURE_CANDIDATS <= 100, 'jamais au-delà du maximum de l API');
 });

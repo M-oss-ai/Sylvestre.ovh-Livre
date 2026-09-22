@@ -129,6 +129,14 @@ CREATE TABLE IF NOT EXISTS `serie` (
   `tome_actuel`    INT UNSIGNED NOT NULL DEFAULT 0,
   `statut`         ENUM('cours','envie','termine','abandon') NOT NULL DEFAULT 'cours',
   `couverture`     VARCHAR(500) NOT NULL DEFAULT '',
+  -- Serie correspondante chez MangaDex, une fois que l'utilisateur
+  -- l'a designee. Tant qu'elle est renseignee, la couverture suit
+  -- automatiquement le tome : avancer d'un tome va chercher la bonne
+  -- image sans rien redemander ni redeviner.
+  -- Vide des que l'utilisateur choisit une image d'une autre source :
+  -- son choix prime, et un lien qui ecraserait son image serait un
+  -- piege. Un identifiant MangaDex est un UUID, donc 36 caracteres.
+  `mangadex_id`    CHAR(36)     NOT NULL DEFAULT '',
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -230,14 +238,19 @@ CREATE TABLE IF NOT EXISTS `mail_file` (
 --  Migrations — bases déjà installées
 --
 --  À exécuter sur une base créée avant ces évolutions. Tout est
---  rejouable sans risque : « IF EXISTS » et « IF NOT EXISTS » rendent
---  chaque ligne sans effet si elle a déjà été appliquée. Sur une base
---  neuve, elles ne font rien non plus : on peut les laisser.
+--  rejouable sans risque : chaque bloc est sans effet si la colonne
+--  qu'il pose existe déjà. Sur une base neuve, ils ne font rien non
+--  plus : on peut les laisser.
 --
---  ⚠️ « ADD COLUMN IF NOT EXISTS » est une extension MariaDB, ce qui
---  couvre les hébergements OVH. Sur un MySQL d'Oracle, retirez le
---  « IF NOT EXISTS » : la ligne échouera alors si la colonne existe
---  déjà, ce qui est sans conséquence.
+--  ⚠️ « ADD COLUMN IF NOT EXISTS » n'est PAS utilisé ici, bien qu'il
+--  soit plus court : c'est une extension MariaDB, et elle échoue sur
+--  MySQL d'Oracle comme sur les MariaDB antérieures à la 10.0.2. Les
+--  blocs ci-dessous interrogent information_schema, puis ne construisent
+--  l'ALTER que si la colonne manque. C'est plus verbeux, et cela
+--  fonctionne partout.
+--
+--  « DO 0 » est l'instruction qui ne fait rien : c'est ce qu'on exécute
+--  quand il n'y a rien à faire.
 -- ---------------------------------------------------------------------
 
 --  1. Quotas d'envoi retirés : `mail_envoye` ne servait qu'à leur
@@ -254,6 +267,66 @@ DROP TABLE IF EXISTS `mail_envoye`;
 --     Les valeurs par défaut sont les plus restrictives : filtre actif,
 --     aucune déclaration. Les comptes existants sont donc protégés sans
 --     que personne ait à intervenir.
-ALTER TABLE `utilisateur`
-  ADD COLUMN IF NOT EXISTS `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1;
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'adulte_confirme');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'filtre_sensible');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  3. Quota de recherche de couverture, par compte et par tranche.
+--
+--     Une table à part plutôt qu'une ligne de « tentative_ip » : ce
+--     n'est pas la même chose. « tentative_ip » enregistre des ÉCHECS
+--     et double la peine à chaque récidive, ce qui convient à des mots
+--     de passe essayés au hasard. Chercher une couverture est un usage
+--     normal : on compte des recherches RÉUSSIES, sans escalade, et la
+--     tranche suivante repart entière.
+--
+--     « fenetre_fin » porte la fin de la tranche en cours. Une tranche
+--     échue est repartie à la première recherche suivante, sans qu'un
+--     nettoyage soit nécessaire pour que le compte redevienne bon.
+--
+--     ON DELETE CASCADE : la ligne disparaît avec le compte, comme les
+--     séries et les jetons.
+-- ---------------------------------------------------------------------
+--  4. Lien vers la serie correspondante chez MangaDex.
+--
+--     Sans lui, retrouver la couverture du tome suivant obligeait a
+--     relancer une recherche complete et a redeviner quelle serie
+--     etait la bonne — une vingtaine de requetes, a chaque tome.
+--     Avec lui, une seule requete suffit, et elle ne se trompe pas.
+--
+--     Les series existantes partent sans lien : elles en obtiennent un
+--     a la prochaine recherche de couverture.
+--  La valeur par défaut est une chaîne vide. Dans un ALTER construit à
+--  l'intérieur d'une chaîne SQL, elle s'écrit avec quatre apostrophes :
+--  deux pour la chaîne vide, doublées pour survivre à la chaîne qui les
+--  contient.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'mangadex_id');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `mangadex_id` CHAR(36) NOT NULL DEFAULT ''''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `recherche_couverture` (
+  `utilisateur_id` INT UNSIGNED NOT NULL,
+  `essais`         INT UNSIGNED NOT NULL DEFAULT 0,
+  `fenetre_fin`    DATETIME     NOT NULL,
+  PRIMARY KEY (`utilisateur_id`),
+  -- Utilisé par purger.php pour effacer les tranches depuis longtemps
+  -- échues : sans purge, une ligne subsiste par compte ayant cherché.
+  KEY `idx_recherche_fenetre` (`fenetre_fin`),
+  CONSTRAINT `fk_recherche_utilisateur` FOREIGN KEY (`utilisateur_id`)
+    REFERENCES `utilisateur` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -45,7 +45,8 @@ function carte_html(array $s): string
                data-titre="' . e($titre) . '"
                data-auteur="' . e($auteur) . '"
                data-tome="' . $tome . '"
-               data-couverture="' . e($couverture) . '">
+               data-couverture="' . e($couverture) . '"
+               data-mangadex="' . e((string) ($s['mangadex_id'] ?? '')) . '">
         <div class="card-cover" data-action="edit" role="button" tabindex="0" aria-label="Modifier ' . e($titre) . '">
           ' . $image . '
           <span class="badge">' . e(STATUTS[$statut]) . '</span>
