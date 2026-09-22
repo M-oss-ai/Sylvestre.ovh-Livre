@@ -131,8 +131,12 @@ Ne jamais fournir une liste partielle de migrations : c'est ainsi que
 `mail_file` a été oubliée sur le serveur, et le cron plantait en 500 à
 chaque passage.
 
-`ADD COLUMN IF NOT EXISTS` est une **extension MariaDB** — ce qui couvre
-OVH, mais pas un MySQL d'Oracle.
+**Ne pas écrire `ADD COLUMN IF NOT EXISTS`**, même si c'est plus court :
+c'est une extension MariaDB, et elle échoue sur MySQL d'Oracle comme
+sur les MariaDB antérieures à la 10.0.2 — la base de production en a
+fait l'expérience. Le motif portable est dans `livre.sql` : interroger
+`information_schema`, puis ne construire l'`ALTER` que si la colonne
+manque, et exécuter `DO 0` sinon.
 
 ## Déploiement
 
