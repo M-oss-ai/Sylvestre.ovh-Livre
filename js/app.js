@@ -22,6 +22,9 @@
   // La grille est-elle actuellement rangée par pertinence plutôt que
   // dans l'ordre du serveur ? Voir appliquerVue().
   let ordreBouscule = false;
+  /* Rang d'origine des séries créées depuis le chargement. Négatif et
+     décroissant : elles se placent en tête, la plus récente devant. */
+  let ordreNouveau = -1;
   // Série MangaDex de la fiche ouverte, ou "" si elle n'est pas liée.
   let lienMangadex = "";
   let coverEnAttente = null; // null | {type:'url'|'file', …}
@@ -126,9 +129,15 @@
 
   /**
    * Remplace (ou ajoute) une carte à partir du HTML renvoyé par le serveur.
-   * L'ordre affiché (du plus récemment modifié au plus ancien) vient du tri
-   * serveur au chargement de la page : ici on ne déplace jamais une carte,
-   * pour éviter qu'elle saute sous les yeux pendant qu'on la modifie.
+   *
+   * L'ordre affiché — du plus récemment modifié au plus ancien — vient du
+   * tri serveur au chargement de la page. Les deux cas n'appellent pas le
+   * même traitement :
+   *
+   *   - une série MODIFIÉE garde sa place. La voir sauter ailleurs pendant
+   *     qu'on vient de la changer est désagréable, et on la perd des yeux ;
+   *   - une série NOUVELLE se met en TÊTE. Ajoutée en bas d'une liste de
+   *     cent cinquante, il fallait recharger la page pour la retrouver.
    */
   function poserCarte(html, id) {
     const gabarit = document.createElement("div");
@@ -144,9 +153,10 @@
       nouvelle._ordre = ancienne._ordre;
       ancienne.replaceWith(nouvelle);
     } else {
-      // Ajoutée en fin de grille : son rang d'origine est donc le dernier.
-      nouvelle._ordre = Number.MAX_SAFE_INTEGER;
-      $grid.appendChild(nouvelle);
+      // En tête, et son rang la garde en tête quand une recherche est
+      // effacée — sans quoi elle repartirait se cacher en bas de liste.
+      nouvelle._ordre = ordreNouveau--;
+      $grid.prepend(nouvelle);
     }
 
     // Le fondu ne s'applique qu'ici, et une seule fois : la classe est
@@ -383,6 +393,10 @@
     try {
       const r = await L.api("serie.enregistrer", fd);
       poserCarte(r.carte, r.id);
+      /* La carte doit passer par le filtre et la recherche en cours,
+         comme les autres : sans cela elle s'afficherait même sous un
+         filtre qui l'exclut. */
+      appliquerVue();
       majCompteurs(r.compte);
       L.toast(r.message);
       fermerModale();
