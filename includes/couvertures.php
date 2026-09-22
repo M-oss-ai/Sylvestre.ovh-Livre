@@ -52,9 +52,11 @@ const MANGADEX_FORMATS_EXCLUS = [
    vaut un 429, puis un blocage temporaire de l'hébergement, puis un
    blocage complet dont la durée n'est pas publiée.
 
-   Une seule recherche coûte 1 + COUVERTURE_MAX_SERIES appels. À deux
-   personnes en même temps le budget est dépassé sans que personne n'ait
-   rien fait d'anormal. Tenir la cadence est donc le travail du serveur,
+   Une seule recherche coûte un appel, plus un par série proposée —
+   COUVERTURE_MAX_SERIES, ou COUVERTURE_CANDIDATS quand aucune limite
+   n'est fixée. À deux personnes en même temps le budget est dépassé
+   sans que personne n'ait rien fait d'anormal. Tenir la cadence est
+   donc le travail du serveur,
    pas une raison de rationner l'utilisateur : ici on ne compte rien et
    on ne sanctionne personne, les appels font la queue.
 
@@ -259,12 +261,21 @@ function couverture_titres_connus(array $attributs): array
  * plus proche — c'est le terme dominant du classement.
  *
  *    0 : un de ses titres correspond exactement ;
- *    4 : un de ses titres contient la recherche, ou l'inverse ;
+ *    2 : un de ses titres COMMENCE par la recherche, ou l'inverse ;
+ *    4 : un de ses titres la contient, mais ailleurs ;
  *   10 : rien ne correspond.
  *
- * Le palier intermédiaire évite le tout ou rien : « Ayanashi no Kimi »
- * doit passer devant une série sans rapport, tout en restant derrière
- * « Ayanashi » tout court.
+ * Les paliers intermédiaires évitent le tout ou rien : « Berserk
+ * Gaiden » doit passer devant « Tensei Berserker », qui doit lui-même
+ * passer devant une série sans rapport — et tous restent derrière
+ * « Berserk » tout court.
+ *
+ * Distinguer « commence par » de « contient » n'était pas nécessaire
+ * tant qu'on ne proposait que quatre séries. Sans limite d'affichage,
+ * une recherche courante en remonte une quinzaine qui contiennent
+ * toutes le mot cherché quelque part : le départage se faisait alors
+ * sur la seule longueur du titre, et « Kuro no Shoukanshi » passait
+ * devant « Berserk (Fan Colored) ».
  *
  * Le fragment comparé doit faire au moins quatre caractères : sans ce
  * plancher, une série dont un titre alternatif est « Aya » se
@@ -286,10 +297,16 @@ function couverture_ecart_titre(array $attributs, string $vise): int
         if ($n === $vise) {
             return 0;                       // rien ne fait mieux, on s'arrête
         }
+
         $court = mb_strlen($n, 'UTF-8') <= mb_strlen($vise, 'UTF-8') ? $n : $vise;
-        if (mb_strlen($court, 'UTF-8') >= 4
-            && (str_contains($n, $vise) || str_contains($vise, $n))) {
-            $ecart = 4;
+        if (mb_strlen($court, 'UTF-8') < 4) {
+            continue;
+        }
+
+        if (str_starts_with($n, $vise) || str_starts_with($vise, $n)) {
+            $ecart = min($ecart, 2);
+        } elseif (str_contains($n, $vise) || str_contains($vise, $n)) {
+            $ecart = min($ecart, 4);
         }
     }
     return $ecart;
@@ -317,6 +334,129 @@ function titre_normalise(string $t): string
         'ç'=>'c','ñ'=>'n','ÿ'=>'y','æ'=>'ae','œ'=>'oe','ß'=>'ss',
     ]);
     return trim(preg_replace('/[^a-z0-9]+/', ' ', $t) ?? $t);
+}
+
+/**
+ * L'identifiant de la série MangaDex contenu dans une URL de
+ * couverture, ou '' si l'URL vient d'ailleurs.
+ *
+ * Déduire le lien de l'image elle-même, plutôt que de le faire voyager
+ * dans un champ à côté : les deux ne peuvent alors pas se contredire,
+ * et surtout, choisir une image d'une autre source — un fichier envoyé,
+ * une URL collée — coupe le lien sans qu'on ait à y penser. C'est
+ * exactement la règle voulue, et elle n'a aucun code à elle.
+ *
+ * Le motif est volontairement strict : seul l'hôte d'images de MangaDex
+ * est reconnu, et l'identifiant doit avoir la forme d'un UUID. Une URL
+ * fabriquée pour ressembler à celle-là n'ouvrirait de toute façon aucun
+ * droit — le lien ne sert qu'à savoir où chercher l'image suivante.
+ */
+function mangadex_id_depuis_url(string $url): string
+{
+    $motif = '#^https://uploads\.mangadex\.org/covers/'
+           . '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/#i';
+
+    return preg_match($motif, trim($url), $m) ? strtolower($m[1]) : '';
+}
+
+/**
+ * Quel tome faut-il illustrer, pour une série dans cet état ?
+ *
+ * Une série terminée ou abandonnée ne sera plus empruntée plus loin que
+ * le tome qu'on en a : c'est celui-là qu'on montre. Une série en cours
+ * ou à commencer se regarde en avant, vers le prochain à emprunter.
+ *
+ * Jamais sous 1 : le tome 0 n'existe chez personne.
+ *
+ * La même règle vit dans js/app.js, qui l'applique au formulaire ouvert
+ * avant même l'enregistrement. Ici, elle sert au rafraîchissement
+ * automatique, qui part de ce qui est en base.
+ */
+function couverture_tome_vise(string $statut, int $tome_actuel): int
+{
+    $fini = ($statut === 'termine' || $statut === 'abandon');
+    return max(1, $fini ? $tome_actuel : $tome_actuel + 1);
+}
+
+/**
+ * Les deux couvertures qui nous intéressent pour une série déjà
+ * identifiée : celle du tome demandé, et celle qui sert de repli.
+ *
+ * Retourne ['exacte' => url|null, 'repli' => url|null]. Un seul appel
+ * réseau — c'est tout l'intérêt d'avoir identifié la série une fois
+ * pour toutes.
+ */
+function mangadex_couvertures_serie(string $id, int $tome): array
+{
+    /* Les couvertures sont triées par tome : on saute directement à la
+       page qui contient celui qu'on cherche, plutôt que de parcourir les
+       cent premières d'une série qui en compte cent cinquante. */
+    $page = max(0, intdiv(max(0, $tome - 1), 100) * 100);
+    $couvertures = mangadex_get('/cover', [
+        'manga'  => [$id],
+        'limit'  => 100,
+        'offset' => $page,
+        'order'  => ['volume' => 'asc'],
+    ]);
+
+    $choisie = null;
+    $repli   = null;
+    $rangLangue = ['fr' => 0, 'en' => 1, 'ja' => 2];
+
+    foreach ($couvertures['data'] ?? [] as $couverture) {
+        $a = $couverture['attributes'] ?? [];
+        $fichier = (string) ($a['fileName'] ?? '');
+        if ($fichier === '') {
+            continue;
+        }
+        $url = MANGADEX_IMAGES . rawurlencode($id) . '/' . rawurlencode($fichier) . '.512.jpg';
+        $repli ??= $url;
+
+        if (isset($a['volume']) && (int) $a['volume'] === $tome) {
+            $poids = $rangLangue[$a['locale'] ?? ''] ?? 9;
+            if ($choisie === null || $poids < $choisie['poids']) {
+                $choisie = ['url' => $url, 'poids' => $poids];
+            }
+        }
+    }
+
+    return ['exacte' => $choisie['url'] ?? null, 'repli' => $repli];
+}
+
+/**
+ * L'URL à afficher pour une série liée, ou '' si rien n'est trouvé.
+ *
+ * $repli décide de ce qu'on fait quand le tome demandé n'a pas de
+ * couverture — cas fréquent au-delà des premiers tomes :
+ *   false : on ne renvoie rien, et l'appelant garde l'image en place ;
+ *   true  : on accepte n'importe quelle couverture de la série, ce que
+ *           demande le bouton « Image MangaDex ».
+ */
+function couverture_liee(string $manga_id, int $tome, bool $repli = false): string
+{
+    if ($manga_id === '') {
+        return '';
+    }
+
+    $u = mangadex_couvertures_serie($manga_id, $tome);
+    if ($u['exacte'] !== null) {
+        return $u['exacte'];
+    }
+    if (!$repli) {
+        return '';
+    }
+    if ($u['repli'] !== null) {
+        return $u['repli'];
+    }
+
+    /* Rien du tout, et le repli est demandé : la page consultée était
+       peut-être hors de la série. Un tome 999 fait demander la page 900,
+       vide, alors que la série a bien des couvertures — on retombe donc
+       sur son début. Une requête de plus, et seulement dans ce cas. */
+    if ($tome > 100) {
+        return (string) (mangadex_couvertures_serie($manga_id, 1)['repli'] ?? '');
+    }
+    return '';
 }
 
 /**
@@ -494,7 +634,13 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
 
     usort($candidats, static fn (array $a, array $b) =>
         [$a['ecart'], $a['long'], $a['rang']] <=> [$b['ecart'], $b['long'], $b['rang']]);
-    $candidats = array_slice($candidats, 0, COUVERTURE_MAX_SERIES);
+
+    /* Zéro = pas de limite : tout ce qui a été examiné est proposé. Le
+       classement ci-dessus garde son intérêt même alors — il décide de
+       l'ORDRE, et le bon résultat reste en tête d'une longue liste. */
+    if (COUVERTURE_MAX_SERIES > 0) {
+        $candidats = array_slice($candidats, 0, COUVERTURE_MAX_SERIES);
+    }
 
     /* Second temps : une requête de couvertures par série retenue. */
     $resultats = [];
@@ -503,46 +649,19 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
         $id  = $candidat['id'];
         $nom = $candidat['nom'];
 
-        /* Les couvertures sont triées par tome : on saute directement à
-           la page qui contient celui qu'on cherche, plutôt que de
-           parcourir les cent premières d'une série qui en compte cent
-           cinquante. */
-        $page = max(0, intdiv(max(0, $tome - 1), 100) * 100);
-        $couvertures = mangadex_get('/cover', [
-            'manga'  => [$id],
-            'limit'  => 100,
-            'offset' => $page,
-            'order'  => ['volume' => 'asc'],
-        ]);
-
-        $choisie = null;
-        $repli   = null;
-        $rangLangue = ['fr' => 0, 'en' => 1, 'ja' => 2];
-
-        foreach ($couvertures['data'] ?? [] as $couverture) {
-            $a = $couverture['attributes'] ?? [];
-            $fichier = (string) ($a['fileName'] ?? '');
-            if ($fichier === '') {
-                continue;
-            }
-            $url = MANGADEX_IMAGES . rawurlencode($id) . '/' . rawurlencode($fichier) . '.512.jpg';
-            $repli ??= $url;
-
-            if (isset($a['volume']) && (int) $a['volume'] === $tome) {
-                $poids = $rangLangue[$a['locale'] ?? ''] ?? 9;
-                if ($choisie === null || $poids < $choisie['poids']) {
-                    $choisie = ['url' => $url, 'poids' => $poids];
-                }
-            }
-        }
-
-        $url = $choisie['url'] ?? $repli;
+        $u       = mangadex_couvertures_serie($id, $tome);
+        $choisie = $u['exacte'];
+        $url     = $choisie ?? $u['repli'];
         if ($url === null) {
             continue;
         }
 
         $resultats[] = [
             'serie' => $nom,
+            /* L'identifiant voyage jusqu'au navigateur : c'est lui qui
+               sera enregistré si l'utilisateur choisit cette série, et
+               qui évitera toutes les recherches suivantes. */
+            'id'    => $id,
             'tome'  => $tome,
             'exact' => $choisie !== null,
             'url'   => $url,
@@ -563,8 +682,9 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false): a
     usort($resultats, static fn (array $a, array $b) => $a['_score'] <=> $b['_score']);
 
     return array_map(
-        static fn (array $r) => ['serie' => $r['serie'], 'tome' => $r['tome'],
-                                 'exact' => $r['exact'], 'url' => $r['url']],
+        static fn (array $r) => ['serie' => $r['serie'], 'id' => $r['id'],
+                                 'tome' => $r['tome'], 'exact' => $r['exact'],
+                                 'url' => $r['url']],
         $resultats
     );
 }

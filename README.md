@@ -151,6 +151,36 @@ Le détour a deux avantages — la Content-Security-Policy reste en
 `connect-src 'self'`, et l'adresse IP du visiteur n'est pas communiquée
 à un tiers. Les endpoints de lecture ne demandent **ni compte ni clé**.
 
+### La série est liée, puis se suit toute seule
+
+Choisir une couverture ne fait pas que poser une image : la série
+MangaDex correspondante est **enregistrée** (`serie.mangadex_id`). Dès
+lors, avancer ou reculer d'un tome va chercher la couverture du nouveau
+tome — **une seule requête**, sans rien rechercher ni redeviner.
+
+C'est ce qui change tout : la recherche redevient un geste ponctuel, au
+lieu d'être à refaire à chaque tome.
+
+Le lien n'est pas transmis par le formulaire, il se **déduit de l'URL de
+l'image** (`mangadex_id_depuis_url()`). Conséquence directe, et voulue :
+
+| Vous choisissez | Le lien |
+|---|---|
+| une couverture proposée par la recherche | **enregistré** |
+| un fichier depuis votre appareil | **coupé** |
+| une URL d'un autre site | **coupé** |
+| « Retirer l'image » | **coupé** |
+
+Les deux ne peuvent donc pas se contredire, et votre image n'est jamais
+écrasée par une mise à jour automatique.
+
+Le rafraîchissement automatique **n'accepte que la couverture du tome
+exact**. Si ce tome n'en a pas — fréquent au-delà des premiers — l'image
+en place est conservée plutôt que remplacée par une vignette trompeuse.
+Le bouton **🖼️ Image MangaDex**, lui, accepte n'importe quelle
+couverture de la série : il n'apparaît que sur une série liée, et sert
+précisément à cela.
+
 ### Quel tome est cherché
 
 Le tome dépend du **statut** de la série : une série terminée ne sera
@@ -168,6 +198,10 @@ soit.
 Le statut lu est celui du **formulaire ouvert**, pas celui enregistré :
 changer le statut puis lancer la recherche cherche bien le tome
 correspondant au nouveau statut.
+
+La même règle s'applique au rafraîchissement automatique d'une série
+liée — à ceci près qu'il part, lui, de ce qui est en base
+(`couverture_tome_vise()`).
 
 ### Quelle série est proposée
 
@@ -235,6 +269,13 @@ font pas le même travail :
   aucune sanction — seulement l'attente de la tranche suivante, et une
   recherche qui n'est pas partie est rendue.
 
+Le rafraîchissement d'une série liée **ne consomme pas ce quota**. Un
+quota répartit une ressource coûteuse ; il s'agit ici d'un appel
+unique, souvent déclenché en avançant simplement d'un tome. Le faire
+payer au tarif d'une recherche bloquerait la recherche manuelle de
+quelqu'un qui ne fait que rattraper sa série. La file d'attente, elle,
+s'applique : c'est elle qui protège l'adresse du serveur.
+
 ### Contenu sensible
 
 `COUVERTURE_CONTENU_ADULTE` est à `0` par défaut : seules les séries
@@ -252,7 +293,7 @@ configuration.
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable |
+| `livre.sql` | Schéma complet, rejouable (migration 4 : `serie.mangadex_id`) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |

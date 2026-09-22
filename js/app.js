@@ -22,6 +22,8 @@
   // La grille est-elle actuellement rangée par pertinence plutôt que
   // dans l'ordre du serveur ? Voir appliquerVue().
   let ordreBouscule = false;
+  // Série MangaDex de la fiche ouverte, ou "" si elle n'est pas liée.
+  let lienMangadex = "";
   let coverEnAttente = null; // null | {type:'url'|'file', …}
   let idEnEdition = "";
   let idASupprimer = "";
@@ -184,6 +186,25 @@
     ouvrirModale(e.target.closest(".card"));
   });
 
+  /**
+   * Une série liée à MangaDex suit son tome : dès qu'il change, on va
+   * chercher la couverture du nouveau tome.
+   *
+   * En arrière-plan et sans rien bloquer — le tome, lui, a déjà changé
+   * sous les yeux. Et en silence : si le tome n'a pas de couverture
+   * chez MangaDex, ou si la file d'attente est pleine, l'image en place
+   * reste, ce qui vaut mieux qu'un message pour une action que
+   * personne n'a demandée.
+   */
+  function rafraichirCouverture(id) {
+    const carte = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
+    if (!carte || !carte.dataset.mangadex) return;
+
+    L.api("couverture.rafraichir", { id })
+      .then((r) => poserCarte(r.carte, id))
+      .catch(() => {});
+  }
+
   async function avancer(id, bouton) {
     bouton.disabled = true;
     try {
@@ -191,6 +212,7 @@
       poserCarte(r.carte, id);
       majCompteurs(r.compte);
       L.toast(r.message);
+      rafraichirCouverture(id);
     } catch (err) {
       bouton.disabled = false;
       L.toast(err.message);
@@ -204,6 +226,8 @@
       poserCarte(r.carte, id);
       majCompteurs(r.compte);
       L.toast(r.message);
+      // Reculer aussi : la couverture redescend avec le tome.
+      rafraichirCouverture(id);
     } catch (err) {
       bouton.disabled = false;
       L.toast(err.message);
@@ -242,6 +266,7 @@
   const $fSubtitle = document.getElementById("f-subtitle");
   const $fVolume = document.getElementById("f-volume");
   const $fStatus = document.getElementById("f-status");
+  const $btnCoverLinked = document.getElementById("btn-cover-linked");
   const $fImageUrl = document.getElementById("f-image-url");
   const $fImageFile = document.getElementById("f-image-file");
   const $fCoverRemoved = document.getElementById("f-cover-removed");
@@ -277,6 +302,11 @@
     $fImageUrl.value = couverture && /^https:\/\//i.test(couverture) ? couverture : "";
 
     $btnDelete.classList.toggle("hidden", !edition);
+
+    /* Le bouton n'a de sens que pour une série déjà désignée chez
+       MangaDex : ailleurs il n'aurait nulle part où aller chercher. */
+    lienMangadex = edition ? carte.dataset.mangadex || "" : "";
+    $btnCoverLinked.classList.toggle("hidden", lienMangadex === "");
     $coverStatus.textContent = "";
     $coverResults.classList.add("hidden");
     $coverResults.replaceChildren();
@@ -421,6 +451,41 @@
       $fCoverRemoved.value = cover ? "0" : "1";
       majApercu();
     },
+  });
+
+  /* « Image MangaDex » : reprendre l'image de la série liée, même
+     lorsqu'elle ne correspond pas au tome en cours.
+
+     Le rafraîchissement automatique, lui, refuse de se rabattre sur
+     autre chose que le tome exact — il vaut mieux qu'il ne touche à
+     rien que de poser une image trompeuse sans qu'on l'ait demandé.
+     Ici on l'a demandé, d'où « repli ».
+
+     Et « enregistrer: 0 » : on ne fait que proposer l'URL. Écrire tout
+     de suite serait écrasé par le formulaire encore ouvert à la
+     validation. */
+  $btnCoverLinked.addEventListener("click", async () => {
+    if (!lienMangadex || !idEnEdition) return;
+
+    $btnCoverLinked.disabled = true;
+    $coverStatus.textContent = "Recherche de l'image…";
+    try {
+      const r = await L.api("couverture.rafraichir", {
+        id: idEnEdition,
+        repli: "1",
+        enregistrer: "0",
+      });
+      coverEnAttente = { type: "url", value: r.url };
+      $fImageUrl.value = r.url;
+      $fImageFile.value = "";
+      $fCoverRemoved.value = "0";
+      majApercu();
+      $coverStatus.textContent = "Image MangaDex reprise ✅";
+    } catch (err) {
+      $coverStatus.textContent = err.message;
+    } finally {
+      $btnCoverLinked.disabled = false;
+    }
   });
 
   document.getElementById("btn-remove-cover").addEventListener("click", () => {

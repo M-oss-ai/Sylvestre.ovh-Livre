@@ -129,6 +129,14 @@ CREATE TABLE IF NOT EXISTS `serie` (
   `tome_actuel`    INT UNSIGNED NOT NULL DEFAULT 0,
   `statut`         ENUM('cours','envie','termine','abandon') NOT NULL DEFAULT 'cours',
   `couverture`     VARCHAR(500) NOT NULL DEFAULT '',
+  -- Serie correspondante chez MangaDex, une fois que l'utilisateur
+  -- l'a designee. Tant qu'elle est renseignee, la couverture suit
+  -- automatiquement le tome : avancer d'un tome va chercher la bonne
+  -- image sans rien redemander ni redeviner.
+  -- Vide des que l'utilisateur choisit une image d'une autre source :
+  -- son choix prime, et un lien qui ecraserait son image serait un
+  -- piege. Un identifiant MangaDex est un UUID, donc 36 caracteres.
+  `mangadex_id`    CHAR(36)     NOT NULL DEFAULT '',
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -274,6 +282,20 @@ ALTER TABLE `utilisateur`
 --
 --     ON DELETE CASCADE : la ligne disparaît avec le compte, comme les
 --     séries et les jetons.
+-- ---------------------------------------------------------------------
+--  4. Lien vers la serie correspondante chez MangaDex.
+--
+--     Sans lui, retrouver la couverture du tome suivant obligeait a
+--     relancer une recherche complete et a redeviner quelle serie
+--     etait la bonne — une vingtaine de requetes, a chaque tome.
+--     Avec lui, une seule requete suffit, et elle ne se trompe pas.
+--
+--     Les series existantes partent sans lien : elles en obtiennent un
+--     a la prochaine recherche de couverture.
+ALTER TABLE `serie`
+  ADD COLUMN IF NOT EXISTS `mangadex_id` CHAR(36) NOT NULL DEFAULT '';
+
+-- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `recherche_couverture` (
   `utilisateur_id` INT UNSIGNED NOT NULL,
   `essais`         INT UNSIGNED NOT NULL DEFAULT 0,

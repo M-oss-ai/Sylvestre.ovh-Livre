@@ -190,6 +190,8 @@ de données ni le réseau.
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
 (câblage), `titre_normalise`, `mangadex_titre`,
 `couverture_quota`, `couverture_tranche_lisible`,
+`mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
+qu'il refuse), `couverture_tome_vise`,
 `mangadex_attente_suggeree`, `mangadex_attendre_son_tour` (la file
 d'attente des appels sortants), `carte_html`, les
 planchers de toutes les constantes — y compris `COUVERTURE_*` et le

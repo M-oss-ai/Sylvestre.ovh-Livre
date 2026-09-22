@@ -404,10 +404,21 @@ define('IMPORT_TAILLE_MAX', max(65536, (int) env('IMPORT_TAILLE_MAX', '5242880')
    indisponible — ce qui vaut mieux qu'une page qui ne répond plus. */
 define('COUVERTURE_TIMEOUT', max(1, (int) env('COUVERTURE_TIMEOUT', '5')));
 
-/* Nombre de séries proposées. Chacune coûte un appel supplémentaire
-   pour aller chercher ses couvertures : au-delà de quelques-unes,
-   l'attente devient sensible sans aider au choix. */
-define('COUVERTURE_MAX_SERIES', min(10, max(1, (int) env('COUVERTURE_MAX_SERIES', '4'))));
+/* Nombre de séries proposées à la recherche de couverture.
+
+   ZÉRO — ou la clé absente — signifie « pas de limite » : toutes les
+   séries examinées sont proposées. C'est le réglage par défaut, pour
+   qu'aucune proposition ne soit cachée.
+
+   Ce que cela coûte, et il faut le savoir : chaque série proposée
+   demande un appel de plus pour aller chercher ses couvertures, et ces
+   appels sont espacés par la file d'attente (voir COUVERTURE_ESPACEMENT).
+   Sans limite, une recherche coûte donc 1 + COUVERTURE_CANDIDATS appels
+   au lieu de 1 + 4, et dure quelques secondes au lieu d'une.
+
+   La borne réelle reste COUVERTURE_CANDIDATS : on ne propose jamais plus
+   de séries qu'on n'en a examinées. */
+define('COUVERTURE_MAX_SERIES', max(0, (int) env('COUVERTURE_MAX_SERIES', '0')));
 
 /* Nombre de séries EXAMINÉES avant d'en retenir COUVERTURE_MAX_SERIES.
 
@@ -421,10 +432,14 @@ define('COUVERTURE_MAX_SERIES', min(10, max(1, (int) env('COUVERTURE_MAX_SERIES'
    ils restent limités aux séries retenues.
 
    Jamais en dessous du nombre de séries proposées, sinon on retiendrait
-   plus de séries qu'on n'en examine. Plafonné à 100, maximum accepté
-   par l'API. */
+   plus de séries qu'on n'en examine — sans objet quand ce nombre est
+   illimité, d'où le « max » avec 1 dans ce cas. Plafonné à 100, maximum
+   accepté par l'API.
+
+   C'est ce réglage, et non COUVERTURE_MAX_SERIES, qui borne réellement
+   le coût d'une recherche sans limite d'affichage. */
 define('COUVERTURE_CANDIDATS',
-    min(100, max(COUVERTURE_MAX_SERIES, (int) env('COUVERTURE_CANDIDATS', '25'))));
+    min(100, max(max(1, COUVERTURE_MAX_SERIES), (int) env('COUVERTURE_CANDIDATS', '25'))));
 
 /* Autoriser les séries classées « erotica » par MangaDex (nudité, thèmes
    sexuels marqués) dans la recherche automatique de couverture.

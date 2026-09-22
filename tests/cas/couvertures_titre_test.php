@@ -218,17 +218,26 @@ test('la casse et les accents ne changent rien', function () {
         titre_normalise('detective conan')), 'normalisation appliquée des deux côtés');
 });
 
-test('un titre qui contient la recherche vaut le palier intermédiaire', function () {
-    /* Il doit passer devant une série sans rapport, et rester derrière
-       le titre exact. */
+test('un titre qui COMMENCE par la recherche vaut le meilleur palier', function () {
     $e = couverture_ecart_titre(['title' => ['ja-ro' => 'Ayanashi no Kimi']], titre_normalise('Ayanashi'));
-    egale(4, $e, 'contient la recherche');
+    egale(2, $e, 'commence par la recherche');
     vrai($e > 0 && $e < 10, 'entre l exact et le hors-sujet');
 });
 
+test('un titre qui la contient AILLEURS vaut le palier suivant', function () {
+    /* La distinction compte des que la liste s allonge : « Berserk
+       Gaiden » doit passer devant « Tensei Berserker ». */
+    egale(4, couverture_ecart_titre(['title' => ['en' => 'Tensei Berserker']],
+        titre_normalise('Berserk')), 'la recherche est au milieu du titre');
+
+    $debut  = couverture_ecart_titre(['title' => ['en' => 'Berserk Gaiden']], titre_normalise('Berserk'));
+    $milieu = couverture_ecart_titre(['title' => ['en' => 'Tensei Berserker']], titre_normalise('Berserk'));
+    vrai($debut < $milieu, 'commencer par vaut mieux que contenir');
+});
+
 test('une recherche plus longue que le titre compte aussi', function () {
-    egale(4, couverture_ecart_titre(['title' => ['en' => 'Berserk']],
-        titre_normalise('Berserk edition couleur')), 'la recherche contient le titre');
+    egale(2, couverture_ecart_titre(['title' => ['en' => 'Berserk']],
+        titre_normalise('Berserk edition couleur')), 'la recherche commence par le titre');
 });
 
 test('une série sans rapport vaut dix', function () {
@@ -242,7 +251,7 @@ test('un fragment trop court ne rapproche de rien', function () {
        et remonterait devant des séries réellement pertinentes. */
     egale(10, couverture_ecart_titre(['title' => ['ja' => 'Aya']], titre_normalise('Ayanashi')),
         'trois caractères ne suffisent pas');
-    egale(4, couverture_ecart_titre(['title' => ['ja' => 'Ayan']], titre_normalise('Ayanashi')),
+    egale(2, couverture_ecart_titre(['title' => ['ja' => 'Ayan']], titre_normalise('Ayanashi')),
         'quatre caractères suffisent');
 });
 
@@ -261,4 +270,27 @@ test('le meilleur titre l emporte, pas le premier', function () {
         'title'     => ['en' => 'Ayanashi no Kimi'],
         'altTitles' => [['ja-ro' => 'Ayanashi']],
     ], titre_normalise('Ayanashi')), 'l exact trouvé après le partiel');
+
+    /* Et de même entre les deux paliers intermédiaires. */
+    egale(2, couverture_ecart_titre([
+        'title'     => ['en' => 'Tensei Berserker'],
+        'altTitles' => [['ja-ro' => 'Berserk Gaiden']],
+    ], titre_normalise('Berserk')), 'le meilleur des deux paliers');
+});
+
+groupe('COUVERTURE_MAX_SERIES — zéro veut dire « pas de limite »');
+
+test('la valeur par défaut n impose aucune limite', function () {
+    /* Le .env des tests ne définit pas la clé : c est le défaut du code
+       qui s applique, et il doit tout proposer. Rien ne doit être caché
+       à l utilisateur sans qu il l ait demandé. */
+    egale(0, COUVERTURE_MAX_SERIES, 'zéro, donc sans limite');
+});
+
+test('le vivier reste borné même sans limite d affichage', function () {
+    /* C est lui qui borne réellement le coût : une série proposée est un
+       appel réseau de plus. Sans cette borne, une recherche courante
+       partirait pour une centaine d appels. */
+    vrai(COUVERTURE_CANDIDATS >= 1, 'au moins une série examinée');
+    vrai(COUVERTURE_CANDIDATS <= 100, 'jamais au-delà du maximum de l API');
 });

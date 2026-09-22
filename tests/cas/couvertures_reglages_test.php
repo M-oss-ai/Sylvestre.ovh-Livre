@@ -36,8 +36,11 @@ test('COUVERTURE_TIMEOUT ne descend pas à zéro', function () {
     vrai(COUVERTURE_TIMEOUT >= 1, 'jamais nul');
 });
 
-test('COUVERTURE_MAX_SERIES reste entre 1 et 10', function () {
-    egale(1, COUVERTURE_MAX_SERIES, 'le .env demandait 0');
+test('COUVERTURE_MAX_SERIES à zéro veut dire « sans limite »', function () {
+    /* Contrairement aux autres réglages, zéro n est pas ici une valeur
+       absurde à relever : c est une intention, « ne cache rien ». Le
+       coût, lui, reste borné par COUVERTURE_CANDIDATS. */
+    egale(0, COUVERTURE_MAX_SERIES, 'zéro est conservé tel quel');
 });
 
 test('on n examine jamais moins de séries qu on n en retient', function () {
@@ -45,7 +48,7 @@ test('on n examine jamais moins de séries qu on n en retient', function () {
        Le vivier ne coûte rien — c est le même appel avec une limite
        plus haute —, il n y a donc aucune raison de le laisser
        descendre sous le nombre de résultats affichés. */
-    vrai(COUVERTURE_CANDIDATS >= COUVERTURE_MAX_SERIES, 'jamais en dessous');
+    vrai(COUVERTURE_CANDIDATS >= 1, 'au moins une série examinée');
     egale(1, COUVERTURE_CANDIDATS, 'le .env demandait 0, relevé au minimum utile');
 });
 

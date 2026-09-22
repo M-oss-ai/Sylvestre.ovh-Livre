@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (371 tests, 32 fichiers de cas)
+php tests/lancer.php              # toute la suite (386 tests, 33 fichiers de cas)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
 php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
@@ -207,6 +207,13 @@ elle est voulue.
 mais l'API n'envoie pas d'en-tête CORS — d'où l'appel depuis le serveur.
 Limite d'environ 5 requêtes par seconde et par IP, et une recherche en
 coûte 1 + `COUVERTURE_MAX_SERIES`.
+
+**Une série est LIÉE, pas recherchée à chaque fois.** Choisir une
+couverture enregistre `serie.mangadex_id` ; avancer d'un tome coûte
+alors une seule requête au lieu d'une recherche entière. Le lien se
+déduit de l'URL de l'image (`mangadex_id_depuis_url()`) et n'est jamais
+transmis à côté : choisir une image d'une autre source le coupe donc
+tout seul, sans code dédié et sans que les deux puissent diverger.
 
 **Sa pertinence n'est pas la nôtre.** Chercher « Shingeki no Kyojin »
 remontait 130 résultats dont les 25 premiers étaient TOUS des

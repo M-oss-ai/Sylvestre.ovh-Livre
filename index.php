@@ -11,7 +11,7 @@ require_once __DIR__ . '/includes/carte.php';
 $moi = exiger_connexion();
 
 $req = $pdo->prepare(
-    'SELECT id, titre, auteur, tome_actuel, statut, couverture
+    'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id
        FROM serie
       WHERE utilisateur_id = ?
       ORDER BY maj_le DESC, id DESC'
@@ -145,6 +145,7 @@ $csrf    = jeton_csrf();
               📁 Choisir un fichier
               <input id="f-image-file" name="couverture_fichier" type="file" accept="image/*" class="visually-hidden">
             </label>
+            <button type="button" id="btn-cover-linked" class="btn btn-ghost small hidden">🖼️ Image MangaDex</button>
             <button type="button" id="btn-remove-cover" class="btn btn-ghost small danger-text">Retirer l'image</button>
           </div>
         </div>
