@@ -1,8 +1,10 @@
 # Ma Bibliothèque Manga
 
 Suivi personnel de collections de mangas. Chaque compte a sa propre
-bibliothèque : tome en cours, statut de lecture, couverture du prochain
-tome à emprunter.
+bibliothèque : tome en cours, statut de lecture, et la couverture du
+tome qui l'intéresse — le prochain à emprunter pour une série en cours,
+le tome atteint pour une série terminée (voir « Recherche de
+couverture »).
 
 PHP 8.1 minimum (8.2 recommandé) + MySQL/MariaDB. Aucune dépendance :
 pas de Composer, pas de framework.
@@ -129,8 +131,121 @@ importantes :
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |
 | `ASSETS_VERSION` | Version des URL `css/` et `js/`. À incrémenter au déploiement |
+| `COUVERTURE_CANDIDATS` · `COUVERTURE_MAX_SERIES` | Séries examinées / proposées à la recherche de couverture |
+| `COUVERTURE_QUOTA` · `COUVERTURE_FENETRE` | Recherches autorisées par compte et par tranche |
+| `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
+| `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `LEGAL_*` | Mentions légales |
 
+---
+
+## Recherche de couverture
+
+Le bouton **Recherche auto** de la fiche d'une série interroge
+[MangaDex](https://api.mangadex.org) et propose la couverture **d'un
+tome précis**, pas celle de la série.
+
+L'appel part du serveur et non du navigateur : MangaDex n'envoie pas
+d'en-tête `Access-Control-Allow-Origin`, un appel direct serait refusé.
+Le détour a deux avantages — la Content-Security-Policy reste en
+`connect-src 'self'`, et l'adresse IP du visiteur n'est pas communiquée
+à un tiers. Les endpoints de lecture ne demandent **ni compte ni clé**.
+
+### Quel tome est cherché
+
+Le tome dépend du **statut** de la série : une série terminée ne sera
+plus empruntée plus loin que le tome qu'on en a.
+
+| Statut | Tome cherché | Pourquoi |
+|---|---|---|
+| **En cours** · **Envie** | `tome_actuel + 1` | le prochain à emprunter |
+| **Terminée** · **Abandonnée** | `tome_actuel` | le tome réel, celui qu'on possède |
+
+Le tome cherché ne descend jamais sous 1 : une série terminée dont le
+tome vaut 0 fait chercher le tome 1, faute de tome 0 chez qui que ce
+soit.
+
+Le statut lu est celui du **formulaire ouvert**, pas celui enregistré :
+changer le statut puis lancer la recherche cherche bien le tome
+correspondant au nouveau statut.
+
+### Quelle série est proposée
+
+MangaDex classe par sa propre pertinence, qui place volontiers les
+dérivés avant l'original : chercher « Shingeki no Kyojin » renvoyait
+130 résultats dont les 25 premiers étaient tous des doujinshi, et la
+vraie série n'était même pas candidate. Trois règles corrigent cela.
+
+1. **Les doujinshi et les oneshots sont écartés.** Ce sont des
+   publications amateur ou des récits isolés : ils portent le titre de
+   la série dont ils s'inspirent, et n'ont pas de tomes à emprunter.
+2. **`COUVERTURE_CANDIDATS` séries sont examinées** (25 par défaut) pour
+   n'en retenir que `COUVERTURE_MAX_SERIES` (4) après classement.
+   Élargir ce premier appel ne coûte **aucune requête supplémentaire** :
+   c'est le même appel avec une limite plus haute. Seuls les appels de
+   couvertures qui suivent se paient à l'unité.
+3. **Le titre tapé est comparé à toutes les écritures connues** de
+   chaque série — titre principal, traductions, titres alternatifs — et
+   non au seul titre affiché. MangaDex affiche « Attack on Titan » là où
+   l'on a tapé « Shingeki no Kyojin ».
+
+L'écart de titre, terme dominant du classement :
+
+| Écart | Condition |
+|---|---|
+| **0** | un des titres de la série **est** exactement ce qui a été tapé |
+| **4** | un des titres contient la recherche, ou l'inverse — quatre caractères minimum, sans quoi un titre alternatif de trois lettres rapprocherait n'importe quoi |
+| **10** | aucun rapport |
+
+La comparaison ignore la casse, les accents, les ligatures et la
+ponctuation : « Detective Conan » retrouve « Détective Conan ».
+
+S'ajoutent **+3** quand le tome demandé n'a pas été trouvé, et un
+dixième de point par rang pour conserver l'ordre de MangaDex entre
+ex æquo.
+
+### Ce que montre le résultat
+
+Chaque vignette porte le nom de la série et, en dessous :
+
+- **« Tome N »** — c'est bien la couverture du tome demandé ;
+- **« Série »** — le tome n'existe pas chez MangaDex, la couverture de
+  la série est proposée en repli. La vignette est alors grisée et
+  bordée, pour qu'on sache ce qu'on choisit avant de cliquer.
+
+Entre plusieurs couvertures du même tome, la langue est préférée dans
+l'ordre français, anglais, japonais.
+
+### Ce qui borne les appels
+
+MangaDex tolère environ **5 requêtes par seconde et par adresse IP** —
+celle de l'hébergement, partagée par tous les visiteurs. Une recherche
+coûte 1 + `COUVERTURE_MAX_SERIES` appels, si bien que deux personnes
+simultanées suffisent à dépasser la limite. Deux dispositifs, qui ne
+font pas le même travail :
+
+- **Une file d'attente** espace les appels sortants de
+  `COUVERTURE_ESPACEMENT` millisecondes, tous visiteurs confondus. Rien
+  n'est compté au nom de personne. L'attente est bornée par
+  `COUVERTURE_FILE_MAX` : au-delà, la recherche répond « réessayez dans
+  N secondes » plutôt que de retenir un processus PHP.
+- **Un quota par compte**, annoncé et sans escalade :
+  `COUVERTURE_QUOTA` recherches par tranche de `COUVERTURE_FENETRE`
+  secondes (davantage pour le forfait illimité). Dépasser n'entraîne
+  aucune sanction — seulement l'attente de la tranche suivante, et une
+  recherche qui n'est pas partie est rendue.
+
+### Contenu sensible
+
+`COUVERTURE_CONTENU_ADULTE` est à `0` par défaut : seules les séries
+classées `safe` et `suggestive` par MangaDex sont proposées. Conséquence
+assumée — certaines séries deviennent introuvables, Berserk par exemple,
+que MangaDex classe `erotica` pour de la nudité et non pour sa violence.
+
+Même à `1`, rien ne change tant que l'utilisateur n'a pas lui-même
+déclaré sa majorité **et** levé le filtre depuis ses paramètres. Le
+classement `pornographic` n'est jamais proposé, quelle que soit la
+configuration.
 ---
 
 ## Les fichiers
