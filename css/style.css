@@ -541,9 +541,37 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .modal-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 14px;
 }
+
+/* Sur grand ecran, le titre occupe la place et la croix reste a droite :
+   on retrouve exactement la disposition d'avant, l'ordre du HTML ayant
+   change pour que le telephone puisse s'en servir. */
+.modal-head h2 { order: 0; flex: 1; margin: 0; }
+#btn-close { order: 1; }
+
+/* Le bouton de validation du haut n'existe que sur telephone. */
+#btn-save-top { display: none; }
+
+/* Pastille pleine : c'est l'action principale, elle doit se distinguer
+   de la croix sans avoir besoin d'un mot. */
+.icon-btn-valider {
+  background: linear-gradient(135deg, var(--gold), #a9835a);
+  color: #1a1410;
+  border-radius: 999px;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 700;
+  padding: 0;
+  flex: none;
+}
+
+.icon-btn-valider:hover { filter: brightness(1.08); color: #1a1410; }
 
 /* ---------- Champs de formulaire (style unifié, jamais l'apparence native) ---------- */
 
@@ -1160,6 +1188,42 @@ select,
   /* Clavier ouvert, « vh » compte toujours l ecran entier et la modale
      debordait. « dvh » suit la hauteur reellement visible. */
   .modal { padding: 16px; max-height: 92dvh; }
+
+  /* Le bouton « Enregistrer » vivait en bas de la modale. Des qu'une
+     recherche de couverture affiche ses resultats, ceux-ci le poussent
+     hors de l'ecran : on valide un formulaire qu'on ne voit plus.
+
+     Il remonte donc dans une barre qui ne bouge jamais, avec la croix a
+     gauche et le titre au milieu — la disposition qu'on trouve en haut
+     de toutes les fiches sur telephone. */
+  .modal-head {
+    position: sticky;
+    /* -16 px et non 0 : le decalage collant se mesure depuis le bord
+       INTERIEUR de la modale, rembourrage compris. A zero, une bande de
+       16 px de contenu continuait de defiler au-dessus de la barre. */
+    top: -16px;
+    z-index: 3;
+    /* Remonter dans le rembourrage de la modale : sans ces marges
+       negatives, une bande de fond defilerait au-dessus de la barre. */
+    margin: -16px -16px 14px;
+    padding: 10px 14px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-head h2 {
+    order: 0;
+    text-align: center;
+    font-size: 17px;
+  }
+
+  #btn-close { order: -1; }
+  #btn-save-top { order: 1; display: inline-flex; }
+
+  /* Celui du bas ferait doublon. « Annuler » et « Supprimer » restent :
+     ce sont des gestes qu'on ne veut surtout pas a portee de pouce
+     pendant qu'on saisit. */
+  .modal-actions .btn-primary { display: none; }
   /* Les resultats de recherche ne defilent plus dans leur propre cadre :
      300 px sur un telephone, c est une ligne et demie de vignettes, et
      la seconde ligne se devine sous le bord sans qu on sache qu elle est

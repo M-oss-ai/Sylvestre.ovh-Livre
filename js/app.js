@@ -276,7 +276,13 @@
   const $coverResults = document.getElementById("cover-results");
   const $dropzone = document.getElementById("dropzone");
   const $btnDelete = document.getElementById("btn-delete");
-  const $btnSubmit = $form.querySelector('button[type="submit"]');
+  /* Il y a DEUX boutons d'envoi : celui du bas, et celui de la barre
+     fixe sur téléphone. « form.elements » les rassemble tous les deux,
+     y compris celui qui vit HORS du <form> et n'y est rattaché que par
+     son attribut « form ». Les désactiver ensemble pendant l'envoi
+     évite qu'une double frappe enregistre la série deux fois. */
+  const $boutonsEnvoi = Array.from($form.elements).filter((el) => el.type === "submit");
+  const envoiEnCours = (oui) => $boutonsEnvoi.forEach((b) => { b.disabled = oui; });
 
   // Élément qui avait le focus avant l'ouverture d'une modale : on le lui
   // rend à la fermeture, sinon la navigation au clavier repart du haut de
@@ -373,7 +379,7 @@
       fd.set("couverture_retiree", "1");
     }
 
-    $btnSubmit.disabled = true;
+    envoiEnCours(true);
     try {
       const r = await L.api("serie.enregistrer", fd);
       poserCarte(r.carte, r.id);
@@ -383,7 +389,7 @@
     } catch (err) {
       L.toast(err.message);
     } finally {
-      $btnSubmit.disabled = false;
+      envoiEnCours(false);
     }
   });
 

@@ -92,8 +92,15 @@ $csrf    = jeton_csrf();
 <div id="overlay" class="overlay hidden">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-head">
-      <h2 id="modal-title">Nouvelle série</h2>
       <button id="btn-close" class="icon-btn" type="button" aria-label="Fermer">✕</button>
+      <h2 id="modal-title">Nouvelle série</h2>
+      <!-- Hors du <form>, d'où l'attribut « form » : il suffit à en faire
+           le bouton d'envoi. Caché sur grand écran, où celui du bas est
+           tout de suite visible ; sur téléphone il prend sa place, parce
+           que les résultats de recherche repoussent le bas de la modale
+           hors de vue. -->
+      <button id="btn-save-top" class="icon-btn icon-btn-valider" type="submit"
+              form="series-form" aria-label="Enregistrer" title="Enregistrer">✓</button>
     </div>
 
     <form id="series-form" enctype="multipart/form-data">
