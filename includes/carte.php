@@ -10,6 +10,19 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/fonctions.php';
 
+/* L'etoile est DESSINEE, pas ecrite.
+
+   Un « ★ » n'a pas de version creuse fiable d'une police a l'autre,
+   et le « ☆ » d'Unicode n'a ni la meme taille ni le meme centrage :
+   basculer de l'un a l'autre faisait sauter la forme. Ici le meme
+   trace sert aux deux etats, seul son remplissage change.
+
+   La Content-Security-Policy n'y voit rien a redire : c'est du
+   balisage, pas un style ni un script en ligne. */
+const ETOILE_SVG = '<svg class="etoile" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+    . '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24'
+    . 'l5.46 4.73L5.82 21z"/></svg>';
+
 function carte_html(array $s): string
 {
     $statut  = isset(STATUTS[$s['statut']]) ? (string) $s['statut'] : 'cours';
@@ -69,7 +82,8 @@ function carte_html(array $s): string
             <button type="button" class="btn-favori' . ($favori ? ' actif' : '') . '"
                     data-action="favori" aria-pressed="' . ($favori ? 'true' : 'false') . '"
                     title="' . ($favori ? 'Retirer des favoris' : 'Mettre en favori') . '"
-                    aria-label="' . ($favori ? 'Retirer' : 'Mettre') . ' &quot;' . e($titre) . '&quot; ' . ($favori ? 'des' : 'en') . ' favori' . ($favori ? 's' : '') . '">★</button>
+                    aria-label="' . ($favori ? 'Retirer' : 'Mettre') . ' &quot;' . e($titre) . '&quot; ' . ($favori ? 'des' : 'en') . ' favori' . ($favori ? 's' : '') . '">'
+              . ETOILE_SVG . '</button>
             <button type="button" class="btn-edit" data-action="edit"
                     title="Modifier / gérer la couverture" aria-label="Modifier ' . e($titre) . '">✏️</button>
           </div>

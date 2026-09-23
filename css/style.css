@@ -302,21 +302,43 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   flex: none;
   width: 42px;
   min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.25);
-  /* Gris tant qu'elle n'est pas posee : une etoile doree partout ne
-     distinguerait plus rien. */
-  color: rgba(230, 220, 207, 0.45);
-  font-size: 17px;
-  line-height: 1;
+  color: var(--text-dim);
   cursor: pointer;
   padding: 0;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s;
 }
 
-.btn-favori:hover { background: rgba(255, 255, 255, 0.08); color: var(--gold-light); }
-.btn-favori.actif { color: var(--gold); text-shadow: 0 0 10px rgba(201, 168, 124, 0.6); }
+/* Etat par defaut : un CONTOUR, dont le milieu laisse voir le fond du
+   bouton. Pleine et grise, l'etoile ressemblait a un favori deja pose
+   mais terne — on ne savait pas si on l'avait cliquee. Creuse contre
+   pleine, la difference se lit sans hesiter. */
+.btn-favori .etoile {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  /* Pas de transition sur « fill » : on passe de « none » a une
+     couleur, ce qui ne s'interpole pas — la declarer ne faisait que
+     rendre la valeur calculee illisible pendant la bascule. */
+  transition: stroke 0.15s;
+}
+
+/* Le survol ne touche qu'au fond. Eclaircir l'etoile donnait
+   l'impression qu'elle venait de s'allumer, et on ne savait plus quel
+   etat on regardait. */
+.btn-favori:hover { background: rgba(255, 255, 255, 0.08); }
+
+.btn-favori.actif { color: var(--gold); }
+.btn-favori.actif .etoile { fill: var(--gold); stroke: var(--gold); }
+
 .btn-favori:disabled { opacity: 0.5; cursor: default; }
 
 /* Seconde rangee de filtres, repliable. */
