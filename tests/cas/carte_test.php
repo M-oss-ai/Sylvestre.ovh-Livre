@@ -209,3 +209,107 @@ test('les données de la carte sont présentes pour la recherche côté navigate
     contient('data-tome="3"', $html, 'le tome');
     contient('data-statut="cours"', $html, 'le statut');
 });
+
+groupe('carte_html() — les favoris');
+
+test('une série en favori porte le drapeau et l étoile allumée', function () {
+    $html = carte_html(serie(['favori' => 1]));
+    contient('data-favori="1"', $html, 'le drapeau lu par le filtre');
+    contient('btn-favori actif', $html, 'l étoile est allumée');
+    contient('aria-pressed="true"', $html, 'annoncée comme enfoncée');
+});
+
+test('une série ordinaire porte le drapeau à zéro', function () {
+    $html = carte_html(serie(['favori' => 0]));
+    contient('data-favori="0"', $html, 'le drapeau');
+    sans('btn-favori actif', $html, 'l étoile reste éteinte');
+});
+
+test('la valeur « 0 » venue de MySQL ne passe pas pour vraie', function () {
+    /* PDO rend les TINYINT en CHAÎNES : la carte recevait donc « "0" »,
+       qui est vrai pour un test naïf. Toute série aurait été en favori. */
+    $html = carte_html(serie(['favori' => '0']));
+    contient('data-favori="0"', $html, 'la chaîne « 0 » vaut faux');
+    sans('btn-favori actif', $html, 'étoile éteinte');
+
+    $html = carte_html(serie(['favori' => '1']));
+    contient('data-favori="1"', $html, 'la chaîne « 1 » vaut vrai');
+});
+
+test('une série d avant la migration est traitée comme non favorite', function () {
+    /* La clé manque tant que la colonne n a pas été ajoutée, ou pour une
+       ligne relue par un chemin qui ne la sélectionne pas. Le défaut doit
+       être le plus discret, jamais « tout en favori ». */
+    $serie = serie();
+    unset($serie['favori']);
+    $html = carte_html($serie);
+    contient('data-favori="0"', $html, 'clé absente = pas favori');
+});
+
+test('l étoile porte son action et son libellé', function () {
+    contient('data-action="favori"', carte_html(serie()), 'le gestionnaire de la grille s y raccroche');
+
+    contient('Mettre en favori', carte_html(serie(['favori' => 0])), 'le libellé quand elle est éteinte');
+    contient('Retirer des favoris', carte_html(serie(['favori' => 1])), 'et quand elle est allumée');
+});
+
+test('un titre à guillemets ne casse pas le libellé de l étoile', function () {
+    /* Le titre est inséré dans l attribut aria-label de l étoile : un
+       guillemet non échappé y ouvrirait un attribut à lui. */
+    /* « <b> » ne ferait pas un bon témoin : le gabarit en contient un
+       pour le numéro de tome. On prend une balise qui n a aucune
+       raison d apparaître. */
+    $html = carte_html(serie(['titre' => 'Ça "va" <script>']));
+    sans('aria-label="Mettre "', $html, 'l attribut n est pas refermé trop tôt');
+    sans('<script>', $html, 'aucune balise ne passe');
+    contient('&quot;va&quot;', $html, 'les guillemets sont encodés');
+});
+
+groupe('carte_html() — la provenance de l image, pour le filtre avancé');
+
+test('les quatre provenances sont annoncées', function () {
+    contient('data-image="aucune"', carte_html(serie(['couverture' => ''])),
+        'sans couverture');
+    egale(true, str_contains(carte_html(serie(['couverture' => 'uploads/a1b2c3.webp'])),
+        'data-image="importee"'), 'fichier envoyé');
+    egale(true, str_contains(carte_html(serie(['couverture' =>
+        'https://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/x.jpg'])),
+        'data-image="mangadex"'), 'couverture MangaDex');
+    egale(true, str_contains(carte_html(serie(['couverture' => 'https://ailleurs.test/x.jpg'])),
+        'data-image="lien"'), 'lien externe');
+});
+
+test('une couverture refusée est classée « aucune »', function () {
+    /* Le classement porte sur ce qui est RÉELLEMENT affiché : une URL
+       rejetée par url_image_sure() ne montre aucune image, la série doit
+       donc apparaître sous « Pas d image » et pas ailleurs — sans quoi
+       elle serait introuvable par le filtre censé la débusquer. */
+    $html = carte_html(serie(['couverture' => 'javascript:alert(1)']));
+    contient('data-image="aucune"', $html, 'classée comme sans image');
+    sans('javascript:', $html, 'et l URL ne sort pas');
+});
+
+groupe('carte_html() — le lien MangaDex');
+
+test('le lien est porté jusqu au DOM', function () {
+    $id = '801513ba-a712-498c-8f57-cae55b38cc92';
+    contient('data-mangadex="' . $id . '"', carte_html(serie(['mangadex_id' => $id])),
+        'le JavaScript s en sert pour savoir si la série se rafraîchit seule');
+});
+
+test('une série non liée porte un lien vide', function () {
+    contient('data-mangadex=""', carte_html(serie()), 'clé absente');
+    contient('data-mangadex=""', carte_html(serie(['mangadex_id' => ''])), 'clé vide');
+});
+
+test('un lien inattendu est échappé comme le reste', function () {
+    /* Il vient de la base, donc d une URL qu on a nous-même analysée —
+       mais le gabarit ne doit rien supposer de ce qu on lui donne. */
+    /* Le texte « onload= » subsiste dans la valeur, et c est sans
+       danger : ce qui compte est qu aucun GUILLEMET brut ne vienne
+       refermer data-mangadex pour en rouvrir un autre. */
+    $html = carte_html(serie(['mangadex_id' => '" onload="alert(1)']));
+    sans(' onload="alert', $html, 'aucun attribut ne s ouvre');
+    contient('data-mangadex="&quot; onload=&quot;alert(1)"', $html,
+        'tout est resté dans la valeur, encodé');
+});
