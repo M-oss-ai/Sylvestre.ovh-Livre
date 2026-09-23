@@ -492,6 +492,42 @@ function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$a
    sur TROIS lignes et recouvrait l'image — d'où des libellés courts,
    d'un seul mot quand c'est possible. La clé, elle, ne change jamais :
    c'est la valeur stockée en base. */
+/* Les quatre provenances possibles d'une couverture.
+
+   La classification vit ICI, en PHP, et voyage jusqu'au navigateur
+   dans un attribut « data-image » : le JavaScript n'a pas à
+   redécouvrir ce qu'une URL veut dire, et la règle ne peut pas
+   diverger entre les deux. */
+const IMAGES_TYPES = [
+    'aucune'   => 'Pas d\'image',
+    'mangadex' => 'MangaDex',
+    'importee' => 'Importée',
+    'lien'     => 'Lien',
+];
+
+/**
+ * D'où vient cette couverture ? Retourne une clé d'IMAGES_TYPES.
+ *
+ * Le test MangaDex est un simple préfixe d'hôte, et non la
+ * vérification complète de mangadex_id_depuis_url() : ici on CLASSE
+ * pour un filtre, on n'autorise rien. Et couvertures.php, qui porte
+ * l'autre fonction, n'est pas chargé par les pages.
+ */
+function type_image(string $couverture): string
+{
+    $c = trim($couverture);
+    if ($c === '') {
+        return 'aucune';
+    }
+    if (stripos($c, 'https://uploads.mangadex.org/covers/') === 0) {
+        return 'mangadex';
+    }
+    if (stripos($c, 'uploads/') === 0) {
+        return 'importee';
+    }
+    return 'lien';
+}
+
 const STATUTS = [
     'cours'   => 'En cours',
     'envie'   => 'Envie',

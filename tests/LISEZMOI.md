@@ -181,7 +181,8 @@ de données ni le réseau.
 `ini_octets`, `plafond_pixels`, `taille_lisible`, `erreur_fatale`, `e`,
 `texte`, `valider_mot_de_passe`, `jeton_csrf`, `csrf_valide`,
 `exiger_csrf`, `post_trop_gros`, `message_post_trop_gros`,
-`journal_securite`, `url_image_sure`, `photo_depuis_formulaire`,
+`journal_securite`, `url_image_sure`, `type_image` (la provenance
+d'une couverture, pour le filtre avancé), `photo_depuis_formulaire`,
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
 `cron_en_ligne_de_commande`, `cron_refus_navigateur`,
 `cron_appelant_authentifie`,

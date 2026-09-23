@@ -15,9 +15,18 @@
   const $emptyCollection = document.getElementById("empty-collection");
   const $emptySearch = document.getElementById("empty-search");
   const $search = document.getElementById("search");
+  const $filtresImage = document.getElementById("filtres-image");
+  const $btnFiltreFavori = document.getElementById("btn-filtre-favori");
+  const $btnFiltresPlus = document.getElementById("btn-filtres-plus");
   const $filters = document.getElementById("filters");
 
-  let filtreActif = "all";
+  /* Les filtres se CUMULENT, et se conservent d'une visite à l'autre.
+     Un ensemble vide veut dire « aucun filtre de ce genre », ce qui est
+     plus simple qu'une valeur « toutes » à traiter à part. */
+  const filtresStatut = new Set();
+  const filtresImage = new Set();
+  let favorisSeuls = false;
+  let imageOuvert = false;
   let recherche = "";
   // La grille est-elle actuellement rangée par pertinence plutôt que
   // dans l'ordre du serveur ? Voir appliquerVue().
@@ -89,9 +98,11 @@
 
     toutes.forEach((c) => {
       if (c._recherche === undefined) indexer(c);
-      const okStatut = filtreActif === "all" || c.dataset.statut === filtreActif;
+      const okStatut = filtresStatut.size === 0 || filtresStatut.has(c.dataset.statut);
+      const okImage = filtresImage.size === 0 || filtresImage.has(c.dataset.image);
+      const okFavori = !favorisSeuls || c.dataset.favori === "1";
       const okRecherche = !prep.q || L.correspondPrepare(c._recherche, prep);
-      const visible = okStatut && okRecherche;
+      const visible = okStatut && okImage && okFavori && okRecherche;
       c.classList.toggle("hidden", !visible);
       if (visible) visibles++;
     });
@@ -185,6 +196,7 @@
 
     if (action === "advance") avancer(id, cible);
     else if (action === "undo") reculer(id, cible);
+    else if (action === "favori") basculerFavori(id, cible);
     else if (action === "edit") ouvrirModale(carte);
   });
 
@@ -213,6 +225,28 @@
     L.api("couverture.rafraichir", { id })
       .then((r) => poserCarte(r.carte, id))
       .catch(() => {});
+  }
+
+  /**
+   * Met la série en favori, ou l'en retire.
+   *
+   * La valeur finale vient du serveur et n'est pas devinée ici : deux
+   * frappes rapides sur l'étoile ne peuvent donc pas laisser l'affichage
+   * et la base en désaccord.
+   */
+  async function basculerFavori(id, bouton) {
+    bouton.disabled = true;
+    try {
+      const r = await L.api("serie.favori", { id });
+      poserCarte(r.carte, id);
+      L.toast(r.message);
+      /* Le filtre « Favoris » peut faire disparaître la carte qu'on
+         vient de retirer : c'est cohérent, et le message l'explique. */
+      appliquerVue();
+    } catch (err) {
+      bouton.disabled = false;
+      L.toast(err.message);
+    }
   }
 
   async function avancer(id, bouton) {
@@ -246,16 +280,103 @@
 
   /* ---------------- Filtres / recherche ---------------- */
 
-  $filters.addEventListener("click", (e) => {
-    const btn = e.target.closest(".filter-btn");
-    if (!btn) return;
-    filtreActif = btn.dataset.filter;
-    document.querySelectorAll(".filter-btn").forEach((b) => {
-      const actif = b === btn;
+  /* Les filtres survivent au rechargement : c'est le sens d'un filtre
+     qu'on pose pour faire le tri dans cent cinquante séries.
+
+     localStorage peut lever — navigation privée, stockage bloqué — et
+     peut revenir vide. La page doit donc s'afficher correctement sans
+     lui, d'où les deux try/catch et le repli sur « aucun filtre », qui
+     est le bon défaut. */
+  const CLE_FILTRES = "livre.filtres";
+
+  function lireFiltres() {
+    try {
+      const brut = localStorage.getItem(CLE_FILTRES);
+      if (!brut) return;
+      const f = JSON.parse(brut) || {};
+      (Array.isArray(f.statut) ? f.statut : []).forEach((v) => filtresStatut.add(v));
+      (Array.isArray(f.image) ? f.image : []).forEach((v) => filtresImage.add(v));
+      favorisSeuls = !!f.favoris;
+      imageOuvert = !!f.imageOuvert;
+    } catch (e) {
+      /* Illisible ou indisponible : on repart sans filtre. */
+    }
+  }
+
+  function ecrireFiltres() {
+    try {
+      localStorage.setItem(CLE_FILTRES, JSON.stringify({
+        statut: [...filtresStatut],
+        image: [...filtresImage],
+        favoris: favorisSeuls,
+        imageOuvert,
+      }));
+    } catch (e) {
+      /* Sans mémoire, les filtres ne valent que pour cette visite. */
+    }
+  }
+
+  /** Met les boutons au diapason de l'état. */
+  function refleterFiltres() {
+    $filters.querySelectorAll(".filter-btn[data-filter]").forEach((b) => {
+      const cle = b.dataset.filter;
+      // « Toutes » s'allume quand aucun statut n'est retenu.
+      const actif = cle === "all" ? filtresStatut.size === 0 : filtresStatut.has(cle);
       b.classList.toggle("active", actif);
       b.setAttribute("aria-pressed", actif ? "true" : "false");
     });
+
+    $filtresImage.querySelectorAll(".filter-btn[data-image]").forEach((b) => {
+      const actif = filtresImage.has(b.dataset.image);
+      b.classList.toggle("active", actif);
+      b.setAttribute("aria-pressed", actif ? "true" : "false");
+    });
+
+    $btnFiltreFavori.classList.toggle("active", favorisSeuls);
+    $btnFiltreFavori.setAttribute("aria-pressed", favorisSeuls ? "true" : "false");
+
+    $filtresImage.classList.toggle("hidden", !imageOuvert);
+    $btnFiltresPlus.setAttribute("aria-expanded", imageOuvert ? "true" : "false");
+    /* Une pastille quand un filtre d'image est actif mais replié : sans
+       elle on cherche longtemps pourquoi la liste est si courte. */
+    $btnFiltresPlus.classList.toggle("a-un-filtre", filtresImage.size > 0);
+  }
+
+  function basculer(ensemble, valeur) {
+    if (ensemble.has(valeur)) ensemble.delete(valeur);
+    else ensemble.add(valeur);
+  }
+
+  function filtresChanges() {
+    refleterFiltres();
+    ecrireFiltres();
     appliquerVue();
+  }
+
+  $filters.addEventListener("click", (e) => {
+    const btn = e.target.closest(".filter-btn");
+    if (!btn) return;
+
+    if (btn === $btnFiltresPlus) {
+      imageOuvert = !imageOuvert;
+    } else if (btn === $btnFiltreFavori) {
+      favorisSeuls = !favorisSeuls;
+    } else if (btn.dataset.filter === "all") {
+      // « Toutes » n'est pas un filtre de plus : c'est leur remise à zéro.
+      filtresStatut.clear();
+    } else if (btn.dataset.filter) {
+      basculer(filtresStatut, btn.dataset.filter);
+    } else {
+      return;
+    }
+    filtresChanges();
+  });
+
+  $filtresImage.addEventListener("click", (e) => {
+    const btn = e.target.closest(".filter-btn[data-image]");
+    if (!btn) return;
+    basculer(filtresImage, btn.dataset.image);
+    filtresChanges();
   });
 
   // Débouncé : on attend une courte pause dans la frappe avant de
@@ -651,5 +772,7 @@
   /* ---------------- Démarrage ---------------- */
 
   cartes().forEach(indexer);
+  lireFiltres();
+  refleterFiltres();
   appliquerVue();
 })();

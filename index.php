@@ -11,7 +11,7 @@ require_once __DIR__ . '/includes/carte.php';
 $moi = exiger_connexion();
 
 $req = $pdo->prepare(
-    'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id
+    'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori
        FROM serie
       WHERE utilisateur_id = ?
       ORDER BY maj_le DESC, id DESC'
@@ -60,13 +60,28 @@ $csrf    = jeton_csrf();
     </div>
   </div>
 
-  <nav class="filters" id="filters" aria-label="Filtrer par statut">
+  <!-- Les statuts se cumulent : cliquer « En cours » puis « Envie » montre
+       les deux. « Toutes » n'est pas un filtre de plus, c'est leur remise
+       à zéro — d'où son data-filter particulier. -->
+  <nav class="filters" id="filters" aria-label="Filtrer">
     <button class="filter-btn active" data-filter="all" type="button" aria-pressed="true">Toutes<span class="count" id="count-all"><?= (int) $compte['all'] ?></span></button>
     <button class="filter-btn status-cours" data-filter="cours" type="button" aria-pressed="false">En cours<span class="count" id="count-cours"><?= (int) $compte['cours'] ?></span></button>
     <button class="filter-btn status-envie" data-filter="envie" type="button" aria-pressed="false">Envie<span class="count" id="count-envie"><?= (int) $compte['envie'] ?></span></button>
     <button class="filter-btn status-termine" data-filter="termine" type="button" aria-pressed="false">Terminée<span class="count" id="count-termine"><?= (int) $compte['termine'] ?></span></button>
     <button class="filter-btn status-abandon" data-filter="abandon" type="button" aria-pressed="false">Abandonnée<span class="count" id="count-abandon"><?= (int) $compte['abandon'] ?></span></button>
+    <button class="filter-btn filter-favori" id="btn-filtre-favori" data-favori="1" type="button" aria-pressed="false">★ Favoris</button>
+    <button class="filter-btn filter-plus" id="btn-filtres-plus" type="button"
+            aria-expanded="false" aria-controls="filtres-image">Image ▾</button>
   </nav>
+
+  <!-- Le type d'image est replié par défaut : c'est un filtre qu'on sort
+       pour faire le ménage (« lesquelles n'ont pas de couverture ? »),
+       pas un réglage du quotidien. -->
+  <div class="filters filters-image hidden" id="filtres-image" aria-label="Filtrer par type d'image">
+    <?php foreach (IMAGES_TYPES as $cle => $libelle): ?>
+      <button class="filter-btn" data-image="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?></button>
+    <?php endforeach; ?>
+  </div>
 </header>
 
 <main>

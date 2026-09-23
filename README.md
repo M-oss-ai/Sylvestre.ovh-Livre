@@ -139,6 +139,39 @@ importantes :
 
 ---
 
+## Favoris et filtres
+
+L'étoile de chaque carte pose ou retire un favori. Elle vit dans la
+rangée d'actions et non sur la couverture : sur téléphone la carte
+passe à l'horizontale et sa vignette ne fait plus que 70 px, où
+l'étoile se cognait à la pastille de statut.
+
+Les filtres **se cumulent** et **survivent au rechargement** :
+
+| Filtre | Valeurs |
+|---|---|
+| Statut | En cours · Envie · Terminée · Abandonnée |
+| Favoris | oui / non |
+| Type d'image | Pas d'image · MangaDex · Importée · Lien |
+
+Cocher deux statuts montre les deux ; les familles se croisent
+(« terminées **et** sans image »). « Toutes » n'est pas un filtre de
+plus, c'est la remise à zéro des statuts.
+
+Le type d'image est classé côté serveur par `type_image()` et voyage
+dans un attribut `data-image` : le navigateur n'a pas à redécouvrir
+ce qu'une URL veut dire, et la règle ne peut pas diverger entre les
+deux. Ce panneau est replié par défaut — c'est un filtre qu'on sort
+pour faire le ménage, pas un réglage du quotidien ; une pastille sur
+le bouton signale qu'il est actif alors qu'il est replié.
+
+L'état est gardé dans le `localStorage` du navigateur, sous
+`livre.filtres`. Il peut être indisponible — navigation privée,
+stockage bloqué — et la page s'affiche alors sans filtre, ce qui est
+le bon défaut.
+
+---
+
 ## Recherche de couverture
 
 Le bouton **Recherche auto** de la fiche d'une série interroge

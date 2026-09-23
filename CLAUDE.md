@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (386 tests, 33 fichiers de cas)
+php tests/lancer.php              # toute la suite (394 tests, 34 fichiers de cas)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
 php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
@@ -84,6 +84,12 @@ destinées au JS passent par des attributs `data-` sur `<body>`.
 (`INSERT … SELECT … FROM DUAL WHERE (SELECT COUNT(*)…) < ?`). Un
 contrôle préalable en PHP ne résiste pas à deux requêtes simultanées ;
 quand il y en a un, c'est une optimisation, jamais le garde-fou.
+
+**Ce que le navigateur doit savoir d'une série passe par `data-`.**
+`carte.php` pose `data-statut`, `data-image`, `data-favori`,
+`data-mangadex` : le JavaScript filtre sur des attributs, il ne
+réinterprète jamais une URL ni un statut. `type_image()` classe les
+couvertures une seule fois, en PHP, et elle est testée.
 
 **Les libellés de `STATUTS` restent courts** (≤ 12 caractères, testé) :
 ils s'affichent dans la pastille posée sur la couverture.

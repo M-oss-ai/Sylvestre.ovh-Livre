@@ -137,7 +137,7 @@ if ($action === 'donnees.exporter') {
 function ma_serie(PDO $pdo, int $mon_id, int $id): array
 {
     $req = $pdo->prepare(
-        'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id
+        'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori
            FROM serie WHERE id = ? AND utilisateur_id = ?'
     );
     $req->execute([$id, $mon_id]);
@@ -714,6 +714,29 @@ switch ($action) {
             'message'   => $resultats
                 ? count($resultats) . ' résultat(s) pour le tome ' . $tome
                 : 'Aucune série trouvée pour « ' . $titre . ' ».',
+        ]);
+    }
+
+    /* ---------------- Favori ----------------
+       Un simple drapeau, que l'utilisateur pose et retire. Le serveur
+       décide de la valeur finale plutôt que de la recevoir : deux
+       frappes rapides sur l'étoile ne peuvent pas laisser l'affichage
+       et la base en désaccord. */
+    case 'serie.favori': {
+        $id = (int) ($_POST['id'] ?? 0);
+        $s  = ma_serie($pdo, $mon_id, $id);
+
+        $pdo->prepare('UPDATE serie SET favori = 1 - favori WHERE id = ? AND utilisateur_id = ?')
+            ->execute([$id, $mon_id]);
+        $s['favori'] = empty($s['favori']) ? 1 : 0;
+
+        reponse_json([
+            'ok'      => true,
+            'favori'  => (bool) $s['favori'],
+            'carte'   => carte_html($s),
+            'message' => $s['favori']
+                ? '« ' . $s['titre'] . ' » ajoutée aux favoris ★'
+                : '« ' . $s['titre'] . ' » retirée des favoris',
         ]);
     }
 

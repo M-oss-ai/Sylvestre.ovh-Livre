@@ -137,6 +137,9 @@ CREATE TABLE IF NOT EXISTS `serie` (
   -- son choix prime, et un lien qui ecraserait son image serait un
   -- piege. Un identifiant MangaDex est un UUID, donc 36 caracteres.
   `mangadex_id`    CHAR(36)     NOT NULL DEFAULT '',
+  -- Serie mise en favori par son proprietaire. Un simple drapeau :
+  -- l'ordre d'affichage n'en depend pas, seul le filtre s'en sert.
+  `favori`         TINYINT(1)   NOT NULL DEFAULT 0,
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -316,6 +319,18 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
               AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'mangadex_id');
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `serie` ADD COLUMN `mangadex_id` CHAR(36) NOT NULL DEFAULT ''''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  5. Favoris.
+--
+--     Voir la mise en garde ci-dessus : « ADD COLUMN IF NOT EXISTS »
+--     n'est pas utilisable, d'ou ce detour par information_schema.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'favori');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `favori` TINYINT(1) NOT NULL DEFAULT 0');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
 
 -- ---------------------------------------------------------------------

@@ -290,6 +290,50 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   opacity: 0.35;
 }
 
+/* Etoile de favori, dans la rangee d'actions avec les fleches et le
+   crayon.
+
+   Elle a d'abord ete posee sur la couverture, ce qui etait plus joli sur
+   grand ecran — mais sur telephone la carte passe a l'horizontale et sa
+   couverture ne fait plus que 70 px : l'etoile s'y cognait a la pastille
+   de statut. Ici elle ne chevauche jamais rien, et tombe sous le pouce
+   comme les autres commandes. */
+.btn-favori {
+  flex: none;
+  width: 42px;
+  min-height: 42px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  /* Gris tant qu'elle n'est pas posee : une etoile doree partout ne
+     distinguerait plus rien. */
+  color: rgba(230, 220, 207, 0.45);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-favori:hover { background: rgba(255, 255, 255, 0.08); color: var(--gold-light); }
+.btn-favori.actif { color: var(--gold); text-shadow: 0 0 10px rgba(201, 168, 124, 0.6); }
+.btn-favori:disabled { opacity: 0.5; cursor: default; }
+
+/* Seconde rangee de filtres, repliable. */
+.filters-image { margin-top: 8px; }
+
+/* Pastille sur « Image » quand un filtre y est actif mais replie : sans
+   elle, on cherche longtemps pourquoi la liste est si courte. */
+.filter-plus.a-un-filtre::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--gold);
+}
+
+.filter-favori.active { color: var(--gold); }
+
 .badge {
   position: absolute;
   top: 8px;

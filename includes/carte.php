@@ -21,6 +21,7 @@ function carte_html(array $s): string
     $en_cours = ($statut === 'cours' || $statut === 'envie');
 
     $couverture = url_image_sure($s['couverture'] ?? '');
+    $favori     = !empty($s['favori']);
     $titre      = (string) $s['titre'];
     $auteur     = (string) ($s['auteur'] ?? '');
 
@@ -46,7 +47,9 @@ function carte_html(array $s): string
                data-auteur="' . e($auteur) . '"
                data-tome="' . $tome . '"
                data-couverture="' . e($couverture) . '"
-               data-mangadex="' . e((string) ($s['mangadex_id'] ?? '')) . '">
+               data-mangadex="' . e((string) ($s['mangadex_id'] ?? '')) . '"
+               data-favori="' . ($favori ? '1' : '0') . '"
+               data-image="' . e(type_image($couverture)) . '">
         <div class="card-cover" data-action="edit" role="button" tabindex="0" aria-label="Modifier ' . e($titre) . '">
           ' . $image . '
           <span class="badge">' . e(STATUTS[$statut]) . '</span>
@@ -63,6 +66,10 @@ function carte_html(array $s): string
             <button type="button" class="btn-advance" data-action="advance"
                     title="Marquer le tome ' . $suivant . ' comme lu"
                     aria-label="Marquer le tome ' . $suivant . ' comme lu">→</button>
+            <button type="button" class="btn-favori' . ($favori ? ' actif' : '') . '"
+                    data-action="favori" aria-pressed="' . ($favori ? 'true' : 'false') . '"
+                    title="' . ($favori ? 'Retirer des favoris' : 'Mettre en favori') . '"
+                    aria-label="' . ($favori ? 'Retirer' : 'Mettre') . ' &quot;' . e($titre) . '&quot; ' . ($favori ? 'des' : 'en') . ' favori' . ($favori ? 's' : '') . '">★</button>
             <button type="button" class="btn-edit" data-action="edit"
                     title="Modifier / gérer la couverture" aria-label="Modifier ' . e($titre) . '">✏️</button>
           </div>
