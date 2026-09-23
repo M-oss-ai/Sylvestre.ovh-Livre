@@ -239,6 +239,7 @@
     try {
       const r = await L.api("serie.favori", { id });
       poserCarte(r.carte, id);
+      majCompteurs(r.compte);
       L.toast(r.message);
       /* Le filtre « Favoris » peut faire disparaître la carte qu'on
          vient de retirer : c'est cohérent, et le message l'explique. */

@@ -69,7 +69,7 @@ $csrf    = jeton_csrf();
     <button class="filter-btn status-envie" data-filter="envie" type="button" aria-pressed="false">Envie<span class="count" id="count-envie"><?= (int) $compte['envie'] ?></span></button>
     <button class="filter-btn status-termine" data-filter="termine" type="button" aria-pressed="false">Terminée<span class="count" id="count-termine"><?= (int) $compte['termine'] ?></span></button>
     <button class="filter-btn status-abandon" data-filter="abandon" type="button" aria-pressed="false">Abandonnée<span class="count" id="count-abandon"><?= (int) $compte['abandon'] ?></span></button>
-    <button class="filter-btn filter-favori" id="btn-filtre-favori" data-favori="1" type="button" aria-pressed="false">★ Favoris</button>
+    <button class="filter-btn filter-favori" id="btn-filtre-favori" data-favori="1" type="button" aria-pressed="false">★ Favoris<span class="count" id="count-favori"><?= (int) $compte['favori'] ?></span></button>
     <button class="filter-btn filter-plus" id="btn-filtres-plus" type="button"
             aria-expanded="false" aria-controls="filtres-image">Image ▾</button>
   </nav>

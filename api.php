@@ -734,6 +734,8 @@ switch ($action) {
             'ok'      => true,
             'favori'  => (bool) $s['favori'],
             'carte'   => carte_html($s),
+            // Le compteur du filtre « Favoris » suit tout de suite.
+            'compte'  => compter_series($pdo, $mon_id),
             'message' => $s['favori']
                 ? '« ' . $s['titre'] . ' » ajoutée aux favoris ★'
                 : '« ' . $s['titre'] . ' » retirée des favoris',
