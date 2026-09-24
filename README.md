@@ -170,6 +170,27 @@ L'état est gardé dans le `localStorage` du navigateur, sous
 stockage bloqué — et la page s'affiche alors sans filtre, ce qui est
 le bon défaut.
 
+### Une série qu'on modifie ne disparaît pas sous vos yeux
+
+Retirer une série des favoris pendant que le filtre « Favoris » est
+actif, ou changer son image pendant que le filtre « Image » exclut la
+nouvelle — sans précaution, la carte se serait effacée au moment même
+où on vient de la toucher.
+
+Une série créée ou modifiée reçoit donc une **exception**, par
+catégorie de filtre (statut, favoris, image — jamais la recherche) :
+elle reste visible même si elle ne correspond plus, jusqu'à ce qu'on
+retouche cette catégorie précise. « Retouche » veut dire n'importe quel
+clic dans la catégorie, pas forcément le bouton exact qui l'exclut —
+cliquer sur « Abandonnée » revérifie aussi une exception née d'un
+passage à « En cours ». C'est la règle la plus simple des deux
+possibles : l'autre (ne réagir qu'à la valeur exacte) demanderait de
+suivre, par carte, ce qu'elle portait au moment de l'exception, pour un
+résultat plus difficile à deviner.
+
+Une série tout juste **créée** reçoit la même exception sur les trois
+catégories : elle apparaît toujours, quels que soient les filtres actifs.
+
 ---
 
 ## Recherche de couverture

@@ -227,6 +227,16 @@ règle que le reste — rien de dédié. `couvertures.php` déclare donc un
 réellement, et ne plus se fier à l'ordre de chargement d'un appelant
 est exactement la leçon de la section cron ci-dessus.
 
+**Une carte créée ou modifiée ne disparaît pas d'un filtre actif à
+l'instant même.** `poserCarte()` (js/app.js) lui accorde une
+exception par catégorie (`_exceptions`, statut/favoris/image — jamais
+la recherche). Elle s'efface au premier clic dans la catégorie
+concernée, quel que soit le bouton précis — pas seulement celui qui
+l'exclurait. Décision volontaire (l'utilisateur a choisi cette règle
+entre deux, voir l'historique) : suivre la valeur exacte portée au
+moment de l'exception aurait été plus fidèle, mais plus fragile et
+moins devinable.
+
 **Une série est LIÉE, pas recherchée à chaque fois.** Choisir une
 couverture enregistre `serie.mangadex_id` ; avancer d'un tome coûte
 alors une seule requête au lieu d'une recherche entière. Le lien se

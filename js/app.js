@@ -98,9 +98,16 @@
 
     toutes.forEach((c) => {
       if (c._recherche === undefined) indexer(c);
-      const okStatut = filtresStatut.size === 0 || filtresStatut.has(c.dataset.statut);
-      const okImage = filtresImage.size === 0 || filtresImage.has(c.dataset.image);
-      const okFavori = !favorisSeuls || c.dataset.favori === "1";
+      // Une série qu'on vient de créer ou de modifier garde une
+      // EXCEPTION par catégorie (voir poserCarte()) : elle reste visible
+      // même si elle ne correspond plus au filtre, jusqu'à ce qu'on
+      // retouche cette catégorie précise (voir oublierExceptions()).
+      const exceptee = (categorie) => c._exceptions && c._exceptions.has(categorie);
+      const okStatut = filtresStatut.size === 0 || filtresStatut.has(c.dataset.statut)
+        || exceptee("statut");
+      const okImage = filtresImage.size === 0 || filtresImage.has(c.dataset.image)
+        || exceptee("image");
+      const okFavori = !favorisSeuls || c.dataset.favori === "1" || exceptee("favori");
       const okRecherche = !prep.q || L.correspondPrepare(c._recherche, prep);
       const visible = okStatut && okImage && okFavori && okRecherche;
       c.classList.toggle("hidden", !visible);
@@ -156,6 +163,14 @@
     const nouvelle = gabarit.firstElementChild;
     if (!nouvelle) return;
     indexer(nouvelle);
+
+    // Créée ou modifiée : elle reste visible même si elle ne correspond
+    // plus au filtre actif, tant qu'on ne retouche pas la catégorie
+    // concernée (favoris, statut, image — jamais la recherche, qui n'a
+    // pas ce genre de surprise). Sans quoi poser une étoile sous le
+    // filtre « Favoris », ou changer une image sous le filtre « Image »,
+    // ferait disparaître la carte sous les yeux de qui vient d'agir dessus.
+    nouvelle._exceptions = new Set(["statut", "favori", "image"]);
 
     const ancienne = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
     if (ancienne) {
@@ -348,6 +363,23 @@
     else ensemble.add(valeur);
   }
 
+  /**
+   * Retouche une catégorie de filtre (statut, favori ou image) : les
+   * exceptions qu'elle porte n'ont plus lieu d'être, on les efface sur
+   * TOUTES les cartes — y compris celles dont la valeur ne correspond
+   * pas au bouton cliqué. Un clic sur « Abandonnée » revérifie donc
+   * aussi une série restée visible pour « En cours ».
+   *
+   * C'est délibérément la règle la plus simple des deux possibles :
+   * l'autre (n'effacer que pour la valeur exacte qu'on vient de
+   * toggler) demanderait de suivre, par carte, la valeur qu'elle
+   * portait au moment de l'exception — plus fragile, et le résultat
+   * serait difficile à deviner pour qui l'utilise.
+   */
+  function oublierExceptions(categorie) {
+    cartes().forEach((c) => c._exceptions && c._exceptions.delete(categorie));
+  }
+
   function filtresChanges() {
     refleterFiltres();
     ecrireFiltres();
@@ -359,14 +391,19 @@
     if (!btn) return;
 
     if (btn === $btnFiltresPlus) {
+      // Ouvrir ou fermer le panneau n'est pas une décision de filtrage :
+      // aucune exception n'a de raison de s'effacer pour autant.
       imageOuvert = !imageOuvert;
     } else if (btn === $btnFiltreFavori) {
       favorisSeuls = !favorisSeuls;
+      oublierExceptions("favori");
     } else if (btn.dataset.filter === "all") {
       // « Toutes » n'est pas un filtre de plus : c'est leur remise à zéro.
       filtresStatut.clear();
+      oublierExceptions("statut");
     } else if (btn.dataset.filter) {
       basculer(filtresStatut, btn.dataset.filter);
+      oublierExceptions("statut");
     } else {
       return;
     }
@@ -377,6 +414,7 @@
     const btn = e.target.closest(".filter-btn[data-image]");
     if (!btn) return;
     basculer(filtresImage, btn.dataset.image);
+    oublierExceptions("image");
     filtresChanges();
   });
 
