@@ -432,6 +432,92 @@ window.Lib = (() => {
     true // capture : l'évènement « error » d'une image ne remonte pas
   );
 
+  /* ---------- Quitter un champ sans passer par la touche « Entrée » ----------
+
+     Sur téléphone, un champ focalisé garde le clavier ouvert tant qu'on
+     ne touche pas explicitement autre chose — et l'étiquette du champ
+     (« Titre * », par exemple) NE compte PAS comme « autre chose » : le
+     navigateur la traite comme une extension du champ.
+
+     Ce qui se passe RÉELLEMENT au tap est plus retors qu'il n'y paraît
+     (vérifié en instrumentant un vrai clic, pas seulement lu dans la
+     spec) : le navigateur retire déjà le focus du champ AVANT même de
+     distribuer l'évènement « click » sur l'étiquette — à ce moment-là,
+     « document.activeElement » est donc déjà vide, impossible à
+     comparer à l'étiquette cliquée. Il fait ensuite comme si l'input
+     avait été cliqué DIRECTEMENT, avec son propre évènement « click »
+     séparé, qui le refocalise. Deux évènements, pas un.
+
+     D'où la nécessité de mémoriser QUI vient de perdre le focus — via
+     « focusout », qui se déclenche sur l'ANCIEN élément avant tout ce
+     manège — plutôt que de se fier à « activeElement » au moment du
+     clic sur l'étiquette. */
+
+  let venaitDePerdreLeFocus = null;
+
+  document.addEventListener(
+    "focusout",
+    (e) => {
+      if (e.target.matches("input, textarea, select")) venaitDePerdreLeFocus = e.target;
+    },
+    true
+  );
+
+  document.addEventListener(
+    "click",
+    (e) => {
+      // Cas particulier : l'étiquette du champ qui vient JUSTE de
+      // perdre le focus — très probablement à cause de ce tap-ci. Le
+      // comportement natif s'apprête à le refocaliser (un no-op
+      // invisible côté écran, qui laisse le clavier ouvert) : on
+      // l'empêche et on sort du champ pour de bon.
+      //
+      // L'étiquette d'un AUTRE champ, ou une étiquette après un tap sans
+      // rapport, n'est pas concernée : `venaitDePerdreLeFocus` ne
+      // correspond alors pas, et le focus continue de se déplacer
+      // normalement.
+      const etiquette = e.target.closest("label");
+      if (etiquette && etiquette.htmlFor && venaitDePerdreLeFocus
+          && etiquette.htmlFor === venaitDePerdreLeFocus.id) {
+        e.preventDefault();
+        venaitDePerdreLeFocus.blur(); // déjà fait en pratique ; ceinture et bretelles
+        venaitDePerdreLeFocus = null;
+        return;
+      }
+
+      // Le reste : le fond de page, un titre de section, une carte…
+      // Rien de tout cela n'a de focus à prendre nativement. Cliquer sur
+      // un AUTRE champ (ou son étiquette) n'entre pas ici : le focus s'y
+      // déplace de lui-même, la ligne ci-dessous ne fait rien de plus
+      // dans ce cas (elle vise l'ANCIEN champ, qui a déjà perdu le
+      // focus par la mécanique native).
+      const actif = document.activeElement;
+      if (actif && actif.matches("input, textarea, select")
+          && !actif.contains(e.target) && e.target !== actif) {
+        actif.blur();
+      }
+    },
+    true // capture : on veut voir le clic avant que quoi que ce soit
+         // d'autre (fermeture de la modale, etc.) ne réagisse dessus.
+  );
+
+  /* Faire glisser la page (ou la modale, qui défile elle aussi) ferme le
+     clavier de la même façon.
+     « touchmove » et non « scroll » : le navigateur fait défiler la page
+     de LUI-MÊME pour garder un champ visible au-dessus du clavier quand
+     il s'ouvre — un « scroll » générique s'y serait donc déclenché à
+     l'instant même où l'on vient de toucher le champ, le refermant
+     aussitôt. « touchmove » ne se déclenche que sous un doigt qui glisse
+     réellement, jamais pour un défilement programmatique. */
+  document.addEventListener(
+    "touchmove",
+    () => {
+      const actif = document.activeElement;
+      if (actif && actif.matches("input, textarea, select")) actif.blur();
+    },
+    { passive: true }
+  );
+
   return {
     csrf, api, toast, debounce, limite, tailleLisible,
     normalize, levenshtein, correspond, prepareRecherche, correspondPrepare,

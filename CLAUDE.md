@@ -181,6 +181,22 @@ règles d'accès du cron ont été extraites de `purger.php` vers
 
 ## Pièges connus
 
+**Un clic réel sur une `<label>` distribue DEUX évènements « click »,**
+pas un. D'abord un sur l'étiquette elle-même, à un moment où le focus a
+DÉJÀ quitté le champ associé (`document.activeElement` y est donc déjà
+vide — inutile de le comparer à ce stade) ; ensuite un second,
+synthétique, ciblant directement le champ, qui le refocalise. Vérifié
+en instrumentant un vrai tap, pas seulement lu dans la spec : un
+`console.log` naïf sur `document.activeElement` au premier évènement
+aurait fait croire que le champ était encore focalisé.
+
+Conséquence pour `js/commun.js` (évasion de champ, voir plus bas) :
+détecter « l'utilisateur vient de cliquer sur l'étiquette du champ
+déjà focalisé » ne peut pas se fier à `activeElement` au moment du
+clic — il faut mémoriser QUI vient de perdre le focus via `focusout`
+(qui se déclenche sur l'ANCIEN élément, avant ce manège), puis
+comparer l'étiquette cliquée à cette mémoire.
+
 **Une tâche planifiée refusée doit sortir avec un code non nul.**
 `exit('Not found')` retourne **0**, donc une réussite. Un hébergeur réglé
 sur « envoyer uniquement en cas d'erreur » ne dit alors jamais rien : la
@@ -196,6 +212,19 @@ vue par PHP sans rien purger.
 **L'encodage à l'envoi.** Transférer les fichiers en **binaire**. Coller
 du texte dans l'éditeur ANSI de WinSCP corrompt l'UTF-8 — et le piège est
 que du contenu correct y *paraît* faux.
+
+**Un champ focalisé ne se quitte pas tout seul sur téléphone.** Ni un
+tap ailleurs, ni un glissement de la page ne fermaient le clavier
+virtuel — et cliquer sur l'ÉTIQUETTE du champ focalisé (« Titre * »)
+le refocalisait silencieusement (comportement natif du navigateur),
+donnant l'impression que rien ne se passait. `js/commun.js` y répond,
+sans wiring par page (auto-actif partout où `commun.js` est chargé) :
+tap hors du champ actif → `blur()` ; tap sur SA PROPRE étiquette →
+interception (voir le piège ci-dessus) ; `touchmove` → `blur()`
+(« touchmove » et non « scroll » : le navigateur fait défiler la page
+tout seul pour garder un champ visible au-dessus du clavier quand il
+s'ouvre, un `scroll` générique s'y serait donc déclenché à l'instant
+même où l'on vient de toucher le champ).
 
 **Les grilles CSS étirent leurs lignes par défaut.** Avec un `max-height`
 sur le conteneur, les lignes sont dimensionnées contre la hauteur
