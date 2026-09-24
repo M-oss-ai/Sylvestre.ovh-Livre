@@ -23,6 +23,15 @@
 
 declare(strict_types=1);
 
+/* mangadex_image_locale() rapatrie une image via traiter_image() et
+   ecrire_image() (includes/images.php). Ce fichier est chargé APRÈS
+   carte.php par tous ses appelants (api.php, tests/amorce.php), ce qui
+   suffirait déjà — mais dépendre de l'ordre de chargement d'un autre
+   fichier est le genre de fragilité qui a déjà coûté cher ici (voir
+   CLAUDE.md, section cron). require_once le rend explicite et sans
+   risque : rien n'est redéfini si le fichier est déjà chargé. */
+require_once __DIR__ . '/images.php';
+
 /** Hôte interrogé. Codé en dur : aucune URL ne vient de l'utilisateur. */
 const MANGADEX_API = 'https://api.mangadex.org';
 const MANGADEX_IMAGES = 'https://uploads.mangadex.org/covers/';
@@ -457,6 +466,71 @@ function couverture_liee(string $manga_id, int $tome, bool $repli = false): stri
         return (string) (mangadex_couvertures_serie($manga_id, 1)['repli'] ?? '');
     }
     return '';
+}
+
+/**
+ * Rapatrie une couverture MangaDex en local, via le pipeline habituel
+ * des images envoyées (validation, redimension, ré-encodage WebP).
+ *
+ * Sert au bouton « Délier de MangaDex » : l'utilisateur garde l'image
+ * affichée à l'identique, mais elle cesse d'être une URL MangaDex —
+ * donc cesse d'être reconnue par mangadex_id_depuis_url(), et le lien
+ * disparaît de lui-même au prochain enregistrement. Aucun code dédié
+ * pour « couper le lien » : c'est la même règle que choisir un fichier
+ * ou coller une URL d'ailleurs, appliquée ici à l'image déjà en place.
+ *
+ * Passe par la même file d'attente que les autres appels sortants
+ * (mangadex_attendre_son_tour()) : télécharger une image reste un appel
+ * à l'adresse du serveur, qu'il faut cadencer comme les autres.
+ *
+ * Seul l'hôte d'images de MangaDex est accepté — cette fonction ne doit
+ * jamais devenir un relais pour télécharger une URL arbitraire fournie
+ * par un visiteur (SSRF).
+ */
+function mangadex_image_locale(string $url, ?string &$erreur = null): ?string
+{
+    if (!str_starts_with($url, MANGADEX_IMAGES)) {
+        $erreur = "Cette image ne vient pas de MangaDex.";
+        return null;
+    }
+
+    $tour = mangadex_attendre_son_tour();
+    if ($tour > 0) {
+        mangadex_attente_suggeree($tour);
+        $erreur = 'Trop de requêtes en cours. Réessayez dans ' . $tour . ' secondes.';
+        return null;
+    }
+
+    $ch = curl_init($url);
+    if ($ch === false) {
+        $erreur = 'Téléchargement impossible.';
+        return null;
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => COUVERTURE_TIMEOUT,
+        CURLOPT_CONNECTTIMEOUT => min(3, COUVERTURE_TIMEOUT),
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_USERAGENT      => 'MaBibliothequeManga/1.0',
+        // Ceinture et bretelles : traiter_image() vérifie déjà la taille
+        // après coup, mais autant ne pas rapatrier un fichier énorme pour
+        // le refuser ensuite.
+        CURLOPT_MAXFILESIZE    => IMAGE_TAILLE_MAX,
+    ]);
+    $brut = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code !== 200 || !is_string($brut) || $brut === '') {
+        $erreur = 'Téléchargement impossible.';
+        return null;
+    }
+
+    $image = traiter_image($brut, $erreur);
+    if ($image === null) {
+        return null;
+    }
+    return ecrire_image($image['contenu'], $image['ext'], $erreur);
 }
 
 /**

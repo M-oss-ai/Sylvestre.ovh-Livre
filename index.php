@@ -168,6 +168,7 @@ $csrf    = jeton_csrf();
               <input id="f-image-file" name="couverture_fichier" type="file" accept="image/*" class="visually-hidden">
             </label>
             <button type="button" id="btn-cover-linked" class="btn btn-ghost small hidden">🖼️ Image MangaDex</button>
+            <button type="button" id="btn-cover-unlink" class="btn btn-ghost small hidden" title="Garde cette image, mais arrête de la faire suivre automatiquement les tomes">🔓 Délier de MangaDex</button>
             <button type="button" id="btn-remove-cover" class="btn btn-ghost small danger-text">Retirer l'image</button>
           </div>
         </div>

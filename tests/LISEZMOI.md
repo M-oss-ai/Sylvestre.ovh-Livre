@@ -192,7 +192,9 @@ d'une couverture, pour le filtre avancé), `photo_depuis_formulaire`,
 (câblage), `titre_normalise`, `mangadex_titre`,
 `couverture_quota`, `couverture_tranche_lisible`,
 `mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
-qu'il refuse), `couverture_tome_vise`,
+qu'il refuse), `couverture_tome_vise`, `mangadex_image_locale` (son
+garde-fou avant tout réseau, seul le téléchargement lui-même ne l'est
+pas — voir ci-dessous),
 `mangadex_attente_suggeree`, `mangadex_attendre_son_tour` (la file
 d'attente des appels sortants), `carte_html`, les
 planchers de toutes les constantes — y compris `COUVERTURE_*` et le
@@ -200,8 +202,9 @@ défaut restrictif de `COUVERTURE_CONTENU_ADULTE` —, et les contrôles de form
 précèdent une requête (`valider_profil`, `jeton_action_valide`,
 `verifier_session_persistante`, `supprimer_images_locales`).
 
-**Non couvert, faute de réseau** — `mangadex_get` et
-`chercher_couvertures`, qui interrogent MangaDex. Le classement des
+**Non couvert, faute de réseau** — `mangadex_get`,
+`chercher_couvertures` et le téléchargement fait par
+`mangadex_image_locale`, qui interrogent tous MangaDex. Le classement des
 résultats, lui, repose sur `titre_normalise`, qui est testé : c'est la
 partie qui décide quelle série remonte en tête.
 

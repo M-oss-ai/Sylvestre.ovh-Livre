@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (405 tests, 34 fichiers de cas)
+php tests/lancer.php              # toute la suite (409 tests, 34 fichiers de cas)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
 php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
@@ -217,6 +217,15 @@ elle est voulue.
 mais l'API n'envoie pas d'en-tête CORS — d'où l'appel depuis le serveur.
 Limite d'environ 5 requêtes par seconde et par IP, et une recherche en
 coûte 1 + `COUVERTURE_MAX_SERIES`.
+
+**Se délier reste possible sans perdre l'image.** Le bouton
+« 🔓 Délier de MangaDex » rapatrie la couverture affichée en local
+(`mangadex_image_locale()`, même pipeline que les fichiers envoyés) :
+elle perd ainsi son URL MangaDex, et le lien disparaît par la même
+règle que le reste — rien de dédié. `couvertures.php` déclare donc un
+`require_once` explicite vers `images.php` : il en dépend désormais
+réellement, et ne plus se fier à l'ordre de chargement d'un appelant
+est exactement la leçon de la section cron ci-dessus.
 
 **Une série est LIÉE, pas recherchée à chaque fois.** Choisir une
 couverture enregistre `serie.mangadex_id` ; avancer d'un tome coûte

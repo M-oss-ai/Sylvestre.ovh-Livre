@@ -824,6 +824,45 @@ switch ($action) {
         ]);
     }
 
+    /* ---------------- Délier une image de MangaDex ----------------
+       L'image reste affichée à l'identique, mais cesse d'être suivie
+       automatiquement : on la rapatrie en local (includes/images.php),
+       ce qui lui fait perdre son URL MangaDex. Le lien se déduisant de
+       cette URL (mangadex_id_depuis_url()), il disparaît alors de
+       lui-même au prochain enregistrement — sans code dédié pour
+       « couper le lien », la même règle que choisir un fichier ou coller
+       une URL d'ailleurs.
+
+       Comme le bouton « Image MangaDex », ceci ne PROPOSE l'image que
+       pour le formulaire : rien n'est écrit tant que la modale n'est
+       pas validée, pour ne pas écraser un choix que l'utilisateur
+       ferait entre-temps. */
+    case 'couverture.delier': {
+        $id = (int) ($_POST['id'] ?? 0);
+        $s  = ma_serie($pdo, $mon_id, $id);
+
+        $couverture = url_image_sure((string) $s['couverture']);
+        if ($couverture === '' || mangadex_id_depuis_url($couverture) === '') {
+            reponse_json(['ok' => false, 'erreur' =>
+                "Cette série n'a pas d'image MangaDex à dissocier."], 422);
+        }
+
+        $erreur = null;
+        $locale = mangadex_image_locale($couverture, $erreur);
+        if ($locale === null) {
+            $attente = mangadex_attente_suggeree();
+            reponse_json([
+                'ok'      => false,
+                'attente' => $attente,
+                'erreur'  => $attente > 0
+                    ? 'Trop de requêtes en cours. Réessayez dans ' . $attente . ' secondes.'
+                    : ($erreur ?? 'Téléchargement impossible.'),
+            ], $attente > 0 ? 429 : 422);
+        }
+
+        reponse_json(['ok' => true, 'url' => $locale]);
+    }
+
     /* ---------------- Filtre des images sensibles ----------------
        Le filtre est actif par défaut. Le désactiver exige d'avoir
        déclaré sa majorité — déclaration sur l'honneur, jamais une

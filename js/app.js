@@ -399,6 +399,7 @@
   const $fVolume = document.getElementById("f-volume");
   const $fStatus = document.getElementById("f-status");
   const $btnCoverLinked = document.getElementById("btn-cover-linked");
+  const $btnCoverUnlink = document.getElementById("btn-cover-unlink");
   const $fImageUrl = document.getElementById("f-image-url");
   const $fImageFile = document.getElementById("f-image-file");
   const $fCoverRemoved = document.getElementById("f-cover-removed");
@@ -445,6 +446,7 @@
        MangaDex : ailleurs il n'aurait nulle part où aller chercher. */
     lienMangadex = edition ? carte.dataset.mangadex || "" : "";
     $btnCoverLinked.classList.toggle("hidden", lienMangadex === "");
+    $btnCoverUnlink.classList.toggle("hidden", lienMangadex === "");
     $coverStatus.textContent = "";
     $coverResults.classList.add("hidden");
     $coverResults.replaceChildren();
@@ -634,6 +636,37 @@
       $coverStatus.textContent = err.message;
     } finally {
       $btnCoverLinked.disabled = false;
+    }
+  });
+
+  /* « Délier de MangaDex » : garder l'image affichée, mais lui faire
+     perdre son URL MangaDex — le lien s'en déduisant, il disparaît de
+     lui-même au prochain enregistrement.
+
+     Comme « Image MangaDex », ceci ne fait que PROPOSER l'image : rien
+     n'est écrit tant que la modale n'est pas validée. Et l'image
+     obtenue est un chemin LOCAL (uploads/…), pas une adresse
+     https:// : $fImageUrl reste vide, exactement comme ouvrirModale()
+     le fait déjà pour une couverture déjà locale — un champ « url »
+     n'accepte qu'une adresse absolue, un chemin local y serait rejeté
+     par le navigateur. */
+  $btnCoverUnlink.addEventListener("click", async () => {
+    if (!lienMangadex || !idEnEdition) return;
+
+    $btnCoverUnlink.disabled = true;
+    $coverStatus.textContent = "Rapatriement de l'image…";
+    try {
+      const r = await L.api("couverture.delier", { id: idEnEdition });
+      coverEnAttente = { type: "url", value: r.url };
+      $fImageUrl.value = "";
+      $fImageFile.value = "";
+      $fCoverRemoved.value = "0";
+      majApercu();
+      $coverStatus.textContent = "Image dissociée de MangaDex ✅ — Enregistrez pour confirmer.";
+    } catch (err) {
+      $coverStatus.textContent = err.message;
+    } finally {
+      $btnCoverUnlink.disabled = false;
     }
   });
 

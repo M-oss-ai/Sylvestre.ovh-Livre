@@ -203,9 +203,19 @@ l'image** (`mangadex_id_depuis_url()`). Conséquence directe, et voulue :
 | un fichier depuis votre appareil | **coupé** |
 | une URL d'un autre site | **coupé** |
 | « Retirer l'image » | **coupé** |
+| **🔓 Délier de MangaDex** | **coupé**, image conservée |
 
 Les deux ne peuvent donc pas se contredire, et votre image n'est jamais
 écrasée par une mise à jour automatique.
+
+Le bouton **🔓 Délier de MangaDex** couvre le cas qui manquait : garder
+l'image affichée sans qu'elle continue à suivre les tomes — une édition
+particulière qu'on a choisie à la main, par exemple. Il rapatrie la
+couverture en local (même traitement que n'importe quelle image
+envoyée : redimension, ré-encodage WebP), ce qui lui fait perdre son URL
+MangaDex — et le lien disparaît alors de lui-même, par la même règle que
+tout le reste de cette section. Il n'apparaît, comme son voisin, que sur
+une série déjà liée.
 
 Le rafraîchissement automatique **n'accepte que la couverture du tome
 exact**. Si ce tome n'en a pas — fréquent au-delà des premiers — l'image
