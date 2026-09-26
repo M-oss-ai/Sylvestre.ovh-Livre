@@ -155,10 +155,25 @@ Copie de fichiers par FTP, rien d'autre. Dans l'ordre :
    `js/` ou `css/` change. `actif()` s'en sert pour casser le cache ;
    sans l'incrément le correctif reste invisible, et on le croit raté.
 
-**Ne montent jamais sur le serveur** : `tests/` (ses fichiers de cas sont
-du PHP, qu'Apache exécuterait à la demande de n'importe quel visiteur) et
-`.env`. Deux règles `.htaccess` interdisent `tests/` par précaution, à la
-racine et dans le dossier lui-même.
+**Envoyer le dossier entier, puis faire le ménage** est la méthode
+retenue, parce que c'est la plus rapide. Le `.htaccess` racine est écrit
+pour ça : il couvre chaque élément du dossier local (le tableau en tête
+du fichier dit ce qui est servi, ce qui est gardé mais bloqué, et ce qui
+est à supprimer). Entre l'envoi et le ménage, rien de ce qui est arrivé
+en trop n'est lisible. À supprimer ensuite : `tests/`, `.git/`,
+`.env.example`, `.gitignore`, `*.md`, `livre.sql`, et les images de test
+de `uploads/`.
+
+**Seule exception, à exclure du transfert lui-même : `.env`.** Le `.env`
+local (base `localhost`) écraserait celui du serveur, et le site perdrait
+sa base à l'instant même. Aucune règle HTTP n'y peut rien : c'est un
+écrasement de fichier. Le supprimer après coup ne réparerait rien.
+
+Les règles de `includes/` et `tests/` sont doublées (racine et
+`.htaccess` du dossier) : elles tiennent même si un dossier arrive sans
+ses fichiers cachés. Vérifié avec l'Apache de XAMPP, qui lit ce
+`.htaccess` : demander chaque élément du dossier par `curl` et comparer
+le code de réponse.
 
 ## Tests
 
