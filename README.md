@@ -235,6 +235,12 @@ seuls le titre, la recherche et le « ＋ » restent en haut de l'écran.
 Sur téléphone, la barre occupait jusqu'au tiers de l'écran ; elle en
 prend désormais 15 %.
 
+Pas besoin de remonter tout en haut pour autant : les filtres se
+collent sous la barre, s'y effacent quand on descend et reviennent dès
+qu'on remonte d'une dizaine de pixels. Un filtre changé depuis là
+ramène en haut de la liste, pour la lire depuis son début. Au clavier,
+revenir sur les filtres (Maj+Tab depuis la grille) les fait réapparaître.
+
 ### Au clavier
 
 La grille ne compte qu'**un** arrêt de tabulation : la carte active.

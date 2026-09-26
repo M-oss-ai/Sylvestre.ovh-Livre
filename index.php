@@ -54,7 +54,8 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
 <!-- Seuls le titre et la recherche restent collés en haut de l'écran. Les
      filtres ont quitté la barre fixe : ils y mangeaient jusqu'au tiers de
      l'écran d'un téléphone, pour un réglage qu'on pose une fois puis
-     qu'on oublie. -->
+     qu'on oublie. Ils reviennent sous elle dès qu'on remonte (voir
+     .barre-filtres). -->
 <header class="topbar">
   <div class="topbar-row">
     <h1>📚 Ma Bibliothèque</h1>
@@ -83,7 +84,13 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
   </div>
 </header>
 
-<main>
+<main class="bibliotheque">
+  <!-- Les deux rangées de filtres, collées sous la barre du haut : elles
+       s'effacent derrière elle quand on descend et reviennent dès qu'on
+       remonte, sans devoir retourner en haut de la page (js/app.js).
+       Doit rester le PREMIER élément de <main> : c'est ce qui les fait se
+       coller dès le premier pixel de défilement. -->
+  <div class="barre-filtres" id="barre-filtres">
   <!-- Les statuts se cumulent : cliquer « En cours » puis « Envie » montre
        les deux. « Toutes » n'est pas un filtre de plus, c'est leur remise
        à zéro — d'où son data-filter particulier. -->
@@ -105,6 +112,7 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
     <?php foreach (IMAGES_TYPES as $cle => $libelle): ?>
       <button class="filter-btn" data-image="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?></button>
     <?php endforeach; ?>
+  </div>
   </div>
 
   <!-- La place restante, annoncée à l'approche de la limite (voir

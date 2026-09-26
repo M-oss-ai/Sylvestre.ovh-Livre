@@ -119,6 +119,13 @@ et rendues par `champ_aria()` / `champ_erreur()` ; l'API nomme le champ
 nouveau bouton de carte qui oublierait l'un ou l'autre ramènerait des
 centaines d'arrêts.
 
+**Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
+`js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se
+sert la marge de défilement des cartes). `.barre-filtres` reste le
+PREMIER élément de `<main class="bibliotheque">`, qui n'a pas de
+rembourrage haut : c'est ce qui la fait coller dès le premier pixel, et
+ce qui permet au script de la dire « collée » dès que `scrollY > 0`.
+
 **Une page qui montre un compte est en `no-store`** (posé par
 `exiger_connexion()`) et porte `data-prive="1"` sur `<body>` : c'est ce
 qui l'empêche de revenir du cache par « Précédent » après une
@@ -296,6 +303,18 @@ sur le conteneur, les lignes sont dimensionnées contre la hauteur
 disponible et non contre leur contenu : l'élément devient plus court que
 ce qu'il porte, et son `overflow: hidden` tranche le texte. Invisible sur
 un écran large. D'où `align-content: start` sur `.cover-results`.
+
+**`scrollY` ne bouge pas que sous le doigt.** Quand une hauteur change
+au-dessus de ce qu'on regarde, Chrome et Firefox recalent le défilement
+d'autant (« scroll anchoring ») pour que le contenu ne saute pas. Or les
+cartes sont en `content-visibility: auto` avec une taille estimée
+(340 px) qui n'est pas la vraie (451 px sur un écran de 1024) : en
+remontant une page rechargée en cours de liste, chaque rangée dessinée
+pour la première fois décale `scrollY` de +111 px, alors qu'on remonte.
+Déplier « Image ▾ » fait de même. Lu comme un geste, ce recalage cachait
+les filtres au moment précis où on les voulait. `suivreDefilement()`
+(`js/app.js`) ignore donc le mouvement de toute image où la hauteur de
+`<main>` ou de la barre a changé.
 
 **Un rapprochement symétrique a besoin d'un plancher de longueur.** La
 recherche de la bibliothèque (`correspondPrepare`, `js/commun.js`)

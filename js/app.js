@@ -595,6 +595,7 @@
       return;
     }
     filtresChanges();
+    if (btn !== $btnFiltresPlus) revenirEnHaut();
   });
 
   $filtresImage.addEventListener("click", (e) => {
@@ -603,7 +604,88 @@
     basculer(filtresImage, btn.dataset.image);
     oublierExceptions("image");
     filtresChanges();
+    revenirEnHaut();
   });
+
+  /* ---------------- Les filtres reviennent quand on remonte ----------------
+     Sortis de la barre du haut (ils y prenaient jusqu'au tiers d'un
+     téléphone), les filtres obligeaient à remonter tout en haut pour en
+     changer. Ils se collent maintenant sous elle : ils s'y effacent quand
+     on descend, et reviennent dès qu'on remonte un peu. */
+
+  const $topbar = document.querySelector(".topbar");
+  const $barreFiltres = document.getElementById("barre-filtres");
+  const $main = document.querySelector("main");
+  const racine = document.documentElement;
+
+  /* Le point d'accroche est la hauteur EXACTE de la barre du haut, qui
+     change avec la largeur de l'écran et la taille du texte : trop grand,
+     les filtres descendraient d'autant en haut de page ; trop petit, ils
+     glisseraient dessous. Celle des filtres sert aux cartes atteintes au
+     clavier (scroll-margin-top, dans style.css). */
+  const mesurerBarres = new ResizeObserver(() => {
+    racine.style.setProperty("--hauteur-topbar", $topbar.getBoundingClientRect().height + "px");
+    racine.style.setProperty("--hauteur-filtres", $barreFiltres.offsetHeight + "px");
+  });
+  mesurerBarres.observe($topbar);
+  mesurerBarres.observe($barreFiltres);
+
+  /* Quelques pixels dans le même sens avant de basculer : le pouce qui se
+     relève fait souvent remonter la page d'un rien. */
+  const SEUIL_SENS = 10;
+  let dernierY = 0;
+  let parcouru = 0; // chemin fait dans le sens actuel : > 0 en descendant
+  let gabaritConnu = -1;
+  let suiviPrevu = false;
+
+  function suivreDefilement() {
+    suiviPrevu = false;
+    /* Bornée : le rebond élastique d'iOS, en haut comme en bas de page,
+       ferait croire à un changement de sens. */
+    const max = Math.max(0, racine.scrollHeight - window.innerHeight);
+    const y = Math.min(Math.max(window.scrollY, 0), max);
+    /* Une hauteur a changé depuis le dernier relevé (« Image ▾ » déplié,
+       liste filtrée, cartes dessinées pour la première fois en remontant) :
+       le navigateur a pu décaler le défilement d'autant, pour garder sous
+       les yeux ce qu'on regardait. Ce décalage n'est pas un geste — pris
+       pour une descente, il cachait les filtres qu'on venait de déplier.
+       On repart simplement de la position actuelle. */
+    const gabarit = $main.offsetHeight + $topbar.offsetHeight;
+    const delta = gabarit === gabaritConnu ? y - dernierY : 0;
+    gabaritConnu = gabarit;
+    dernierY = y;
+
+    // Tout en haut, les filtres sont à leur place : ni fond, ni cache.
+    $barreFiltres.classList.toggle("collee", y > 0);
+    if (y <= 0) {
+      parcouru = 0;
+      $barreFiltres.classList.remove("escamotee");
+      return;
+    }
+    if (delta === 0) return;
+    if ((delta > 0) !== (parcouru > 0)) parcouru = 0;
+    parcouru += delta;
+    if (parcouru > SEUIL_SENS) $barreFiltres.classList.add("escamotee");
+    else if (parcouru < -SEUIL_SENS) $barreFiltres.classList.remove("escamotee");
+  }
+
+  window.addEventListener("scroll", () => {
+    if (suiviPrevu) return;
+    suiviPrevu = true;
+    requestAnimationFrame(suivreDefilement);
+  }, { passive: true });
+
+  /* Maj+Tab depuis la grille y revient alors qu'ils sont cachés derrière
+     la barre du haut : ils doivent se montrer. */
+  $barreFiltres.addEventListener("focusin", () => $barreFiltres.classList.remove("escamotee"));
+
+  /** Un filtre changé en cours de liste : la nouvelle se lit depuis son
+      début — et non d'un endroit quelconque, ou de sa fin si elle est
+      plus courte. D'un bond : html défile en douceur (style.css), et
+      glisser le long d'une liste qui vient de changer ne montre rien. */
+  function revenirEnHaut() {
+    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: "instant" });
+  }
 
   // Débouncé : on attend une courte pause dans la frappe avant de
   // recalculer, au lieu de tout refiltrer à chaque caractère.
@@ -1114,4 +1196,5 @@
   refleterFiltres();
   appliquerVue();
   majQuota();
+  suivreDefilement(); // page rechargée en cours de liste
 })();

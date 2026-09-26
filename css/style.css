@@ -10,6 +10,8 @@
   --border-strong: rgba(201, 168, 124, 0.5);
   --radius: 14px;
   --radius-sm: 8px;
+  /* Barre du haut, et filtres quand ils s'y collent. */
+  --fond-barre: rgb(22, 18, 14);
 
   --cours: #6fb3c9;
   --cours-bg: rgba(111, 179, 201, 0.15);
@@ -68,7 +70,7 @@ code {
      recomposition à chaque image pendant le défilement d'une barre
      collante, ce qui se sent nettement sur un téléphone d'entrée de
      gamme — pour une différence visuelle presque invisible. */
-  background: rgb(22, 18, 14);
+  background: var(--fond-barre);
   border-bottom: 1px solid var(--border);
   padding: calc(14px + env(safe-area-inset-top, 0px)) 20px 12px;
   display: flex;
@@ -255,10 +257,42 @@ code {
 .filter-btn.status-termine.active { border-color: var(--termine); background: var(--termine-bg); color: var(--termine); }
 .filter-btn.status-abandon.active { border-color: var(--abandon); background: var(--abandon-bg); color: var(--abandon); }
 
-/* Les filtres vivent désormais en tête de la page, hors de la barre
-   collante : ils défilent avec la liste. */
-main > .filters { margin-bottom: 16px; }
-main > .filters-image { margin-top: -8px; }
+/* Les filtres vivent en tête de la page, hors de la barre du haut. Ils se
+   collent sous elle, s'y effacent quand on descend et reviennent dès
+   qu'on remonte (js/app.js). Leur point d'accroche est la hauteur exacte
+   de la barre, que le script mesure ; sans lui, ils glissent simplement
+   dessous, comme avant. */
+main.bibliotheque { padding-top: 0; }
+
+.barre-filtres {
+  position: sticky;
+  top: var(--hauteur-topbar, 0px);
+  z-index: 10;
+  /* Le rembourrage haut remplace celui de <main> : les filtres commencent
+     exactement sous la barre et s'y collent dès le premier pixel de
+     défilement, sans saut. */
+  padding: 14px 0 12px;
+  margin-bottom: 4px;
+  transition: transform 0.2s ease;
+}
+
+/* Collés : un fond opaque, sans quoi les cartes se liraient au travers.
+   Il couvre toute la largeur de l'écran, comme celui de la barre, sans
+   élargir la page : une ombre pleine, rognée à la hauteur des filtres.
+   Les deux suivantes, décalées d'un pixel, tracent le filet du bas —
+   la couleur translucide de --border, posée sur le même fond que celui
+   de la barre. */
+.barre-filtres.collee {
+  background: var(--fond-barre);
+  box-shadow:
+    0 0 0 100vmax var(--fond-barre),
+    0 1px 0 100vmax var(--border),
+    0 1px 0 100vmax var(--fond-barre);
+  clip-path: inset(0 -100vmax -1px);
+}
+
+/* Cachés derrière la barre du haut, filet compris. */
+.barre-filtres.escamotee { transform: translateY(calc(-100% - 2px)); }
 
 /* Place restante du forfait standard, à l'approche de la limite. */
 .quota-series {
@@ -336,7 +370,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 /* Au clavier, les flèches passent d'une carte à l'autre (js/app.js) : la
    carte atteinte doit se voir, et ne pas glisser sous la barre collante
-   du haut en remontant. */
+   du haut en remontant — ni sous les filtres, qui reviennent justement
+   quand on remonte. Les deux hauteurs sont mesurées par le script. */
 .card-cover:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: -3px;
@@ -344,7 +379,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .card-cover,
 .card-actions button {
-  scroll-margin-top: 150px;
+  scroll-margin-top: calc(var(--hauteur-topbar, 130px) + var(--hauteur-filtres, 0px) + 16px);
   scroll-margin-bottom: 16px;
 }
 
