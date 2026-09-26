@@ -66,29 +66,43 @@ comptes et de séries, nouveautés de la période, tentatives de connexion
 échouées, e-mails bloqués, taille de la base et des images, et le
 détail du ménage effectué.
 
-**Le cron reste quotidien, le rapport peut s'espacer.** `RAPPORT_JOURS`
-(dans le `.env`) fixe tous les combien de jours il part, et la période
-qu'il couvre :
+**Le cron reste quotidien, le rapport peut s'espacer.** Deux réglages
+du `.env`, en heures :
 
-| `RAPPORT_JOURS` | Le rapport part | Il couvre |
+| Variable | Rôle | Exemple |
 |---|---|---|
-| `1` (défaut) | à chaque passage | les dernières 24 h |
-| `7` | le lundi | les 7 derniers jours |
-| `N` (max 30) | un jour sur N, à date fixe | les N derniers jours |
+| `CRON_HEURES` | L'espacement réglé chez l'hébergeur | `24` (défaut) |
+| `RAPPORT_HEURES` | Tous les combien d'heures le rapport part. `0` = à chaque passage (défaut) | `168` = chaque semaine |
 
 Espacer le cron lui-même serait une fausse bonne idée : c'est aussi lui
 qui rejoue les e-mails bloqués (confirmation d'inscription, mot de passe
 oublié). Avec un passage hebdomadaire, un utilisateur pourrait attendre
 son lien jusqu'à une semaine, et il aurait peut-être expiré entre-temps.
 
-**Une anomalie n'attend pas le jour du rapport** (e-mail perdu, file
-d'envoi bloquée) : le rapport part le jour même, avec `[ANOMALIE]` dans
-le sujet. Le plafond de 30 jours vient de la purge, qui efface au-delà
-les compteurs de tentatives de connexion. La rubrique sécurité ne
-couvrirait plus la période annoncée.
+Le serveur retient la date du dernier rapport envoyé (table
+`rapport_cron`). Le suivant part au premier passage où `RAPPORT_HEURES`
+sont écoulées, avec une marge d'une demi-période de cron. Un cron que
+l'hébergeur lance « dans l'heure », tantôt à 3 h 02, tantôt à 3 h 58, ne
+saute ni ne double donc aucun rapport. C'est à ça que sert
+`CRON_HEURES`, et c'est pourquoi `RAPPORT_HEURES` ne peut pas lui être
+inférieur.
 
-La règle suppose un cron **quotidien**. Un cron réglé toutes les heures
-enverrait le rapport à chacun de ses passages du lundi.
+Le rapport couvre le temps **réellement écoulé** depuis le précédent, et
+l'affiche ainsi :
+
+| Écoulé | Affiché |
+|---|---|
+| 1 à 47 heures | `depuis 1 heure`, `depuis 47 heures` |
+| 48 heures et plus | `depuis 2 jours`, `depuis 7 j et 5 heures` |
+
+**Une anomalie n'attend pas l'échéance** (e-mail perdu, file d'envoi
+bloquée) : le rapport part tout de suite, avec `[ANOMALIE]` dans le
+sujet, sans décaler le suivant. Un rapport dû mais qui n'a pas pu partir
+(SMTP en panne) est retenté au passage suivant.
+
+Plafond de 720 heures (30 jours) : la purge efface au-delà les compteurs
+de tentatives de connexion, et la rubrique sécurité ne couvrirait plus
+la période annoncée.
 
 Ce rapport part en envoi **direct**, sans passer par la file de
 rattrapage : un rapport est périssable, le suivant arrive au passage
@@ -151,7 +165,7 @@ importantes :
 | `APP_URL` | Adresse publique. Sert à fabriquer les liens des e-mails |
 | `DB_*` · `SMTP_*` | Base de données et compte d'envoi |
 | `CRON_TOKEN` | Jeton exigé par `purger.php` en HTTP |
-| `RAPPORT_JOURS` | Tous les combien de jours part le rapport du cron, et la période qu'il couvre (7 = chaque lundi) |
+| `CRON_HEURES` · `RAPPORT_HEURES` | Espacement du cron réglé chez l'hébergeur, et tous les combien d'heures part son rapport (24 et 168 : cron quotidien, rapport hebdomadaire) |
 | `UPLOAD_SECRET` | Sel des noms de fichiers envoyés |
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |

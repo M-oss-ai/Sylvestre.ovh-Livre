@@ -97,12 +97,16 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
 --  utilisateur.email qu'au clic sur le lien : tant que la nouvelle adresse
 --  n'est pas confirmée, l'ancienne reste celle du compte. Une faute de
 --  frappe ne peut donc pas rendre un compte irrécupérable.
+--
+--  « blocage_email » est le lien envoyé à l'ANCIENNE adresse avec l'alerte
+--  de changement : il bloque ce changement (ou le défait) et fait choisir
+--  un nouveau mot de passe. `donnee` y porte l'adresse à rétablir.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `jeton_action` (
   `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `utilisateur_id` INT UNSIGNED NOT NULL,
   `jeton_hash`     CHAR(64) NOT NULL,
-  `type`           ENUM('verification','reinit','changement_email') NOT NULL,
+  `type`           ENUM('verification','reinit','changement_email','blocage_email') NOT NULL,
   `donnee`         VARCHAR(190) NULL,
   `expire`         DATETIME NOT NULL,
   `cree_le`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -344,4 +348,20 @@ CREATE TABLE IF NOT EXISTS `recherche_couverture` (
   KEY `idx_recherche_fenetre` (`fenetre_fin`),
   CONSTRAINT `fk_recherche_utilisateur` FOREIGN KEY (`utilisateur_id`)
     REFERENCES `utilisateur` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+--  Date du dernier rapport d'activité (purger.php)
+--
+--  Le cron passe toutes les CRON_HEURES heures, le rapport ne part que
+--  toutes les RAPPORT_HEURES heures. Retenir la date du dernier envoi
+--  permet de décider sans calendrier (un cron que l'hébergeur décale de
+--  quelques minutes ne saute ni ne double aucun rapport) et d'afficher le
+--  temps réellement écoulé : « depuis 7 j et 5 heures ».
+--  Une seule ligne, id = 1.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `rapport_cron` (
+  `id`         TINYINT UNSIGNED NOT NULL,
+  `envoye_le`  DATETIME NOT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

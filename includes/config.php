@@ -642,63 +642,93 @@ define('LEGAL_HEBERGEUR_PAYS', env('LEGAL_HEBERGEUR_PAYS', 'France'));
    afficher. Chez OVH, l'offre d'entree de gamme plafonne souvent a 200. */
 define('QUOTA_BASE_MO', max(0, (int) env('QUOTA_BASE_MO', '200')));
 
-/* Rapport du cron : il part tous les RAPPORT_JOURS jours et couvre cette
-   période (1 = chaque jour, 7 = chaque lundi, la semaine écoulée).
+/* ---------------------------------------------------------------------
+   Tâche planifiée (purger.php) et son rapport, en HEURES
 
-   Le cron, lui, reste QUOTIDIEN : il ne fait pas que le rapport. Il
-   rejoue aussi les e-mails bloqués (confirmation d'inscription, mot de
-   passe oublié). Espacé d'une semaine, un utilisateur attendrait son
-   lien jusqu'à sept jours, et il aurait peut-être expiré entre-temps.
-   On espace donc le RAPPORT, pas le passage.
+     CRON_HEURES     l'espacement réglé chez l'hébergeur (24 = chaque jour)
+     RAPPORT_HEURES  tous les combien d'heures part le rapport détaillé
+                     (168 = chaque semaine). 0 ou absent : à chaque passage.
 
-   Plafond de 30 : la purge efface les compteurs de tentatives au-delà de
-   30 jours (tentative_ip). Une période plus longue ferait annoncer à la
-   rubrique SÉCURITÉ des jours qu'elle ne couvre plus. */
-define('RAPPORT_JOURS', min(30, max(1, (int) env('RAPPORT_JOURS', '1'))));
+   Le cron ne fait pas que le rapport : il rejoue aussi les e-mails
+   bloqués (confirmation d'inscription, mot de passe oublié). On espace
+   donc le RAPPORT, pas le passage. Un cron hebdomadaire ferait attendre
+   un lien jusqu'à une semaine, jusqu'à son expiration peut-être.
+
+   CRON_HEURES sert à deux choses :
+     - un rapport ne peut pas partir plus souvent que le cron ne passe,
+       d'où RAPPORT_HEURES ≥ CRON_HEURES ;
+     - la marge de tolérance (voir rapport_du()) : une demi-période de
+       cron, pour qu'un passage décalé par l'hébergeur ne fasse ni sauter
+       ni doubler un rapport.
+
+   Plafond de 720 h (30 jours) : la purge efface au-delà les compteurs de
+   tentatives (tentative_ip). Une période plus longue ferait annoncer à la
+   rubrique SÉCURITÉ des jours qu'elle ne couvre plus.
+   --------------------------------------------------------------------- */
 
 /**
- * Le rapport détaillé part-il ce jour-là ?
+ * Bornes des deux réglages : [CRON_HEURES, RAPPORT_HEURES].
  *
- * Sans mémoire, par le calendrier : un jour sur $jours, compté depuis
- * le lundi 5 janvier 1970. Pour 7, c'est donc toujours le lundi, et le
- * rapport couvre la semaine qui s'achève. Aucune date de dernier envoi à
- * stocker, donc ni table à créer ni fichier à perdre au déploiement.
- *
- * Prévu pour un cron quotidien : un cron plus fréquent enverrait le
- * rapport à chacun de ses passages ce jour-là.
- *
- * $date : « AAAA-MM-JJ », la date du jour chez le serveur. Une date
- * illisible déclenche l'envoi : un rapport de trop vaut mieux qu'un
- * silence qu'on prendrait pour « tout va bien ».
+ * @return array{0: int, 1: int}
  */
-function rapport_jour_prevu(string $date, int $jours): bool
+function cron_reglages(int $cron, int $rapport): array
 {
-    if ($jours <= 1) {
+    $cron = min(720, max(1, $cron));
+    return [$cron, min(720, max($cron, $rapport))];
+}
+
+define('CRON_HEURES', cron_reglages((int) env('CRON_HEURES', '24'), 0)[0]);
+define('RAPPORT_HEURES', cron_reglages(CRON_HEURES, (int) env('RAPPORT_HEURES', '0'))[1]);
+
+/**
+ * Le rapport détaillé est-il dû à ce passage ?
+ *
+ * $minutes : le temps écoulé depuis le dernier rapport envoyé (table
+ * rapport_cron), null s'il n'y en a jamais eu.
+ *
+ * Par la date du dernier envoi plutôt que par le calendrier : un cron que
+ * l'hébergeur lance « dans l'heure », tantôt à 3 h 02, tantôt à 3 h 58,
+ * ne doit ni sauter ni doubler un rapport. La marge d'une demi-période
+ * de cron l'absorbe. Et si RAPPORT_HEURES n'est pas un multiple de
+ * CRON_HEURES, le rapport part au passage le plus proche.
+ */
+function rapport_du(?int $minutes, int $rapport_heures, int $cron_heures): bool
+{
+    if ($minutes === null) {
         return true;
     }
-    $jour = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
-    if ($jour === false || $jour->format('Y-m-d') !== $date) {
-        return true;
-    }
-    // Jours écoulés depuis le lundi 5 janvier 1970 (le 1er était un jeudi).
-    $n = intdiv($jour->getTimestamp(), 86400) - 4;
-    return $n % $jours === 0;
+    return $minutes >= $rapport_heures * 60 - $cron_heures * 30;
 }
 
 /**
- * La période du rapport en toutes lettres : [libellé court, titre].
- * Un jour donne « 24 h » et « 24 dernières heures », pour que le rapport
- * quotidien reste tel qu'il a toujours été. Au-delà : « 7 jours » et
- * « 7 derniers jours ».
- *
- * @return array{0: string, 1: string}
+ * La période que couvre le rapport, en minutes : depuis le dernier
+ * rapport, entre une heure et 720 heures (la mémoire des tentatives).
+ * Sans rapport précédent : RAPPORT_HEURES.
  */
-function rapport_periode(int $jours): array
+function rapport_fenetre_minutes(?int $minutes, int $rapport_heures): int
 {
-    if ($jours <= 1) {
-        return ['24 h', '24 dernières heures'];
+    if ($minutes === null) {
+        return $rapport_heures * 60;
     }
-    return [$jours . ' jours', $jours . ' derniers jours'];
+    return min(720 * 60, max(60, $minutes));
+}
+
+/**
+ * Une durée pour le rapport : « 1 heure », « 47 heures », puis à partir
+ * de 48 heures « 2 jours » ou « 7 j et 5 heures ».
+ */
+function duree_lisible(int $heures): string
+{
+    $heures = max(1, $heures);
+    if ($heures < 48) {
+        return $heures . ($heures === 1 ? ' heure' : ' heures');
+    }
+    $jours = intdiv($heures, 24);
+    $reste = $heures % 24;
+    if ($reste === 0) {
+        return $jours . ' jours';
+    }
+    return $jours . ' j et ' . $reste . ($reste === 1 ? ' heure' : ' heures');
 }
 
 /* Jeton attendu par purger.php quand il est appelé en HTTP (cron OVH). */

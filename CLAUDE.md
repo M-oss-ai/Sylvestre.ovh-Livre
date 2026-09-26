@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (419 tests, 35 fichiers de cas)
+php tests/lancer.php              # toute la suite (424 tests, 35 fichiers de cas)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
 php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
@@ -123,9 +123,10 @@ recommencer.
 
 ## Base de données
 
-Sept tables : `utilisateur`, `serie`, `jeton_action`,
+Huit tables : `utilisateur`, `serie`, `jeton_action`,
 `session_persistante`, `tentative_ip`, `mail_file`,
-`recherche_couverture`.
+`recherche_couverture`, `rapport_cron` (une seule ligne : la date du
+dernier rapport du cron).
 
 `livre.sql` est **entièrement rejouable**. Pour mettre à jour une base
 existante, on rejoue le fichier **en entier** en retirant seulement les
