@@ -1,7 +1,8 @@
 <?php
 /* =====================================================================
    Entretien périodique de la base. À lancer une fois par jour par le
-   cron de l'hébergeur (voir README).
+   cron de l'hébergeur (voir README). Le rapport détaillé, lui, ne part
+   que tous les RAPPORT_JOURS jours (.env) et couvre cette période.
 
    Sans ça, trois tables grossissent indéfiniment : les compteurs de
    tentatives, les jetons expirés et les jetons d'appareil remplacés.
@@ -252,8 +253,13 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
     };
     $un  = static fn (string $sql) => $pdo->query($sql)->fetch(PDO::FETCH_NUM);
 
+    /* La période couverte suit RAPPORT_JOURS : un entier borné dans
+       config.php, donc sans danger une fois écrit dans le SQL. */
+    $depuis = 'NOW() - INTERVAL ' . (int) RAPPORT_JOURS . ' DAY';
+    [$periode, $periode_titre] = rapport_periode(RAPPORT_JOURS);
+
     $u = $un("SELECT COUNT(*), SUM(email_verifie), SUM(forfait = 'illimite'),
-                     SUM(cree_le > NOW() - INTERVAL 1 DAY) FROM utilisateur");
+                     SUM(cree_le > {$depuis}) FROM utilisateur");
     /* « maj_le > cree_le » est ce qui distingue une modification d'une
        création. La colonne vaut CURRENT_TIMESTAMP à l'insertion, si bien
        qu'une série ajoutée et jamais retouchée a maj_le = cree_le : sans
@@ -266,15 +272,15 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
        seconde qui suit la saisie tient plus de la faute de frappe
        rattrapée que d'une modification. */
     $s = $un("SELECT COUNT(*), COUNT(DISTINCT utilisateur_id),
-                     SUM(cree_le > NOW() - INTERVAL 1 DAY),
-                     SUM(maj_le > NOW() - INTERVAL 1 DAY AND maj_le > cree_le)
+                     SUM(cree_le > {$depuis}),
+                     SUM(maj_le > {$depuis} AND maj_le > cree_le)
                 FROM serie");
     $appareils = $un('SELECT COUNT(*) FROM session_persistante
                        WHERE remplace_le IS NULL AND expire > NOW()');
     $bloques   = $un('SELECT COUNT(*) FROM tentative_ip WHERE bloque_jusqu > NOW()');
-    $echecs = $pdo->query('SELECT action, COUNT(*) n, SUM(blocages) b FROM tentative_ip
-                            WHERE maj_le > NOW() - INTERVAL 1 DAY
-                            GROUP BY action ORDER BY n DESC')->fetchAll();
+    $echecs = $pdo->query("SELECT action, COUNT(*) n, SUM(blocages) b FROM tentative_ip
+                            WHERE maj_le > {$depuis}
+                            GROUP BY action ORDER BY n DESC")->fetchAll();
     $base = $un('SELECT ROUND(SUM(data_length + index_length) / 1048576, 2)
                    FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
 
@@ -287,6 +293,7 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
 
     $t  = "============================================================\n";
     $t .= '  Ma Bibliothèque Manga — rapport du ' . date('d/m/Y') . ' à ' . date('H\hi') . "\n";
+    $t .= '  Période couverte : ' . $periode_titre . "\n";
     $t .= "============================================================\n\n";
 
     $t .= "COMPTES\n";
@@ -295,16 +302,16 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
     $t .= $lit('Adresse confirmée', (int) $u[1]);
     $t .= $lit('En attente de confirmation', (int) $u[0] - (int) $u[1]);
     $t .= $lit('Forfait illimité', (int) $u[2]);
-    $t .= $lit('Nouveaux comptes (24 h)', (int) $u[3]);
+    $t .= $lit('Nouveaux comptes (' . $periode . ')', (int) $u[3]);
 
     $t .= "\nBIBLIOTHÈQUES\n";
     $t .= $lit('Séries au total', (int) $s[0]);
     $t .= $lit('Comptes ayant au moins 1 série', (int) $s[1]);
     $t .= $lit('Moyenne par compte actif', $s[1] > 0 ? round($s[0] / $s[1], 1) : 0);
-    $t .= $lit('Ajoutées (24 h)', (int) $s[2]);
-    $t .= $lit('Modifiées (24 h)', (int) $s[3]);
+    $t .= $lit('Ajoutées (' . $periode . ')', (int) $s[2]);
+    $t .= $lit('Modifiées (' . $periode . ')', (int) $s[3]);
 
-    $t .= "\nSÉCURITÉ (24 dernières heures)\n";
+    $t .= "\nSÉCURITÉ (" . $periode_titre . ")\n";
     if ($echecs) {
         foreach ($echecs as $e) {
             $t .= $lit('Échecs « ' . $e['action'] . ' »',
@@ -356,9 +363,16 @@ $rapport = rapport_texte($pdo, $resume, $anomalies, $mails_envoyes,
    perissable, le suivant arrive au prochain passage. L'empiler ferait
    grossir la file d'un message par execution le jour ou le SMTP tombe,
    en noyant justement les e-mails d'utilisateurs qu'elle doit rejouer.
-   S'il echoue, le texte reste dans le journal de la tache planifiee. */
-if (ADMIN_EMAIL !== '') {
-    $sujet = ($anomalies ? '[ANOMALIE] ' : '') . 'Ma Bibliothèque — rapport du ' . date('d/m/Y');
+   S'il echoue, le texte reste dans le journal de la tache planifiee.
+
+   Il ne part que les jours prevus (tous les RAPPORT_JOURS jours, le
+   lundi pour 7), SAUF anomalie : un e-mail perdu ou un SMTP en panne
+   n'attend pas le rapport de la semaine, il part le jour meme. */
+$jour_de_rapport = rapport_jour_prevu(date('Y-m-d'), RAPPORT_JOURS);
+
+if (ADMIN_EMAIL !== '' && ($jour_de_rapport || $anomalies)) {
+    $sujet = ($anomalies ? '[ANOMALIE] ' : '') . 'Ma Bibliothèque — rapport du ' . date('d/m/Y')
+           . ' (' . rapport_periode(RAPPORT_JOURS)[1] . ')';
     if (!envoyer_email_smtp(ADMIN_EMAIL, $sujet, $rapport)) {
         error_log('purger.php: rapport non envoye a ' . ADMIN_EMAIL);
     }

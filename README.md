@@ -61,10 +61,34 @@ curl -H "X-Cron-Token: VOTRE_CRON_TOKEN" https://votredomaine.fr/purger.php
 Elle supprime les jetons expirés, les compteurs de tentatives périmés,
 les images orphelines, et rejoue les e-mails qui n'étaient pas partis.
 
-Chaque passage envoie un **rapport d'activité** à `ADMIN_EMAIL` :
-nombre de comptes et de séries, nouveautés des dernières 24 h,
-tentatives de connexion échouées, e-mails bloqués, taille de la base
-et des images, et le détail du ménage effectué.
+Elle envoie un **rapport d'activité** à `ADMIN_EMAIL` : nombre de
+comptes et de séries, nouveautés de la période, tentatives de connexion
+échouées, e-mails bloqués, taille de la base et des images, et le
+détail du ménage effectué.
+
+**Le cron reste quotidien, le rapport peut s'espacer.** `RAPPORT_JOURS`
+(dans le `.env`) fixe tous les combien de jours il part, et la période
+qu'il couvre :
+
+| `RAPPORT_JOURS` | Le rapport part | Il couvre |
+|---|---|---|
+| `1` (défaut) | à chaque passage | les dernières 24 h |
+| `7` | le lundi | les 7 derniers jours |
+| `N` (max 30) | un jour sur N, à date fixe | les N derniers jours |
+
+Espacer le cron lui-même serait une fausse bonne idée : c'est aussi lui
+qui rejoue les e-mails bloqués (confirmation d'inscription, mot de passe
+oublié). Avec un passage hebdomadaire, un utilisateur pourrait attendre
+son lien jusqu'à une semaine, et il aurait peut-être expiré entre-temps.
+
+**Une anomalie n'attend pas le jour du rapport** (e-mail perdu, file
+d'envoi bloquée) : le rapport part le jour même, avec `[ANOMALIE]` dans
+le sujet. Le plafond de 30 jours vient de la purge, qui efface au-delà
+les compteurs de tentatives de connexion. La rubrique sécurité ne
+couvrirait plus la période annoncée.
+
+La règle suppose un cron **quotidien**. Un cron réglé toutes les heures
+enverrait le rapport à chacun de ses passages du lundi.
 
 Ce rapport part en envoi **direct**, sans passer par la file de
 rattrapage : un rapport est périssable, le suivant arrive au passage
@@ -127,6 +151,7 @@ importantes :
 | `APP_URL` | Adresse publique. Sert à fabriquer les liens des e-mails |
 | `DB_*` · `SMTP_*` | Base de données et compte d'envoi |
 | `CRON_TOKEN` | Jeton exigé par `purger.php` en HTTP |
+| `RAPPORT_JOURS` | Tous les combien de jours part le rapport du cron, et la période qu'il couvre (7 = chaque lundi) |
 | `UPLOAD_SECRET` | Sel des noms de fichiers envoyés |
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |

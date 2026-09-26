@@ -39,6 +39,7 @@ putenv('MAIL_FILE_MAX_ESSAIS=0');
 putenv('SESSION_DUREE=-99');
 putenv('REMEMBER_DUREE_VIP=-99');
 putenv('QUOTA_BASE_MO=-5');
+putenv('RAPPORT_JOURS=0');                // 0 jour : le rapport ne couvrirait plus rien
 putenv('APP_URL=https://exemple.test/bibliotheque/');   // avec un / final
 
 require __DIR__ . '/../lanceur.php';
@@ -143,6 +144,10 @@ test('les durées négatives sont ramenées à zéro', function () {
     egale(0, SESSION_DUREE, 'une durée de session négative devient 0');
     egale(0, REMEMBER_DUREE_VIP, 'idem pour le jeton d appareil');
     egale(0, QUOTA_BASE_MO, 'idem pour le quota affiché dans le rapport');
+});
+
+test('le rapport du cron couvre au moins un jour', function () {
+    egale(1, RAPPORT_JOURS, 'le .env demandait 0');
 });
 
 test('APP_URL perd son slash final', function () {

@@ -185,7 +185,8 @@ de données ni le réseau.
 d'une couverture, pour le filtre avancé), `photo_depuis_formulaire`,
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
 `cron_en_ligne_de_commande`, `cron_refus_navigateur`,
-`cron_appelant_authentifie`,
+`cron_appelant_authentifie`, `rapport_periode` et `rapport_jour_prevu`
+(le rapport du cron : quel jour il part, ce qu'il annonce couvrir),
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
@@ -217,7 +218,9 @@ la rotation des jetons, le plafond d'appareils), les jetons d'action
 `email_disponible`), la file d'e-mails (`empiler_mail`,
 `traiter_file_mail`), `couverture_consommer` et `couverture_rendre` (le
 quota de recherche par compte : le barème est testé, le comptage non), `compter_series`, le cloisonnement par
-`utilisateur_id` d'`api.php` et le rapport de `purger.php`.
+`utilisateur_id` d'`api.php` et le contenu chiffré du rapport de
+`purger.php` (ses requêtes ; quand il part et sur quelle période, lui,
+est testé).
 
 Ces fonctions-là demandent une base de test dédiée, remise à zéro entre
 chaque test — c'est un autre chantier, et il vaut la peine : c'est là que

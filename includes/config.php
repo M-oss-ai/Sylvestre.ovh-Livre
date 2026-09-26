@@ -642,6 +642,65 @@ define('LEGAL_HEBERGEUR_PAYS', env('LEGAL_HEBERGEUR_PAYS', 'France'));
    afficher. Chez OVH, l'offre d'entree de gamme plafonne souvent a 200. */
 define('QUOTA_BASE_MO', max(0, (int) env('QUOTA_BASE_MO', '200')));
 
+/* Rapport du cron : il part tous les RAPPORT_JOURS jours et couvre cette
+   période (1 = chaque jour, 7 = chaque lundi, la semaine écoulée).
+
+   Le cron, lui, reste QUOTIDIEN : il ne fait pas que le rapport. Il
+   rejoue aussi les e-mails bloqués (confirmation d'inscription, mot de
+   passe oublié). Espacé d'une semaine, un utilisateur attendrait son
+   lien jusqu'à sept jours, et il aurait peut-être expiré entre-temps.
+   On espace donc le RAPPORT, pas le passage.
+
+   Plafond de 30 : la purge efface les compteurs de tentatives au-delà de
+   30 jours (tentative_ip). Une période plus longue ferait annoncer à la
+   rubrique SÉCURITÉ des jours qu'elle ne couvre plus. */
+define('RAPPORT_JOURS', min(30, max(1, (int) env('RAPPORT_JOURS', '1'))));
+
+/**
+ * Le rapport détaillé part-il ce jour-là ?
+ *
+ * Sans mémoire, par le calendrier : un jour sur $jours, compté depuis
+ * le lundi 5 janvier 1970. Pour 7, c'est donc toujours le lundi, et le
+ * rapport couvre la semaine qui s'achève. Aucune date de dernier envoi à
+ * stocker, donc ni table à créer ni fichier à perdre au déploiement.
+ *
+ * Prévu pour un cron quotidien : un cron plus fréquent enverrait le
+ * rapport à chacun de ses passages ce jour-là.
+ *
+ * $date : « AAAA-MM-JJ », la date du jour chez le serveur. Une date
+ * illisible déclenche l'envoi : un rapport de trop vaut mieux qu'un
+ * silence qu'on prendrait pour « tout va bien ».
+ */
+function rapport_jour_prevu(string $date, int $jours): bool
+{
+    if ($jours <= 1) {
+        return true;
+    }
+    $jour = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
+    if ($jour === false || $jour->format('Y-m-d') !== $date) {
+        return true;
+    }
+    // Jours écoulés depuis le lundi 5 janvier 1970 (le 1er était un jeudi).
+    $n = intdiv($jour->getTimestamp(), 86400) - 4;
+    return $n % $jours === 0;
+}
+
+/**
+ * La période du rapport en toutes lettres : [libellé court, titre].
+ * Un jour donne « 24 h » et « 24 dernières heures », pour que le rapport
+ * quotidien reste tel qu'il a toujours été. Au-delà : « 7 jours » et
+ * « 7 derniers jours ».
+ *
+ * @return array{0: string, 1: string}
+ */
+function rapport_periode(int $jours): array
+{
+    if ($jours <= 1) {
+        return ['24 h', '24 dernières heures'];
+    }
+    return [$jours . ' jours', $jours . ' derniers jours'];
+}
+
 /* Jeton attendu par purger.php quand il est appelé en HTTP (cron OVH). */
 define('CRON_TOKEN', env('CRON_TOKEN', ''));
 
