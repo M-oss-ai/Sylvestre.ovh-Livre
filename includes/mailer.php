@@ -155,23 +155,7 @@ function envoyer_email_smtp(string $destinataire, string $sujet, string $corps):
         return $echec('DATA refusé');
     }
 
-    $entetes = implode("\r\n", [
-        'From: ' . $nom . ' <' . $user . '>',
-        'To: <' . $destinataire . '>',
-        'Subject: =?UTF-8?B?' . base64_encode($sujet) . '?=',
-        // Message-ID : plusieurs filtres anti-spam (dont ceux de Microsoft)
-        // pénalisent un message qui n'en porte pas. Le domaine est celui du
-        // site, pour rester cohérent avec l'adresse d'expédition.
-        'Message-ID: <' . bin2hex(random_bytes(16)) . '@' . $domaineClient . '>',
-        'Auto-Submitted: auto-generated',
-        'MIME-Version: 1.0',
-        'Content-Type: text/plain; charset=UTF-8',
-        'Content-Transfer-Encoding: base64',
-        'Date: ' . date('r'),
-    ]);
-    $corpsEncode = chunk_split(base64_encode($corps));
-
-    fwrite($flux, $entetes . "\r\n\r\n" . $corpsEncode . "\r\n.\r\n");
+    fwrite($flux, composer_message($destinataire, $sujet, $corps, $user, $nom, $domaineClient) . "\r\n.\r\n");
     $codeFinal = $lireReponse();
 
     $envoyerCommande('QUIT');
@@ -182,6 +166,146 @@ function envoyer_email_smtp(string $destinataire, string $sujet, string $corps):
         return false;
     }
     return true;
+}
+
+/* ---------------------------------------------------------------------
+   Le message lui-même
+
+   Composé à part du dialogue SMTP, pour être vérifié sans réseau.
+
+   Le corps part en deux versions : le texte brut, et le même texte en
+   HTML. Un e-mail en texte brut ne contient aucun lien — l'adresse n'y
+   est que du texte, et c'est la messagerie qui décide d'en faire un lien.
+   Proton, sur ordinateur, ne le faisait pas : il fallait copier chaque
+   lien de confirmation à la main. La version HTML en porte de vrais.
+
+   Ces fonctions ne se servent pas de e() : purger.php, qui rejoue la
+   file d'attente, ne charge pas fonctions.php.
+   --------------------------------------------------------------------- */
+
+/**
+ * Le message tel qu'il part après la commande DATA : les en-têtes, une
+ * ligne vide, puis le corps (voir message_mime()).
+ */
+function composer_message(string $destinataire, string $sujet, string $corps, string $expediteur, string $nom, string $domaine): string
+{
+    // Sépare les deux versions du corps. « =_ » n'existe pas en base64 :
+    // aucune ligne du contenu ne peut être prise pour elle.
+    $frontiere = '=_livre_' . bin2hex(random_bytes(8));
+
+    $entetes = implode("\r\n", [
+        // Le nom est encodé comme le sujet : « Bibliothèque » porte un
+        // accent, qu'un en-tête ne peut pas contenir tel quel.
+        'From: ' . mots_encodes($nom) . ' <' . $expediteur . '>',
+        'To: <' . $destinataire . '>',
+        'Subject: ' . mots_encodes($sujet),
+        // Message-ID : plusieurs filtres anti-spam (dont ceux de Microsoft)
+        // pénalisent un message qui n'en porte pas. Le domaine est celui du
+        // site, pour rester cohérent avec l'adresse d'expédition.
+        'Message-ID: <' . bin2hex(random_bytes(16)) . '@' . $domaine . '>',
+        'Auto-Submitted: auto-generated',
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="' . $frontiere . '"',
+        'Date: ' . date('r'),
+    ]);
+
+    return $entetes . "\r\n\r\n" . message_mime($corps, $sujet, $frontiere);
+}
+
+/**
+ * Un texte en « mots encodés » (RFC 2047) : la seule forme sous laquelle
+ * un en-tête accepte autre chose que de l'ASCII.
+ *
+ * Coupé tous les 42 octets au plus — entre deux caractères, jamais au
+ * milieu d'une lettre accentuée — et replié sur plusieurs lignes : un mot
+ * encodé ne dépasse pas 75 caractères, une ligne d'en-tête pas 78. Le
+ * sujet du rapport du cron, d'un seul tenant, en faisait plus de 120.
+ */
+function mots_encodes(string $texte): string
+{
+    $mots = [];
+    $mot  = '';
+    foreach (mb_str_split($texte, 1, 'UTF-8') as $caractere) {
+        if ($mot !== '' && strlen($mot . $caractere) > 42) {
+            $mots[] = $mot;
+            $mot    = '';
+        }
+        $mot .= $caractere;
+    }
+    $mots[] = $mot;
+
+    // L'espace qui sépare deux mots encodés ne compte pas : le texte se
+    // relit d'un seul tenant.
+    return implode("\r\n ", array_map(
+        static fn (string $m): string => '=?UTF-8?B?' . base64_encode($m) . '?=',
+        $mots
+    ));
+}
+
+/**
+ * Le corps en « multipart/alternative » : le texte brut d'abord, sa
+ * version HTML ensuite. La messagerie affiche la DERNIÈRE qu'elle sait
+ * lire : le HTML presque partout, le texte ailleurs.
+ */
+function message_mime(string $corps, string $sujet, string $frontiere): string
+{
+    $partie = static fn (string $type, string $contenu): string =>
+        '--' . $frontiere . "\r\n"
+        . 'Content-Type: ' . $type . "; charset=UTF-8\r\n"
+        . "Content-Transfer-Encoding: base64\r\n\r\n"
+        . chunk_split(base64_encode($contenu));
+
+    // Fins de ligne canoniques (CRLF) : c'est la forme qu'attend un texte
+    // encodé en base64, où rien ne les convertit plus en route.
+    $texte = preg_replace('/\r\n|\r|\n/', "\r\n", $corps) ?? $corps;
+
+    return $partie('text/plain', $texte)
+        . $partie('text/html', corps_html($corps, $sujet))
+        . '--' . $frontiere . "--\r\n";
+}
+
+/**
+ * La version HTML d'un e-mail, tirée de son texte : les paragraphes
+ * restent des paragraphes, et les adresses du site deviennent des liens.
+ *
+ * Celles du SITE seulement — qui commencent par APP_URL. Tout le reste est
+ * du texte échappé, même s'il a l'air d'une adresse : un identifiant ou
+ * une adresse e-mail choisis par quelqu'un d'autre ne doivent pas devenir
+ * un lien cliquable dans un message authentique de ce site, l'appât rêvé
+ * d'un hameçonnage.
+ *
+ * Le lien montre l'adresse elle-même, pas « cliquez ici » : on voit où
+ * il mène avant de cliquer.
+ */
+function corps_html(string $texte, string $sujet = ''): string
+{
+    $echapper = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $du_site  = static fn (string $url): bool => $url === APP_URL || str_starts_with($url, APP_URL . '/');
+
+    $texte = preg_replace('/\r\n|\r/', "\n", $texte) ?? $texte;
+    $html  = '';
+    foreach (preg_split('/\n\s*\n/', trim($texte)) ?: [] as $paragraphe) {
+        /* Une adresse s'arrête avant la ponctuation qui la suit dans la
+           phrase (« … ici : https://…/page. ») : le point final n'en fait
+           pas partie. Les indices impairs sont les adresses capturées. */
+        $morceaux = preg_split('~(https?://[^\s<>"]*[^\s<>".,;:!?)\]])~u', $paragraphe, -1, PREG_SPLIT_DELIM_CAPTURE)
+            ?: [$paragraphe];
+        $contenu = '';
+        foreach ($morceaux as $i => $morceau) {
+            $contenu .= $i % 2 === 1 && $du_site($morceau)
+                ? '<a href="' . $echapper($morceau) . '" style="color:#8a5a1c;word-break:break-all">'
+                  . $echapper($morceau) . '</a>'
+                : $echapper($morceau);
+        }
+        $html .= '<p style="margin:0 0 16px">' . nl2br($contenu, false) . "</p>\n";
+    }
+
+    return "<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"UTF-8\">\n"
+        . "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        . '<title>' . $echapper($sujet) . "</title>\n</head>\n"
+        . '<body style="margin:0;padding:24px 16px;background:#ffffff;color:#1f1a14;'
+        . "font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:16px;line-height:1.5\">\n"
+        . "<div style=\"max-width:560px;margin:0 auto\">\n" . $html . "</div>\n</body>\n</html>\n";
 }
 
 /* ---------------------------------------------------------------------

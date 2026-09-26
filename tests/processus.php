@@ -65,3 +65,127 @@ function executer_php(string $script, array $arguments = [], array $environnemen
 
     return ['sortie' => $sortie . $erreur, 'code' => $code];
 }
+
+/* ---------------------------------------------------------------------
+   Les tests JavaScript : un vrai navigateur, sans fenêtre
+
+   Le projet n'a pas Node, et n'en veut pas plus que de Composer. Le
+   JavaScript se teste donc là où il tourne : dans un navigateur. Edge
+   est présent sur tout Windows, Chrome ou Chromium presque partout
+   ailleurs ; en mode « headless », il ouvre tests/js/banc.html sans
+   fenêtre et rend la page une fois ses scripts exécutés.
+   --------------------------------------------------------------------- */
+
+/**
+ * Le navigateur qui fera tourner les tests JavaScript : celui que désigne
+ * la variable d'environnement NAVIGATEUR, sinon le premier Edge, Chrome
+ * ou Chromium trouvé à son emplacement habituel. null si aucun.
+ */
+function navigateur_de_test(): ?string
+{
+    $impose = getenv('NAVIGATEUR');
+    if (is_string($impose) && $impose !== '') {
+        return is_file($impose) ? $impose : null;
+    }
+
+    $sous = static fn (string $variable, string $chemin): string =>
+        (string) getenv($variable) !== '' ? getenv($variable) . $chemin : '';
+    $candidats = [
+        $sous('ProgramFiles(x86)', '/Microsoft/Edge/Application/msedge.exe'),
+        $sous('ProgramFiles', '/Microsoft/Edge/Application/msedge.exe'),
+        $sous('ProgramFiles', '/Google/Chrome/Application/chrome.exe'),
+        $sous('ProgramFiles(x86)', '/Google/Chrome/Application/chrome.exe'),
+        $sous('LOCALAPPDATA', '/Google/Chrome/Application/chrome.exe'),
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome',
+        '/usr/bin/microsoft-edge',
+    ];
+    foreach ($candidats as $chemin) {
+        if ($chemin !== '' && is_file($chemin)) {
+            return $chemin;
+        }
+    }
+    return null;
+}
+
+/** L'adresse file:// d'un fichier local, chaque segment encodé. */
+function url_fichier(string $chemin): string
+{
+    $segments = explode('/', ltrim(str_replace('\\', '/', $chemin), '/'));
+    $segments = array_map('rawurlencode', $segments);
+    // Le « C: » d'un lecteur Windows garde ses deux-points.
+    $segments[0] = str_replace('%3A', ':', $segments[0]);
+    return 'file:///' . implode('/', $segments);
+}
+
+/**
+ * Ouvre $page dans le navigateur sans fenêtre et rend le DOM obtenu une
+ * fois ses scripts exécutés : ['sortie' => …, 'code' => …].
+ *
+ * Un profil jetable, pour ne jamais toucher à celui de l'utilisateur (ni
+ * entrer en conflit avec un navigateur ouvert), et une limite de temps :
+ * une boucle sans fin dans un test ne doit pas bloquer toute la suite.
+ * La sortie passe par des fichiers et non des tuyaux, que Windows ne
+ * sait pas lire sans bloquer.
+ */
+function executer_navigateur(string $navigateur, string $page, int $delai = 90): array
+{
+    $base    = sys_get_temp_dir() . '/livre-test-navigateur-' . getmypid();
+    $sortie  = $base . '.html';
+    $erreurs = $base . '.log';
+
+    $commande = [
+        $navigateur, '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+        '--disable-extensions', '--user-data-dir=' . $base . '-profil',
+        '--dump-dom', url_fichier((string) realpath($page)),
+    ];
+    $descripteurs = [1 => ['file', $sortie, 'w'], 2 => ['file', $erreurs, 'w']];
+
+    $processus = proc_open($commande, $descripteurs, $tuyaux, null, getenv());
+    if (!is_resource($processus)) {
+        return ['sortie' => "Impossible de lancer : {$navigateur}\n", 'code' => 255];
+    }
+
+    $fin = microtime(true) + $delai;
+    while (($etat = proc_get_status($processus))['running'] && microtime(true) < $fin) {
+        usleep(100000);
+    }
+    $depasse = $etat['running'];
+    if ($depasse) {
+        proc_terminate($processus);
+    }
+    $code = proc_close($processus);
+    // proc_close() rend -1 quand proc_get_status() a déjà relevé la fin.
+    if ($code === -1 && !$depasse) {
+        $code = (int) $etat['exitcode'];
+    }
+
+    $resultat = [
+        'sortie' => (string) @file_get_contents($sortie),
+        'erreurs' => (string) @file_get_contents($erreurs),
+        'code'   => $depasse ? 124 : $code,
+    ];
+    @unlink($sortie);
+    @unlink($erreurs);
+    supprimer_dossier($base . '-profil');
+    return $resultat;
+}
+
+/** Efface un dossier et son contenu, sans jamais s'arrêter sur un échec. */
+function supprimer_dossier(string $dossier): void
+{
+    if (!is_dir($dossier)) {
+        return;
+    }
+    $elements = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dossier, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ($elements as $element) {
+        $element->isDir() ? @rmdir($element->getPathname()) : @unlink($element->getPathname());
+    }
+    @rmdir($dossier);
+}

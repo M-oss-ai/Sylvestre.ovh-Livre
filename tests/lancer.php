@@ -5,11 +5,17 @@
        php tests/lancer.php              tout
        php tests/lancer.php mot_de_passe  seulement les fichiers dont le
                                           nom contient « mot_de_passe »
+       php tests/lancer.php javascript    seulement le JavaScript
 
    Chaque fichier de tests/cas/ est exécuté dans SON PROPRE PROCESSUS
    (voir tests/processus.php pour le pourquoi : constantes, caches
    « static », fonctions qui se terminent par exit). Ce script se
    contente de les lancer, de relayer leur sortie et d'additionner.
+
+   Les tests JavaScript (tests/js/cas/) tournent ensuite dans un vrai
+   navigateur sans fenêtre, sur la page tests/js/banc.html : ils sont
+   lancés dès que le filtre est vide, vaut « javascript », ou désigne
+   l'un de leurs fichiers.
 
    Code de retour : 0 si tout passe, 1 sinon — pour qu'un jour
    l'intégration continue ou un crochet Git puisse s'en servir.
@@ -33,14 +39,19 @@ $filtre = (string) ($argv[1] ?? '');
 $fichiers = glob(__DIR__ . '/cas/*.php') ?: [];
 sort($fichiers);
 
-if ($filtre !== '') {
-    $fichiers = array_values(array_filter(
-        $fichiers,
-        static fn (string $f): bool => str_contains(basename($f), $filtre)
-    ));
-}
+$cas_js = glob(__DIR__ . '/js/cas/*.js') ?: [];
+sort($cas_js);
 
-if (!$fichiers) {
+if ($filtre !== '') {
+    $correspond = static fn (string $f): bool => str_contains(basename($f), $filtre);
+    $fichiers = array_values(array_filter($fichiers, $correspond));
+    $lancer_js = str_contains('javascript', $filtre) || array_filter($cas_js, $correspond);
+} else {
+    $lancer_js = true;
+}
+$lancer_js = $lancer_js && $cas_js;
+
+if (!$fichiers && !$lancer_js) {
     fwrite(STDERR, "Aucun fichier de test" . ($filtre !== '' ? " ne correspond à « {$filtre} »" : '') . ".\n");
     exit(1);
 }
@@ -48,7 +59,8 @@ if (!$fichiers) {
 echo "\n";
 echo "===========================================================\n";
 echo "  Ma Bibliothèque Manga — tests unitaires\n";
-echo '  PHP ', PHP_VERSION, ' · ', count($fichiers), " fichier(s)\n";
+echo '  PHP ', PHP_VERSION, ' · ', count($fichiers), ' fichier(s)',
+     $lancer_js ? ' · JavaScript : ' . count($cas_js) . ' fichier(s)' : '', "\n";
 echo "===========================================================\n";
 
 $total          = 0;
@@ -97,6 +109,64 @@ foreach ($fichiers as $fichier) {
          ' (code de retour ', $resultat['code'], ")\n";
 }
 
+/* ---------------------------------------------------------------------
+   Le JavaScript, dans un navigateur sans fenêtre
+
+   Le banc écrit son compte rendu dans la page, terminé par la même ligne
+   « ##RESULTAT##total|échecs » que lanceur.php. Mêmes filets qu'en PHP :
+   un fichier de cas que la page ne charge pas, un banc qui ne rend pas de
+   compte rendu, un navigateur arrêté pour dépassement de temps comptent
+   comme des échecs. Seule l'absence de navigateur ne l'est pas : elle
+   est annoncée, en tête et en fin de rapport.
+   --------------------------------------------------------------------- */
+$total_js     = 0;
+$js_non_lance = false;
+
+if ($lancer_js) {
+    echo "\n-- javascript (tests/js/banc.html) ", str_repeat('-', 22), "\n";
+    $banc = __DIR__ . '/js/banc.html';
+
+    /* Un fichier de cas que banc.html ne charge pas ne tournerait jamais,
+       sans que personne ne s'en aperçoive. */
+    $page = (string) file_get_contents($banc);
+    foreach ($cas_js as $cas) {
+        if (!str_contains($page, 'src="cas/' . basename($cas) . '"')) {
+            $echecs++;
+            $fichiers_casse[] = basename($cas);
+            echo '    [OUBLIÉ] cas/', basename($cas), " n'est pas chargé par tests/js/banc.html\n";
+        }
+    }
+
+    $navigateur = navigateur_de_test();
+    if ($navigateur === null) {
+        $js_non_lance = true;
+        echo "    [NON LANCÉ] aucun navigateur trouvé (Edge, Chrome, Chromium).\n",
+             "    Indiquez-en un : NAVIGATEUR=/chemin/vers/chrome php tests/lancer.php\n",
+             "    Ou ouvrez tests/js/banc.html dans un navigateur.\n";
+    } else {
+        $resultat = executer_navigateur($navigateur, $banc);
+        $rapport  = preg_match('#<pre id="compte-rendu">(.*?)</pre>#s', $resultat['sortie'], $m)
+            ? html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8')
+            : '';
+
+        if (preg_match('/^##RESULTAT##(\d+)\|(\d+)$/m', $rapport, $r)) {
+            $total_js = (int) $r[1];
+            $total   += $total_js;
+            $echecs  += (int) $r[2];
+            echo trim(preg_replace('/^##RESULTAT##\d+\|\d+$/m', '', $rapport) ?? $rapport, "\r\n"), "\n";
+        } else {
+            $echecs++;
+            $fichiers_casse[] = 'javascript';
+            echo trim($rapport), "\n",
+                 "\n    [INTERROMPU] le banc n'a pas rendu de compte rendu",
+                 $resultat['code'] === 124 ? ' (temps dépassé)' : ' (code de retour ' . $resultat['code'] . ')', "\n";
+            if (trim($resultat['erreurs']) !== '') {
+                echo '    Navigateur : ', mb_substr(trim($resultat['erreurs']), 0, 600), "\n";
+            }
+        }
+    }
+}
+
 $duree = round(microtime(true) - $demarre, 2);
 
 /* ---------------------------------------------------------------------
@@ -115,15 +185,24 @@ foreach (glob(sys_get_temp_dir() . '/livre-test-*.log') ?: [] as $journal) {
 foreach (glob(sys_get_temp_dir() . '/livre-test-sessions/sess_*') ?: [] as $session) {
     @unlink($session);
 }
+// Un profil de navigateur qu'un processus encore ouvert aurait empêché d'effacer.
+foreach (glob(sys_get_temp_dir() . '/livre-test-navigateur-*-profil', GLOB_ONLYDIR) ?: [] as $profil) {
+    supprimer_dossier($profil);
+}
+
+$detail = $total_js > 0 ? ' (PHP ' . ($total - $total_js) . ', JavaScript ' . $total_js . ')' : '';
 
 echo "\n===========================================================\n";
 if ($echecs === 0) {
-    echo '  ', $total, " test(s) — tout passe. (", $duree, " s)\n";
+    echo '  ', $total, ' test(s)', $detail, " — tout passe. (", $duree, " s)\n";
 } else {
-    echo '  ', $total, ' test(s), ', $echecs, " ÉCHEC(S). (", $duree, " s)\n";
+    echo '  ', $total, ' test(s)', $detail, ', ', $echecs, " ÉCHEC(S). (", $duree, " s)\n";
     if ($fichiers_casse) {
         echo '  Fichiers interrompus : ', implode(', ', $fichiers_casse), "\n";
     }
+}
+if ($js_non_lance) {
+    echo "  Tests JavaScript NON LANCÉS : aucun navigateur trouvé.\n";
 }
 echo "===========================================================\n\n";
 

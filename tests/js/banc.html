@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Tests JavaScript — en cours</title>
+<!-- Le banc des tests JavaScript. À ouvrir tel quel dans un navigateur
+     (double-clic), ou lancé sans fenêtre par « php tests/lancer.php ».
+     Voir tests/LISEZMOI.md. -->
+</head>
+<body>
+<h1>Tests JavaScript</h1>
+<pre id="compte-rendu">Les tests ne se sont pas lancés.</pre>
+
+<!-- Le terrain : chaque test y pose le HTML dont il a besoin. Vidé avant
+     chaque test. -->
+<div id="terrain"></div>
+
+<!-- D'abord le lanceur : il relève les erreurs de chargement de ce qui suit. -->
+<script src="mini-lanceur.js"></script>
+
+<!-- Le code testé, tel qu'il est servi aux pages du site. -->
+<script src="../../js/commun.js"></script>
+<script src="../../js/app.js"></script>
+
+<!-- Les fichiers de cas. Chaque fichier de cas/ doit figurer ici :
+     php tests/lancer.php refuse d'en oublier un. -->
+<script src="cas/commun_test.js"></script>
+<script src="cas/bibliotheque_test.js"></script>
+
+<script src="fin.js"></script>
+</body>
+</html>

@@ -19,6 +19,12 @@ Un seul fichier, directement (pratique pour déboguer) :
 php tests/cas/carte_test.php
 ```
 
+Le JavaScript seul (voir « Le JavaScript » plus bas) :
+
+```bash
+php tests/lancer.php javascript
+```
+
 Sous Windows, si `php` n'est pas dans le `PATH` :
 
 ```bash
@@ -156,6 +162,53 @@ découvert.
 La description n'est pas décorative : c'est elle qui s'affiche quand
 l'assertion cède, avec le fichier et la ligne.
 
+---
+
+## Le JavaScript
+
+Pas de Node, pas plus que de Composer : le JavaScript se teste là où il
+tourne, dans un navigateur. `tests/js/banc.html` charge le code du site
+tel qu'il est servi (`js/commun.js`, `js/app.js`), puis les fichiers de
+`tests/js/cas/`, et écrit son compte rendu dans la page.
+
+- **Avec le reste** : `php tests/lancer.php` ouvre la page dans Edge,
+  Chrome ou Chromium, sans fenêtre (`--headless --dump-dom`), avec un
+  profil jetable et une limite de temps, puis relit le compte rendu.
+  La variable `NAVIGATEUR` désigne un autre navigateur. Sans navigateur
+  trouvé, les tests JavaScript sont annoncés **non lancés** — en tête et
+  en fin de rapport — sans faire échouer la suite.
+- **À la main** : ouvrir `tests/js/banc.html` d'un double-clic. Pas par
+  le serveur web : `tests/` y est interdit, et c'est voulu.
+
+Les assertions ont les mêmes noms qu'en PHP (`egale`, `vrai`, `faux`,
+`contient`, `sans`, `estNul`, `differe`), et `terrain(html)` pose le HTML
+dont un test a besoin dans un conteneur vidé avant chaque test.
+
+```js
+groupe("Lib.urlImageAcceptee()");
+
+test("une adresse en http:// est refusée", () => {
+  faux(Lib.urlImageAcceptee("http://exemple.test/a.png"), "http");
+});
+```
+
+Un fichier de cas doit figurer dans `banc.html` : `lancer.php` refuse
+d'en oublier un (`[OUBLIÉ]`). Les mêmes filets qu'en PHP valent ici — un
+fichier chargé qui n'exécute aucun test (`[VIDE]` : introuvable, erreur
+de syntaxe), une erreur hors de tout test, y compris au chargement du
+code testé (`[ERREUR HORS TEST]`), un banc qui ne rend pas de compte
+rendu ou qui dépasse le temps imparti (`[INTERROMPU]`).
+
+Les fichiers de cas partagent la même page : deux constantes globales
+du même nom dans deux fichiers s'y heurteraient.
+
+**Ce qui se teste ainsi** : les fonctions qui ne dépendent que de leurs
+arguments, et celles qui travaillent sur un bout de DOM qu'on peut leur
+fabriquer. D'où `window.Bibliotheque` en tête d'`app.js` : la logique
+pure de la page (carte voisine au clavier, suivi du défilement, textes
+des quotas), séparée de son branchement. `app.js` ne branche rien hors
+de la bibliothèque, ce qui permet au banc de le charger.
+
 Une assertion qui échoue interrompt **son** test, et lui seul : les
 suivantes porteraient sur un état déjà faux. Les autres tests du fichier
 continuent.
@@ -194,7 +247,11 @@ il part, sur quelle période, et comment il l'affiche),
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
-(câblage), `titre_normalise`, `mangadex_titre`,
+(câblage), `composer_message`, `message_mime`, `corps_html` et
+`mots_encodes` (l'e-mail tel qu'il part : texte et HTML, liens vers le
+site seulement, en-têtes encodés), `import_serie` et `import_complement`
+(une ligne de sauvegarde, et ce que l'import rend à une série déjà
+présente), `titre_normalise`, `mangadex_titre`,
 `couverture_quota`, `couverture_tranche_lisible`,
 `mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
 qu'il refuse), `couverture_tome_vise`, `mangadex_image_locale` (son
@@ -233,5 +290,15 @@ Ces fonctions-là demandent une base de test dédiée, remise à zéro entre
 chaque test — c'est un autre chantier, et il vaut la peine : c'est là que
 se trouve le gros de la logique de sécurité.
 
-**Non couvert non plus** — le JavaScript (`js/*.js`), qui demanderait
-Node.js.
+**Couvert, côté navigateur** — `Lib.erreurChamp`, `effacerErreur`,
+`effacerErreurs` et `erreursSurChamps` (l'erreur sous son champ, et
+effacée dès qu'on le corrige), `Lib.urlImageAcceptee`, `Lib.dureeToast`,
+`Bibliotheque.voisine` (les flèches dans la grille),
+`Bibliotheque.suiviDefilement` (les filtres qui s'effacent et reviennent,
+rebonds et recalages du navigateur compris), `Bibliotheque.annonceQuota`
+et `texteQuotaRecherche`.
+
+**Non couvert, côté navigateur** — le branchement sur la page : les
+écouteurs d'`app.js` et de `settings.js`, les appels à l'API, les
+modales, le contrôle de session au retour arrière. Ils demandent une
+vraie bibliothèque et un compte connecté : ils se vérifient à la main.

@@ -6,12 +6,119 @@
    on insère uniquement le HTML renvoyé par carte.php.
    ========================================================= */
 
+/* ---------------- Logique pure ----------------
+   Ce qui se décide sans toucher à la page : la carte voisine au
+   clavier, le suivi du défilement qui cache ou montre les filtres, les
+   textes des quotas. Isolée ici pour être testée (tests/js), le reste
+   du fichier la branche sur la page. */
+
+window.Bibliotheque = (() => {
+  "use strict";
+
+  /**
+   * La carte voisine dans une direction : son rang parmi `positions` —
+   * celles des cartes visibles, { haut, gauche }, dans l'ordre affiché —
+   * ou -1 en butée.
+   *
+   * Haut / bas : la rangée voisine, et dans celle-ci la carte la plus
+   * proche en abscisse. Le nombre de colonnes dépend de la largeur de
+   * l'écran — une seule sur téléphone — d'où la mesure plutôt qu'un
+   * calcul.
+   */
+  function voisine(positions, i, direction) {
+    const n = positions.length;
+    if (i < 0 || i >= n) return -1;
+    if (direction === "premiere") return 0;
+    if (direction === "derniere") return n - 1;
+    if (direction === "suivante") return i + 1 < n ? i + 1 : -1;
+    if (direction === "precedente") return i - 1;
+    if (direction !== "bas" && direction !== "haut") return -1;
+
+    const pas = direction === "bas" ? 1 : -1;
+    const dans = (j) => j >= 0 && j < n;
+    let j = i + pas;
+    while (dans(j) && positions[j].haut === positions[i].haut) j += pas;
+    if (!dans(j)) return -1;
+    const rangee = positions[j].haut;
+    const ecart = (k) => Math.abs(positions[k].gauche - positions[i].gauche);
+    let meilleure = j;
+    for (; dans(j) && positions[j].haut === rangee; j += pas) {
+      if (ecart(j) < ecart(meilleure)) meilleure = j;
+    }
+    return meilleure;
+  }
+
+  /**
+   * Un relevé du défilement, pour les filtres qui se cachent quand on
+   * descend et reviennent quand on remonte.
+   *
+   * `etat` est ce qu'a laissé le relevé précédent (null au premier) ;
+   * `mesure` : { y, max, gabarit } — la position, sa borne, et la somme
+   * des hauteurs qui peuvent décaler la page. Rend le nouvel état, si les
+   * filtres sont collés, et l'action : "montrer", "cacher" ou null.
+   */
+  function suiviDefilement(etat, mesure, seuil) {
+    /* Bornée : le rebond élastique d'iOS, en haut comme en bas de page,
+       ferait croire à un changement de sens. */
+    const y = Math.min(Math.max(mesure.y, 0), Math.max(0, mesure.max));
+    /* Une hauteur a changé depuis le relevé précédent (« Image ▾ »
+       déplié, liste filtrée, cartes dessinées pour la première fois en
+       remontant) : le navigateur a pu décaler le défilement d'autant,
+       pour garder sous les yeux ce qu'on regardait. Ce décalage n'est pas
+       un geste — pris pour une descente, il cachait les filtres qu'on
+       venait de déplier. On repart simplement de la position actuelle. */
+    const delta = etat && etat.gabarit === mesure.gabarit ? y - etat.y : 0;
+    let parcouru = etat ? etat.parcouru : 0; // dans le sens actuel : > 0 en descendant
+    let action = null;
+
+    if (y <= 0) {
+      // Tout en haut, les filtres sont à leur place.
+      parcouru = 0;
+      action = "montrer";
+    } else if (delta !== 0) {
+      if ((delta > 0) !== (parcouru > 0)) parcouru = 0;
+      parcouru += delta;
+      if (parcouru > seuil) action = "cacher";
+      else if (parcouru < -seuil) action = "montrer";
+    }
+    return { etat: { y, parcouru, gabarit: mesure.gabarit }, collee: y > 0, action };
+  }
+
+  /**
+   * La place restante du forfait standard, annoncée dès 90 % :
+   * { texte, pleine }, ou null en deçà — et sans limite (quota 0).
+   */
+  function annonceQuota(nombre, quota) {
+    if (!quota || nombre < Math.ceil(quota * 0.9)) return null;
+    const pleine = nombre >= quota;
+    return {
+      pleine,
+      texte: pleine
+        ? "Bibliothèque pleine : " + nombre + " / " + quota + " séries, la limite du forfait standard."
+        : nombre + " / " + quota + " séries — encore " + (quota - nombre)
+          + " avant la limite du forfait standard.",
+    };
+  }
+
+  /** Le solde des recherches de couverture, après chacune. */
+  function texteQuotaRecherche(q) {
+    return "Recherche auto : encore " + q.restantes + " sur " + q.quota
+      + " — le compteur repart à " + q.quota + " toutes les " + q.tranche + ".";
+  }
+
+  return { voisine, suiviDefilement, annonceQuota, texteQuotaRecherche };
+})();
+
 (() => {
   "use strict";
 
   const L = window.Lib;
+  const B = window.Bibliotheque;
 
   const $grid = document.getElementById("grid");
+  // Hors de la bibliothèque — le banc de tests charge ce fichier pour sa
+  // logique pure : rien à brancher.
+  if (!$grid) return;
   const $emptyCollection = document.getElementById("empty-collection");
   const $emptySearch = document.getElementById("empty-search");
   const $search = document.getElementById("search");
@@ -179,29 +286,9 @@
   /** La carte voisine dans la direction donnée, telle qu'elle s'affiche. */
   function voisine(carte, direction) {
     const visibles = visiblesDansLOrdre();
-    const i = visibles.indexOf(carte);
-    if (i < 0) return null;
-    if (direction === "premiere") return visibles[0];
-    if (direction === "derniere") return visibles[visibles.length - 1];
-    if (direction === "suivante") return visibles[i + 1] || null;
-    if (direction === "precedente") return visibles[i - 1] || null;
-
-    /* Haut / bas : la rangée voisine, et dans celle-ci la carte la plus
-       proche en abscisse. Le nombre de colonnes dépend de la largeur de
-       l'écran — une seule sur téléphone — d'où la mesure plutôt qu'un
-       calcul. */
-    const pas = direction === "bas" ? 1 : -1;
-    const haut = carte.offsetTop;
-    let j = i + pas;
-    while (visibles[j] && visibles[j].offsetTop === haut) j += pas;
-    if (!visibles[j]) return null;
-    const rangee = visibles[j].offsetTop;
-    let meilleure = visibles[j];
-    for (; visibles[j] && visibles[j].offsetTop === rangee; j += pas) {
-      if (Math.abs(visibles[j].offsetLeft - carte.offsetLeft)
-          < Math.abs(meilleure.offsetLeft - carte.offsetLeft)) meilleure = visibles[j];
-    }
-    return meilleure;
+    const positions = visibles.map((c) => ({ haut: c.offsetTop, gauche: c.offsetLeft }));
+    const j = B.voisine(positions, visibles.indexOf(carte), direction);
+    return j < 0 ? null : visibles[j];
   }
 
   const DIRECTIONS = {
@@ -265,14 +352,11 @@
 
   function majQuota() {
     if (!QUOTA_SERIES) return;
-    const n = nombreSeries();
-    const pleine = n >= QUOTA_SERIES;
-    $quotaSeries.classList.toggle("hidden", n < Math.ceil(QUOTA_SERIES * 0.9));
+    const annonce = B.annonceQuota(nombreSeries(), QUOTA_SERIES);
+    const pleine = !!annonce && annonce.pleine;
+    $quotaSeries.classList.toggle("hidden", !annonce);
     $quotaSeries.classList.toggle("quota-plein", pleine);
-    $quotaSeries.textContent = pleine
-      ? "Bibliothèque pleine : " + n + " / " + QUOTA_SERIES + " séries, la limite du forfait standard."
-      : n + " / " + QUOTA_SERIES + " séries — encore " + (QUOTA_SERIES - n)
-        + " avant la limite du forfait standard.";
+    $quotaSeries.textContent = annonce ? annonce.texte : "";
     $btnAdd.classList.toggle("btn-ajout-plein", pleine);
     $btnAdd.title = pleine ? "Bibliothèque pleine" : "Ajouter une série";
     $btnAdd.setAttribute("aria-label", pleine ? "Ajouter une série (bibliothèque pleine)" : "Ajouter une série");
@@ -633,40 +717,20 @@
   /* Quelques pixels dans le même sens avant de basculer : le pouce qui se
      relève fait souvent remonter la page d'un rien. */
   const SEUIL_SENS = 10;
-  let dernierY = 0;
-  let parcouru = 0; // chemin fait dans le sens actuel : > 0 en descendant
-  let gabaritConnu = -1;
+  let suivi = null; // le relevé précédent, voir Bibliotheque.suiviDefilement
   let suiviPrevu = false;
 
   function suivreDefilement() {
     suiviPrevu = false;
-    /* Bornée : le rebond élastique d'iOS, en haut comme en bas de page,
-       ferait croire à un changement de sens. */
-    const max = Math.max(0, racine.scrollHeight - window.innerHeight);
-    const y = Math.min(Math.max(window.scrollY, 0), max);
-    /* Une hauteur a changé depuis le dernier relevé (« Image ▾ » déplié,
-       liste filtrée, cartes dessinées pour la première fois en remontant) :
-       le navigateur a pu décaler le défilement d'autant, pour garder sous
-       les yeux ce qu'on regardait. Ce décalage n'est pas un geste — pris
-       pour une descente, il cachait les filtres qu'on venait de déplier.
-       On repart simplement de la position actuelle. */
-    const gabarit = $main.offsetHeight + $topbar.offsetHeight;
-    const delta = gabarit === gabaritConnu ? y - dernierY : 0;
-    gabaritConnu = gabarit;
-    dernierY = y;
-
+    const r = B.suiviDefilement(suivi, {
+      y: window.scrollY,
+      max: racine.scrollHeight - window.innerHeight,
+      gabarit: $main.offsetHeight + $topbar.offsetHeight,
+    }, SEUIL_SENS);
+    suivi = r.etat;
     // Tout en haut, les filtres sont à leur place : ni fond, ni cache.
-    $barreFiltres.classList.toggle("collee", y > 0);
-    if (y <= 0) {
-      parcouru = 0;
-      $barreFiltres.classList.remove("escamotee");
-      return;
-    }
-    if (delta === 0) return;
-    if ((delta > 0) !== (parcouru > 0)) parcouru = 0;
-    parcouru += delta;
-    if (parcouru > SEUIL_SENS) $barreFiltres.classList.add("escamotee");
-    else if (parcouru < -SEUIL_SENS) $barreFiltres.classList.remove("escamotee");
+    $barreFiltres.classList.toggle("collee", r.collee);
+    if (r.action) $barreFiltres.classList.toggle("escamotee", r.action === "cacher");
   }
 
   window.addEventListener("scroll", () => {
@@ -1154,8 +1218,7 @@
   const TRANCHE_RECHERCHE = document.body.dataset.trancheRecherche || "";
 
   function majQuotaRecherche(q) {
-    $quotaRecherche.textContent = "Recherche auto : encore " + q.restantes + " sur " + q.quota
-      + " — le compteur repart à " + q.quota + " toutes les " + q.tranche + ".";
+    $quotaRecherche.textContent = B.texteQuotaRecherche(q);
     $quotaRecherche.classList.toggle("quota-epuise", q.restantes <= 0);
   }
 

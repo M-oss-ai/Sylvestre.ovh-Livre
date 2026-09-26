@@ -20,8 +20,9 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (440 tests, 36 fichiers de cas)
+php tests/lancer.php              # toute la suite (531 tests : 487 PHP en 38 fichiers, 44 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
+php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
 php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
 php purger.php                    # la tâche planifiée, à la main
@@ -43,7 +44,7 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 |---|---|
 | `includes/config.php` | **Le seul endroit** où le `.env` devient des constantes. Ouvre aussi la connexion PDO (`$pdo` global), et porte `erreur_fatale()`, `ip_client()`, `taille_lisible()` et les règles d'accès du cron |
 | `includes/fonctions.php` | Bibliothèque partagée **des pages** : CSRF, sessions, limiteur, `STATUTS`, `actif()`. Envoie les en-têtes de sécurité et démarre la session **dès l'inclusion** |
-| `includes/mailer.php` | Envoi SMTP direct + file de rattrapage (`mail_file`) |
+| `includes/mailer.php` | Envoi SMTP direct + file de rattrapage (`mail_file`). Chaque e-mail part en texte ET en HTML (`composer_message()`) |
 | `includes/images.php` | Chaîne GD : type déduit du contenu, ré-encodage WebP, nom = empreinte salée |
 | `includes/carte.php` | Le HTML d'une carte de série |
 | `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
@@ -67,6 +68,11 @@ e-mails, et rapport d'activité envoyé à `ADMIN_EMAIL`.
 `js/commun.js` (socle partagé), `js/app.js` (bibliothèque),
 `js/auth.js`, `js/settings.js`, `js/delai.js` (comptes à rebours des
 attentes). `css/style.css` pour tout le style.
+
+`app.js` commence par `window.Bibliotheque` : sa logique pure (carte
+voisine au clavier, suivi du défilement, textes des quotas), testée par
+`tests/js`. Le reste du fichier la branche sur la page, et ne branche
+rien hors de la bibliothèque — c'est ce qui permet au banc de le charger.
 
 ## Règles tacites
 
@@ -97,7 +103,16 @@ ils s'affichent dans la pastille posée sur la couverture.
 **`purger.php` ne charge que `config.php` et `mailer.php`.** Jamais
 `fonctions.php`, qui enverrait des en-têtes HTTP et démarrerait une
 session — ce qu'une tâche planifiée n'a pas à faire. Toute fonction dont
-le cron a besoin va donc dans `config.php`.
+le cron a besoin va donc dans `config.php`. `mailer.php` compris : il
+compose les e-mails que le cron rejoue, et ne peut appeler ni `e()` ni
+rien d'autre de `fonctions.php` (d'où son propre `htmlspecialchars`).
+
+**Dans un e-mail, seules les adresses du site deviennent des liens.**
+`corps_html()` ne fait un lien que de ce qui commence par `APP_URL` ;
+tout le reste est échappé, même s'il a l'air d'une adresse. Le texte
+d'un avis de sécurité porte des données choisies par d'autres (un
+identifiant, une adresse masquée) : elles ne doivent jamais devenir un
+lien cliquable dans un message authentique du site.
 
 **Le dépôt stocke en LF, le répertoire de travail est en CRLF**
 (`core.autocrlf=true`). Un script qui modifie un fichier doit normaliser
@@ -213,8 +228,15 @@ réglages SMTP sont vidés (rien ne part).
 
 Le périmètre est celui des **fonctions pures** : rien qui exige la base
 ou le réseau. `tests/LISEZMOI.md` tient la liste de ce qui est couvert,
-de ce qui ne l'est pas, et pourquoi. Le JavaScript est hors périmètre :
-le projet n'a pas Node.
+de ce qui ne l'est pas, et pourquoi.
+
+Le JavaScript se teste **dans un navigateur**, pas avec Node (que le
+projet n'a pas) : `tests/js/banc.html` charge `commun.js` et `app.js`
+tels quels, puis les fichiers de `tests/js/cas/`. `lancer.php` l'ouvre
+dans Edge ou Chrome sans fenêtre et relit le compte rendu. **Un nouveau
+fichier de cas s'ajoute à `banc.html`**, sinon `lancer.php` échoue
+(`[OUBLIÉ]`). Le branchement sur la page (écouteurs, appels à l'API,
+modales) reste hors de portée : il se vérifie à la main.
 
 Une fonction difficile à tester est souvent une fonction mal placée : les
 règles d'accès du cron ont été extraites de `purger.php` vers

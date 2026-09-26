@@ -94,12 +94,17 @@ window.Lib = (() => {
   const TOAST_MIN_MS = 4000;
   const TOAST_MS_PAR_CARACTERE = 60;
 
+  /** Le temps de lire le message. */
+  function dureeToast(msg) {
+    return Math.max(TOAST_MIN_MS, String(msg).length * TOAST_MS_PAR_CARACTERE);
+  }
+
   function toast(msg, ms) {
     const el = document.getElementById("toast");
     if (!el) return;
     el.textContent = msg; // textContent : jamais d'interprétation HTML
     el.classList.remove("hidden");
-    toast._duree = ms || Math.max(TOAST_MIN_MS, String(msg).length * TOAST_MS_PAR_CARACTERE);
+    toast._duree = ms || dureeToast(msg);
     toastArmer(el);
   }
 
@@ -853,7 +858,7 @@ window.Lib = (() => {
   });
 
   return {
-    csrf, api, toast, debounce, limite, tailleLisible,
+    csrf, api, toast, dureeToast, debounce, limite, tailleLisible,
     normalize, levenshtein, correspond, prepareRecherche, correspondPrepare,
     wireImagePicker, brancherToggleMotDePasse, piegerFocus,
     erreurChamp, effacerErreur, effacerErreurs, erreursSurChamps, urlImageAcceptee,

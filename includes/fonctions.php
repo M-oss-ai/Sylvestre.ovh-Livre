@@ -705,6 +705,66 @@ function url_image_refusee(mixed $saisie): bool
     return $saisie !== '' && url_image_sure($saisie) === '';
 }
 
+/* ---------------------------------------------------------------------
+   Import d'une sauvegarde : la part qui ne touche ni à la base ni au
+   disque. L'import lui-même (requêtes, images recréées) est dans api.php.
+   --------------------------------------------------------------------- */
+
+/**
+ * Une série d'une sauvegarde, remise en forme — ou null si ce n'est pas
+ * une série, ou si elle n'a pas de titre.
+ *
+ * Les clés de l'ancien format (title, subtitle, volume, status,
+ * cover.value) sont comprises. Une image envoyée comme fichier voyage en
+ * base64 (« donnees ») ; sinon seule une adresse https est gardée : un
+ * chemin « uploads/… » venu d'un autre serveur ne pointerait vers rien
+ * ici, et afficherait une image cassée.
+ */
+function import_serie(mixed $s): ?array
+{
+    if (!is_array($s)) {
+        return null;
+    }
+    $titre = texte($s['titre'] ?? ($s['title'] ?? ''), 190);
+    if ($titre === '') {
+        return null;
+    }
+    $statut = $s['statut'] ?? ($s['status'] ?? 'cours');
+    $brute  = is_array($s['cover'] ?? null) ? ($s['cover']['value'] ?? '') : ($s['couverture'] ?? '');
+    $url    = url_image_sure(is_string($brute) ? $brute : '');
+    $tome   = $s['tome_actuel'] ?? ($s['volume'] ?? 0);
+
+    return [
+        'titre'      => $titre,
+        'auteur'     => texte($s['auteur'] ?? ($s['subtitle'] ?? ''), 190),
+        'tome'       => max(0, min(TOME_MAX, is_numeric($tome) ? (int) $tome : 0)),
+        'statut'     => is_string($statut) && isset(STATUTS[$statut]) ? $statut : 'cours',
+        'favori'     => !empty($s['favori']) ? 1 : 0,
+        'couverture' => preg_match('#^https://#i', $url) ? $url : '',
+        'donnees'    => is_string($s['couverture_donnees'] ?? null) ? $s['couverture_donnees'] : '',
+    ];
+}
+
+/**
+ * Ce que l'import rend à une série DÉJÀ dans la bibliothèque : seulement
+ * ce qui lui manque — son image si elle n'en a pas, l'étoile si la
+ * sauvegarde la portait. Rien n'est écrasé : la série en place est
+ * peut-être plus avancée que la sauvegarde. null s'il n'y a rien à faire.
+ *
+ * $couverture_importee ne sert que si la série n'a pas d'image : l'appelant
+ * ne la calcule qu'alors (la recréer depuis la sauvegarde écrit un
+ * fichier), et passe '' sinon.
+ */
+function import_complement(string $couverture, int $favori, string $couverture_importee, int $favori_importe): ?array
+{
+    $nouvelle = $couverture !== '' ? $couverture : $couverture_importee;
+    $etoile   = max($favori, $favori_importe);
+    if ($nouvelle === $couverture && $etoile === $favori) {
+        return null;
+    }
+    return ['couverture' => $nouvelle, 'favori' => $etoile];
+}
+
 /** L'adresse est-elle libre pour ce compte ? */
 function email_disponible(string $email, int $utilisateur_id): bool
 {

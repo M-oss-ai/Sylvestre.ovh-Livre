@@ -469,7 +469,13 @@ Sans dépendance, comme le reste : le lanceur tient en deux fichiers. Le
 script se termine avec un code de retour non nul en cas d'échec.
 
 Pour n'exécuter qu'une partie des fichiers, passez un fragment de leur
-nom — `php tests/lancer.php mot_de_passe`.
+nom — `php tests/lancer.php mot_de_passe`, ou `php tests/lancer.php
+javascript` pour le seul JavaScript.
+
+**Le JavaScript se teste dans un vrai navigateur**, sans Node : le même
+lanceur ouvre `tests/js/banc.html` dans Edge ou Chrome, sans fenêtre, et
+relit le compte rendu. Sans navigateur trouvé, il le dit et passe ; la
+page s'ouvre aussi à la main, d'un double-clic.
 
 **MySQL doit tourner**, même si aucun de ces tests n'interroge la base :
 `includes/config.php` ouvre une connexion PDO dès son inclusion, et il
@@ -482,8 +488,11 @@ Le périmètre est celui des **fonctions pures** : politique de mot de
 passe, échappement HTML, filtrage des URL d'images, traitement des
 images envoyées (y compris la rotation EXIF et le refus des bombes de
 décompression), identification du client derrière un répartiteur,
-journal de sécurité, jeton CSRF, gabarit des cartes, et les planchers de
-toutes les constantes du `.env`.
+journal de sécurité, jeton CSRF, gabarit des cartes, composition des
+e-mails, lecture d'une sauvegarde à importer, et les planchers de
+toutes les constantes du `.env`. Côté navigateur : les erreurs posées
+sous leur champ, la navigation au clavier dans la grille, le défilement
+qui cache et ramène les filtres, les textes des quotas.
 
 Ce qui demande la base de données — limiteur anti force brute, jetons,
 sessions persistantes, file d'e-mails, cloisonnement par compte — n'est
@@ -595,6 +604,14 @@ le rejoue.
 l'en-tête `Host`, qui est choisi par le client. Sinon, un attaquant peut
 demander une réinitialisation pour un tiers en falsifiant `Host` : la
 victime reçoit un e-mail authentique dont le lien pointe chez lui.
+
+Chaque e-mail part en deux versions, texte brut et HTML. En texte brut,
+une adresse n'est que du texte : c'est la messagerie qui décide d'en
+faire un lien, et Proton, sur ordinateur, ne le faisait pas. La version
+HTML porte de vrais liens — vers les adresses qui commencent par
+`APP_URL`, et elles seules : un identifiant ou une adresse saisis par
+quelqu'un d'autre restent du texte, pour ne jamais devenir un lien
+cliquable dans un message authentique du site.
 
 **Jetons** — confirmation, réinitialisation et connexion par appareil ne
 sont jamais stockés en clair : seule leur empreinte sha256 va en base. Un

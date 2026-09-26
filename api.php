@@ -557,20 +557,14 @@ switch ($action) {
            ce serveur. Recréer la même image redonne le même fichier (son
            nom est l'empreinte de son contenu) : rien ne s'accumule. */
         $couverture_de = static function (array $s) use (&$images_creees): string {
-            $donnees = (string) ($s['couverture_donnees'] ?? '');
-            if ($donnees !== '') {
-                $chemin = enregistrer_image_depuis_donnees($donnees) ?? '';
-                if ($chemin !== '') {
-                    $images_creees[] = $chemin;
-                }
-                return $chemin;
+            if ($s['donnees'] === '') {
+                return $s['couverture'];   // une adresse https, ou rien (voir import_serie())
             }
-            $brute = is_array($s['cover'] ?? null) ? ($s['cover']['value'] ?? '') : ($s['couverture'] ?? '');
-            $url   = url_image_sure(is_string($brute) ? $brute : '');
-            // Un chemin local ("uploads/…") venant d'un autre export n'a
-            // aucune chance d'exister ici sans les données ci-dessus : on
-            // l'ignore plutôt que d'afficher une image cassée.
-            return preg_match('#^https://#i', $url) ? $url : '';
+            $chemin = enregistrer_image_depuis_donnees($s['donnees']) ?? '';
+            if ($chemin !== '') {
+                $images_creees[] = $chemin;
+            }
+            return $chemin;
         };
 
         /* La transaction doit être refermée quoi qu'il arrive : sans ce
@@ -606,32 +600,25 @@ switch ($action) {
             );
             $pdo->beginTransaction();
 
-            foreach ($data['series'] as $s) {
-                if (!is_array($s)) {
+            foreach ($data['series'] as $brute) {
+                $s = import_serie($brute);
+                if ($s === null) {
                     continue;
                 }
-                $titre = texte($s['titre'] ?? ($s['title'] ?? ''), 190);
-                if ($titre === '') {
-                    continue;
-                }
-                $statut = (string) ($s['statut'] ?? ($s['status'] ?? 'cours'));
-                if (!isset(STATUTS[$statut])) {
-                    $statut = 'cours';
-                }
-                $favori = !empty($s['favori']) ? 1 : 0;
 
-                $existante->execute([$mon_id, $titre]);
+                $existante->execute([$mon_id, $s['titre']]);
                 if ($deja = $existante->fetch()) {
                     $presentes++;
-                    $couverture = (string) $deja['couverture'];
-                    if ($couverture === '') {
-                        $couverture = $couverture_de($s);
-                    }
-                    $etoile = max((int) $deja['favori'], $favori);
-                    if ($couverture !== (string) $deja['couverture'] || $etoile !== (int) $deja['favori']) {
+                    $complement = import_complement(
+                        (string) $deja['couverture'],
+                        (int) $deja['favori'],
+                        (string) $deja['couverture'] === '' ? $couverture_de($s) : '',
+                        $s['favori']
+                    );
+                    if ($complement !== null) {
                         $completer->execute([
-                            $couverture, mangadex_id_depuis_url($couverture), $etoile,
-                            (int) $deja['id'], $mon_id,
+                            $complement['couverture'], mangadex_id_depuis_url($complement['couverture']),
+                            $complement['favori'], (int) $deja['id'], $mon_id,
                         ]);
                         $completees++;
                     }
@@ -647,11 +634,11 @@ switch ($action) {
                 $couverture = $couverture_de($s);
                 $inserer->execute([
                     $mon_id,
-                    $titre,
-                    texte($s['auteur'] ?? ($s['subtitle'] ?? ''), 190),
-                    max(0, min(TOME_MAX, (int) ($s['tome_actuel'] ?? ($s['volume'] ?? 0)))),
-                    $statut,
-                    $favori,
+                    $s['titre'],
+                    $s['auteur'],
+                    $s['tome'],
+                    $s['statut'],
+                    $s['favori'],
                     $couverture,
                     // Le suivi MangaDex revient avec l'image : il s'en déduit.
                     mangadex_id_depuis_url($couverture),
