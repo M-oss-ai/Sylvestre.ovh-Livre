@@ -562,6 +562,150 @@ window.Lib = (() => {
     { passive: true }
   );
 
+  /* ---------- Garder le champ touché visible au-dessus du clavier ----------
+
+     Sur téléphone, toucher un champ placé bas dans la modale (« URL de
+     l'image ») ouvrait le clavier PAR-DESSUS : on écrivait à l'aveugle
+     jusqu'à la première lettre, où le navigateur se décidait enfin à
+     décaler l'écran.
+
+     La cause : le clavier ne réduit que la zone VISIBLE
+     (visualViewport), pas la mise en page. La modale garde toute sa
+     hauteur, son bas passe sous le clavier — et sous ce champ-là il ne
+     reste presque rien à faire défiler : même en butée, elle ne peut pas
+     le remonter assez.
+
+     Quand un champ saisissable est caché par le clavier, donc :
+       1. faire défiler ses conteneurs, du plus proche au plus lointain
+          (un défilement qui n'a rien rapproché est annulé : pas question
+          de faire bouger la liste derrière la modale pour rien) ;
+       2. s'il reste caché, conteneur en butée, agrandir le rembourrage
+          bas du conteneur défilant le plus proche de ce qui manque, puis
+          défiler encore ;
+       3. rendre ce rembourrage quand le clavier se referme.
+
+     Rien ne bouge si le champ est déjà visible : un navigateur qui réduit
+     la mise en page avec le clavier, ou qui s'est débrouillé seul, n'est
+     pas touché. Écrans tactiles seulement : sans clavier virtuel, il n'y
+     a rien à corriger. */
+
+  const MARGE_CLAVIER_PX = 12;
+  const CHAMP_SAISISSABLE = "textarea, input:not([type=checkbox]):not([type=radio])"
+    + ":not([type=file]):not([type=hidden]):not([type=button]):not([type=submit])"
+    + ":not([type=reset]):not([type=range]):not([type=color]):not([type=image])";
+
+  const saisissable = (el) =>
+    !!el && typeof el.matches === "function" && el.matches(CHAMP_SAISISSABLE)
+    && !el.readOnly && !el.disabled;
+
+  const conteneursDefilants = (champ) => {
+    const liste = [];
+    for (let el = champ.parentElement; el && el !== document.body; el = el.parentElement) {
+      if (/(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY)) liste.push(el);
+    }
+    return liste;
+  };
+
+  // Ce que les en-têtes collants masquent en haut d'un conteneur — la
+  // barre « ✕ Titre ✓ » de la modale sur téléphone.
+  const masqueEnHaut = (conteneur, hautInterieur) => {
+    let masque = 0;
+    for (const enfant of conteneur.children) {
+      if (getComputedStyle(enfant).position !== "sticky") continue;
+      const r = enfant.getBoundingClientRect();
+      if (r.top <= hautInterieur + 1) masque = Math.max(masque, r.bottom - hautInterieur);
+    }
+    return masque;
+  };
+
+  // De combien défiler pour voir le champ : > 0 vers le bas, < 0 vers le
+  // haut, 0 s'il est visible. Plus haut que la zone visible, on en montre
+  // le haut plutôt que le bas.
+  const ecartAuClavier = (champ, conteneurs) => {
+    const vv = window.visualViewport;
+    let haut = vv.offsetTop;
+    let bas = vv.offsetTop + vv.height;
+    for (const c of conteneurs) {
+      const r = c.getBoundingClientRect();
+      const hautInterieur = r.top + c.clientTop;
+      haut = Math.max(haut, hautInterieur + masqueEnHaut(c, hautInterieur));
+      bas = Math.min(bas, hautInterieur + c.clientHeight);
+    }
+    const r = champ.getBoundingClientRect();
+    if (r.bottom + MARGE_CLAVIER_PX > bas) {
+      return Math.max(0, Math.min(r.bottom + MARGE_CLAVIER_PX - bas, r.top - MARGE_CLAVIER_PX - haut));
+    }
+    if (r.top - MARGE_CLAVIER_PX < haut) return r.top - MARGE_CLAVIER_PX - haut;
+    return 0;
+  };
+
+  let reserveClavier = null; // { conteneur, base, px } : le rembourrage prêté
+
+  const rendreReserveClavier = () => {
+    if (!reserveClavier) return;
+    reserveClavier.conteneur.style.removeProperty("padding-bottom");
+    reserveClavier = null;
+  };
+
+  const preterReserveClavier = (conteneur, px) => {
+    if (reserveClavier && reserveClavier.conteneur !== conteneur) rendreReserveClavier();
+    if (!reserveClavier) {
+      const base = parseFloat(getComputedStyle(conteneur).paddingBottom) || 0;
+      reserveClavier = { conteneur, base, px: 0 };
+    }
+    reserveClavier.px += px;
+    // CSSOM, pas un attribut « style » : la CSP (style-src 'self') l'accepte.
+    conteneur.style.setProperty("padding-bottom", reserveClavier.base + reserveClavier.px + "px");
+  };
+
+  const garderVisible = (champ) => {
+    if (!window.visualViewport || document.activeElement !== champ) return;
+    const conteneurs = conteneursDefilants(champ);
+    const defileurs = [...conteneurs, document.scrollingElement].filter(Boolean);
+    for (let tour = 0; tour < 3; tour++) {
+      let ecart = ecartAuClavier(champ, conteneurs);
+      if (Math.abs(ecart) < 1) return;
+      for (const d of defileurs) {
+        const avant = d.scrollTop;
+        d.scrollTop = avant + ecart;
+        const apres = ecartAuClavier(champ, conteneurs);
+        if (Math.abs(apres - ecart) < 1) d.scrollTop = avant; // n'a rien rapproché
+        else ecart = apres;
+        if (Math.abs(ecart) < 1) return;
+      }
+      if (ecart < 0 || !conteneurs.length) return; // manque en haut : rien à prêter
+      preterReserveClavier(conteneurs[0], Math.ceil(ecart));
+    }
+  };
+
+  // Clavier ouvert : la zone visible a perdu une bonne part de la fenêtre.
+  const clavierOuvert = () => window.visualViewport.height < window.innerHeight * 0.85;
+
+  if (window.visualViewport && window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
+    document.addEventListener("focusin", (e) => {
+      if (!saisissable(e.target)) return;
+      const champ = e.target;
+      // Clavier déjà ouvert (on passe d'un champ à l'autre) : tout de
+      // suite. Sinon c'est le « resize » ci-dessous qui s'en charge ; le
+      // délai rattrape un navigateur qui ne l'enverrait pas.
+      requestAnimationFrame(() => garderVisible(champ));
+      setTimeout(() => garderVisible(champ), 400);
+    });
+
+    window.visualViewport.addEventListener("resize", () => {
+      const actif = document.activeElement;
+      if (saisissable(actif) && clavierOuvert()) garderVisible(actif);
+      else rendreReserveClavier();
+    });
+
+    // Filet : un clavier refermé sans « resize », une modale fermée.
+    document.addEventListener("focusout", () => {
+      setTimeout(() => {
+        if (!saisissable(document.activeElement) || !clavierOuvert()) rendreReserveClavier();
+      }, 600);
+    });
+  }
+
   return {
     csrf, api, toast, debounce, limite, tailleLisible,
     normalize, levenshtein, correspond, prepareRecherche, correspondPrepare,

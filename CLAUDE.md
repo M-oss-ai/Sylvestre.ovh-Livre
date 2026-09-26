@@ -236,6 +236,27 @@ dépasse `GLISSEMENT_MIN_PX`, et aucun texte n'est sélectionné (les
 poignées de sélection débordent sous la ligne, hors de la boîte du
 champ).
 
+**Le clavier ne réduit que la zone visible, pas la mise en page.** La
+modale garde donc toute sa hauteur et son bas passe sous le clavier. Sous
+« URL de l'image », il ne reste presque rien à faire défiler (41 px
+mesurés pour 190 nécessaires). Toucher ce champ laissait le clavier
+par-dessus. Le navigateur ne le remontait qu'à la première lettre tapée :
+il décale alors tout l'écran, recours qu'il n'emploie pas au simple
+toucher. `garderVisible()` (`js/commun.js`, écrans tactiles seulement)
+fait défiler les conteneurs du champ en annulant tout défilement inutile,
+pour ne pas faire bouger la liste derrière la modale. S'il manque encore
+de la place, il prête du rembourrage bas au conteneur (en CSSOM, que la
+CSP accepte) et le rend quand le clavier se ferme. Il n'agit que si le
+champ est réellement caché.
+
+Pour tester ce genre de code dans le navigateur intégré, un `.focus()`
+lancé par script ne déclenche **ni `focusin` ni `focusout`** tant que la
+page n'a pas le focus système (`document.hasFocus()` à `false`). Un
+banc qui s'en contente rate tout le code branché sur ces évènements. Il
+faut focaliser par un vrai clic. Le clavier se simule en remplaçant
+`window.visualViewport` (attribut `[Replaceable]`) par un objet dont on
+réduit `height` avant d'envoyer `resize`.
+
 **Les grilles CSS étirent leurs lignes par défaut.** Avec un `max-height`
 sur le conteneur, les lignes sont dimensionnées contre la hauteur
 disponible et non contre leur contenu : l'élément devient plus court que
