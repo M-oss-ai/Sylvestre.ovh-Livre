@@ -365,36 +365,59 @@ function avertir_compte_supprime(string $email, string $identifiant): void
     );
 }
 
-function avertir_changement_email_demande(string $ancien_email, string $identifiant, string $nouveau_email): void
+/**
+ * Prévient l'ancienne adresse d'une demande de changement, avec un lien
+ * qui bloque ce changement et fait choisir un nouveau mot de passe (voir
+ * reinitialiser-mot-de-passe.php).
+ *
+ * Ce lien sert celui qui a encore sa boîte, mais plus l'exclusivité de
+ * son mot de passe. Il ne donne rien de plus à qui aurait volé la boîte :
+ * « Mot de passe oublié » lui ouvrait déjà le compte.
+ *
+ * Il reste valable 7 jours, MÊME une fois le changement confirmé :
+ * l'attaquant tient la nouvelle boîte et confirme en quelques secondes,
+ * bien avant que sa victime ne lise ce message. Suivi après coup, il rend
+ * donc au compte l'adresse que voici. Aucune autre demande ne le remplace
+ * (voir generer_jeton_action()) : l'attaquant pourrait les faire lui-même.
+ */
+function avertir_changement_email_demande(int $utilisateur_id, string $ancien_email, string $identifiant, string $nouveau_email): void
 {
     // L'adresse visée n'est que partiellement affichée : cet e-mail peut
     // finir sous d'autres yeux que ceux du titulaire.
     $masque = preg_replace('/^(.).*(.@)/u', '$1***$2', $nouveau_email) ?? '***';
 
+    /* Si le jeton ne peut pas être créé (livre.sql pas encore rejoué),
+       l'avis part quand même, avec l'ancien conseil : c'est le seul signal
+       qu'a le titulaire, il ne doit pas dépendre d'une migration. */
+    try {
+        $jeton   = generer_jeton_action($utilisateur_id, 'blocage_email', 7 * 86400, $ancien_email, false);
+        $recours = "SINON, quelqu'un a votre mot de passe. Bloquez le changement d'adresse "
+                 . "et changez de mot de passe ici (lien valable 7 jours) :\n"
+                 . url_publique('reinitialiser-mot-de-passe.php?jeton=' . $jeton) . "\n\n"
+                 . "Ce lien fonctionne même si le changement a déjà été confirmé : il rend alors "
+                 . "cette adresse-ci au compte. Tous les appareils connectés seront déconnectés.";
+    } catch (Throwable $e) {
+        error_log('avertir_changement_email_demande: ' . $e->getMessage());
+        $recours = "SINON, quelqu'un a votre mot de passe. Changez-le tout de suite :\n"
+                 . url_publique('mot-de-passe-oublie.php');
+    }
+
     envoyer_email(
         $ancien_email,
         "Demande de changement d'adresse e-mail",
-        "Bonjour {$identifiant},
-
-"
+        "Bonjour {$identifiant},\n\n"
         . "Quelqu'un vient de demander à remplacer l'adresse e-mail de votre compte "
-        . "par {$masque}.
-
-"
+        . "par {$masque}.\n\n"
         . "Cette adresse-ci reste active tant que la nouvelle n'a pas été confirmée : "
         . "si vous êtes à l'origine de la demande, ouvrez simplement le lien envoyé à "
-        . "la nouvelle adresse.
-
-"
-        . "SINON, quelqu'un a votre mot de passe. Changez-le tout de suite :
-"
-        . url_publique('mot-de-passe-oublie.php')
+        . "la nouvelle adresse.\n\n"
+        . $recours
     );
 }
 
 /* ---------------------------------------------------------------------
    Jetons à usage unique : confirmation d'e-mail, réinitialisation de mot
-   de passe, changement d'adresse.
+   de passe, changement d'adresse, et blocage de ce changement.
 
    Le jeton envoyé par e-mail n'est jamais stocké : seule son empreinte
    sha256 va en base, exactement comme un mot de passe. Quelqu'un qui
@@ -408,17 +431,25 @@ function avertir_changement_email_demande(string $ancien_email, string $identifi
  * mais n'affecte pas les autres types : demander une confirmation
  * d'e-mail n'annule plus une réinitialisation en cours).
  *
+ * $remplacer = false garde les précédents. C'est le cas de
+ * « blocage_email » : chaque alerte porte son propre lien, et une
+ * seconde demande de changement — faite par l'attaquant — ne doit pas
+ * effacer celui qu'a reçu la victime.
+ *
  * $donnee porte la valeur en attente de validation — pour
- * « changement_email », la nouvelle adresse.
+ * « changement_email », la nouvelle adresse ; pour « blocage_email »,
+ * l'ancienne, à rétablir.
  *
  * Retourne le jeton en clair, à mettre dans le lien.
  */
-function generer_jeton_action(int $utilisateur_id, string $type, int $duree_secondes, ?string $donnee = null): string
+function generer_jeton_action(int $utilisateur_id, string $type, int $duree_secondes, ?string $donnee = null, bool $remplacer = true): string
 {
     global $pdo;
 
-    $pdo->prepare('DELETE FROM jeton_action WHERE utilisateur_id = ? AND type = ?')
-        ->execute([$utilisateur_id, $type]);
+    if ($remplacer) {
+        $pdo->prepare('DELETE FROM jeton_action WHERE utilisateur_id = ? AND type = ?')
+            ->execute([$utilisateur_id, $type]);
+    }
 
     $jeton  = bin2hex(random_bytes(32));
     $expire = date('Y-m-d H:i:s', time() + $duree_secondes);

@@ -144,6 +144,8 @@ $connecte = utilisateur_actuel() !== null;
           les paramètres efface immédiatement et définitivement l'ensemble.</li>
       <li><b>Compteurs de tentatives</b> — 30 jours.</li>
       <li><b>Liens de confirmation et de réinitialisation</b> — 24 h et 1 h respectivement.</li>
+      <li><b>Lien de blocage d'un changement d'adresse</b> — 7 jours. Il conserve pendant ce
+          délai l'ancienne adresse, pour pouvoir la rendre au compte.</li>
       <li><b>Journaux du serveur</b> — conservés par l'hébergeur selon sa propre politique.</li>
     </ul>
 

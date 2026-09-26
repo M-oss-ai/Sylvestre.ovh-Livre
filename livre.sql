@@ -365,3 +365,22 @@ CREATE TABLE IF NOT EXISTS `rapport_cron` (
   `envoye_le`  DATETIME NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+--  6. Lien « bloquer ce changement », envoyé à l'ancienne adresse avec
+--     l'alerte de changement d'adresse (voir reinitialiser-mot-de-passe.php).
+--
+--     Un type de jeton à part, parce qu'aucune autre demande ne doit le
+--     remplacer : une réinitialisation ou un second changement d'adresse,
+--     que l'attaquant peut demander lui-même, effaceraient le lien de sa
+--     victime.
+--
+--     MODIFY réécrit la liste entière des valeurs : on ne l'exécute que
+--     si la nouvelle manque, sur le même modèle que les colonnes.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'jeton_action' AND COLUMN_NAME = 'type'
+              AND COLUMN_TYPE LIKE '%''blocage_email''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `jeton_action` MODIFY COLUMN `type` ENUM(''verification'',''reinit'',''changement_email'',''blocage_email'') NOT NULL');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

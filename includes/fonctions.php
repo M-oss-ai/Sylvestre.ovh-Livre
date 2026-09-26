@@ -699,13 +699,27 @@ function connecter(int $id): void
     }
 }
 
-/** Invalide toutes les sessions du compte (y compris celles des autres appareils). */
+/**
+ * Invalide toutes les sessions du compte (y compris celles des autres
+ * appareils), et annule un changement d'adresse en attente.
+ *
+ * Appelée quand le mot de passe change ou est réinitialisé : c'est la
+ * réponse de qui reprend la main sur son compte. Un changement d'adresse
+ * demandé par l'attaquant y survivait — il n'avait plus qu'à le
+ * confirmer depuis sa propre boîte pour tout reprendre.
+ *
+ * Les liens « blocage_email » ne sont PAS touchés : l'attaquant, qui a le
+ * mot de passe, pourrait sinon effacer celui de sa victime en changeant
+ * simplement le mot de passe.
+ */
 function invalider_sessions(int $utilisateur_id): void
 {
     global $pdo;
     $pdo->prepare('UPDATE utilisateur SET session_version = session_version + 1 WHERE id = ?')
         ->execute([$utilisateur_id]);
     $pdo->prepare('DELETE FROM session_persistante WHERE utilisateur_id = ?')
+        ->execute([$utilisateur_id]);
+    $pdo->prepare("DELETE FROM jeton_action WHERE utilisateur_id = ? AND type = 'changement_email'")
         ->execute([$utilisateur_id]);
 }
 

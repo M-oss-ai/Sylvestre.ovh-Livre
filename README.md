@@ -506,6 +506,17 @@ l'est de tout changement de mot de passe et de la suppression du compte.
 C'est le seul signal qu'a le titulaire légitime quand quelqu'un d'autre a
 son mot de passe.
 
+Cet avis porte donc un recours : un lien, valable 7 jours, qui **bloque
+le changement et fait choisir un nouveau mot de passe**, en déconnectant
+tous les appareils. Il fonctionne même une fois le changement confirmé —
+l'attaquant, qui tient la nouvelle boîte, confirme en quelques secondes :
+l'ancienne adresse est alors rendue au compte, et personne ne peut
+s'inscrire avec elle tant que le lien est valable. Aucune autre demande
+ne l'efface, et entre deux liens de blocage, le plus ancien a le dernier
+mot. Il ne donne rien de plus à qui aurait volé la boîte : « Mot de passe
+oublié » lui ouvrait déjà le compte. Changer ou réinitialiser le mot de
+passe annule aussi un changement d'adresse en attente.
+
 **Confidentialité des adresses** — l'inscription répond la même chose que
 l'adresse soit déjà enregistrée ou non, et ne connecte jamais
 directement. Si l'adresse est prise, son propriétaire en est informé par

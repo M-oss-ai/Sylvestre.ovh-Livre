@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 journal_securite('changement_email_demande', [
                     'utilisateur' => (int) $moi['id'], 'vers' => $email,
                 ]);
-                avertir_changement_email_demande((string) $moi['email'], $identifiant, $email);
+                avertir_changement_email_demande((int) $moi['id'], (string) $moi['email'], $identifiant, $email);
                 $jeton = generer_jeton_action((int) $moi['id'], 'changement_email', 86400, $email);
                 envoyer_email(
                     $email,

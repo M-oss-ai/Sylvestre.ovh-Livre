@@ -80,8 +80,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
        et n'est jamais connecté : c'est ce qui rend les deux cas
        (adresse libre / adresse déjà inscrite) indiscernables. */
     if (!$erreurs) {
-        $req = $pdo->prepare('SELECT id, identifiant FROM utilisateur WHERE email = ?');
-        $req->execute([$valeurs['email']]);
+        /* Une adresse que son titulaire peut encore rétablir (lien de
+           blocage en cours de validité, voir reinitialiser-mot-de-passe.php)
+           compte comme prise. Sinon l'attaquant, une fois son changement
+           d'adresse confirmé, inscrirait un compte avec celle de sa victime :
+           le lien de blocage heurterait alors la contrainte d'unicité, et
+           l'adresse ne pourrait plus être rendue. */
+        $req = $pdo->prepare(
+            "SELECT id, identifiant FROM utilisateur WHERE email = ?
+             UNION
+             SELECT u.id, u.identifiant
+               FROM jeton_action j
+               JOIN utilisateur u ON u.id = j.utilisateur_id
+              WHERE j.type = 'blocage_email' AND j.donnee = ? AND j.expire > NOW()
+             LIMIT 1"
+        );
+        $req->execute([$valeurs['email'], $valeurs['email']]);
         $existant = $req->fetch();
 
         if ($existant) {
