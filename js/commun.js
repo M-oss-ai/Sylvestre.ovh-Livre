@@ -508,12 +508,56 @@ window.Lib = (() => {
      il s'ouvre — un « scroll » générique s'y serait donc déclenché à
      l'instant même où l'on vient de toucher le champ, le refermant
      aussitôt. « touchmove » ne se déclenche que sous un doigt qui glisse
-     réellement, jamais pour un défilement programmatique. */
+     réellement, jamais pour un défilement programmatique.
+
+     Mais tout glissement n'est pas un défilement : appuyer longuement
+     dans le champ puis glisser, c'est SÉLECTIONNER du texte (ou déplacer
+     le curseur, ou faire défiler un textarea). La première version
+     fermait le champ au premier pixel, rendant toute sélection
+     impossible. D'où trois conditions, toutes nécessaires :
+       - le geste a commencé HORS du champ actif (décidé au touchstart,
+         une fois pour tout le geste) ;
+       - le doigt a parcouru une vraie distance, pas un tremblement ;
+       - aucun texte n'est sélectionné dans le champ : les poignées de
+         sélection débordent sous la ligne, donc hors de la boîte du
+         champ — les attraper ne doit pas compter comme un défilement. */
+  const GLISSEMENT_MIN_PX = 10;
+  let departGlissement = null; // { x, y } si ce geste peut fermer le champ
+
+  const texteSelectionne = (champ) => {
+    try {
+      return champ.selectionStart != null && champ.selectionStart !== champ.selectionEnd;
+    } catch {
+      return false; // types sans sélection (certains navigateurs lèvent)
+    }
+  };
+
+  document.addEventListener(
+    "touchstart",
+    (e) => {
+      departGlissement = null;
+      const actif = document.activeElement;
+      const doigt = e.touches[0];
+      if (!doigt || !actif || !actif.matches("input, textarea, select")) return;
+      if (actif.contains(e.target)) return; // geste né dans le champ : il lui appartient
+      departGlissement = { x: doigt.clientX, y: doigt.clientY };
+    },
+    { passive: true }
+  );
+
   document.addEventListener(
     "touchmove",
-    () => {
+    (e) => {
+      if (!departGlissement) return;
+      const doigt = e.touches[0];
+      if (!doigt) return;
+      const distance = Math.hypot(doigt.clientX - departGlissement.x, doigt.clientY - departGlissement.y);
+      if (distance < GLISSEMENT_MIN_PX) return;
+      departGlissement = null; // décidé une fois pour tout le geste
       const actif = document.activeElement;
-      if (actif && actif.matches("input, textarea, select")) actif.blur();
+      if (!actif || !actif.matches("input, textarea, select")) return;
+      if (texteSelectionne(actif)) return;
+      actif.blur();
     },
     { passive: true }
   );

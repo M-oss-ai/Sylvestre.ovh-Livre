@@ -226,6 +226,16 @@ tout seul pour garder un champ visible au-dessus du clavier quand il
 s'ouvre, un `scroll` générique s'y serait donc déclenché à l'instant
 même où l'on vient de toucher le champ).
 
+Mais **tout glissement n'est pas un défilement.** La première version
+fermait le champ au moindre `touchmove` — y compris l'appui long suivi
+d'un glissement qui SÉLECTIONNE du texte, et le défilement interne d'un
+textarea : sélectionner devenait impossible. Le glissement ne ferme le
+champ que si les trois conditions tiennent : le geste a commencé HORS
+du champ (décidé au `touchstart`, une fois pour tout le geste), il
+dépasse `GLISSEMENT_MIN_PX`, et aucun texte n'est sélectionné (les
+poignées de sélection débordent sous la ligne, hors de la boîte du
+champ).
+
 **Les grilles CSS étirent leurs lignes par défaut.** Avec un `max-height`
 sur le conteneur, les lignes sont dimensionnées contre la hauteur
 disponible et non contre leur contenu : l'élément devient plus court que
