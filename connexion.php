@@ -211,7 +211,7 @@ $csrf = jeton_csrf();
     <?php endif; ?>
 
     <?php if ($erreur): ?>
-      <div class="alert alert-error" role="alert">
+      <div class="alert alert-error" role="alert" id="connexion-erreur">
         <?= e($erreur) ?><?php if ($attente > 0): ?> <b class="delai" data-restant="<?= (int) $attente ?>"><?= (int) $attente ?> secondes</b>.<?php endif; ?>
       </div>
     <?php endif; ?>
@@ -228,16 +228,21 @@ $csrf = jeton_csrf();
     <form method="post" action="connexion.php" autocomplete="on" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
 
+      <!-- L'erreur de connexion ne désigne volontairement aucun des deux
+           champs (dire lequel est faux aiderait qui devine des comptes) :
+           elle est donc reliée aux deux. Le focus va au mot de passe quand
+           l'identifiant est déjà rempli — c'est lui qu'on retape. -->
+      <?php $decrit = $erreur ? ' aria-describedby="connexion-erreur"' : ''; ?>
       <div class="field">
         <label for="identifiant">Identifiant ou e-mail</label>
         <input id="identifiant" name="identifiant" type="text" required autocomplete="username"
-               value="<?= e($identifiant) ?>" autofocus>
+               value="<?= e($identifiant) ?>"<?= $decrit ?><?= $identifiant === '' ? ' autofocus' : '' ?>>
       </div>
 
       <div class="field">
         <label for="mot_de_passe">Mot de passe</label>
         <div class="password-wrap">
-          <input id="mot_de_passe" name="mot_de_passe" type="password" required autocomplete="current-password">
+          <input id="mot_de_passe" name="mot_de_passe" type="password" required autocomplete="current-password"<?= $decrit ?><?= $identifiant !== '' ? ' autofocus' : '' ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="mot_de_passe"
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>

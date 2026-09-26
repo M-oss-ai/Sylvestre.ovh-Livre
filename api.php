@@ -58,10 +58,11 @@ function exiger_mot_de_passe(int $mon_id): void
     if ($attente > 0) {
         /* « attente » accompagne le message : le navigateur en fait un
            compte à rebours, le message reste lisible sans JavaScript. */
-        reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
+        reponse_json(['ok' => false, 'attente' => $attente, 'champ' => 'mot_de_passe', 'erreur' =>
             'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'], 429);
     }
-    reponse_json(['ok' => false, 'erreur' => 'Mot de passe incorrect.'], 403);
+    // « champ » : le navigateur affiche le message sous le champ concerné.
+    reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'erreur' => 'Mot de passe incorrect.'], 403);
 }
 
 /* --------- Export : seule action qui ne répond pas en JSON ---------
@@ -70,10 +71,14 @@ function exiger_mot_de_passe(int $mon_id): void
    en base64 dans un seul tableau : 150 séries suffisaient à dépasser la
    mémoire allouée par un hébergement mutualisé, et l'export échouait
    silencieusement sur une page blanche. Ici, une seule image est en
-   mémoire à la fois. */
+   mémoire à la fois.
+
+   Version 2 : les favoris sont exportés. Le lien MangaDex, lui, ne l'est
+   pas à part : il se déduit de l'URL de la couverture, à l'import comme
+   partout ailleurs (mangadex_id_depuis_url). */
 if ($action === 'donnees.exporter') {
     $req = $pdo->prepare(
-        'SELECT titre, auteur, tome_actuel, statut, couverture, cree_le, maj_le
+        'SELECT titre, auteur, tome_actuel, statut, favori, couverture, cree_le, maj_le
            FROM serie WHERE utilisateur_id = ? ORDER BY titre'
     );
     $req->execute([$mon_id]);
@@ -86,7 +91,7 @@ if ($action === 'donnees.exporter') {
 
     echo '{', "\n";
     echo '  "application": "Ma Bibliothèque Manga",', "\n";
-    echo '  "version": 1,', "\n";
+    echo '  "version": 2,', "\n";
     echo '  "exporte_le": ', json_encode(date('c'), $options), ",\n";
     echo '  "profil": ', json_encode([
         'identifiant' => $moi['identifiant'],
@@ -101,6 +106,7 @@ if ($action === 'donnees.exporter') {
     while ($s = $req->fetch()) {
         $couverture = url_image_sure($s['couverture'] ?? '');
         $s['couverture'] = $couverture;
+        $s['favori']     = (int) $s['favori'] === 1;
 
         // Les couvertures envoyées comme fichier n'existent que sur ce
         // serveur : on embarque leurs données pour que l'import les
@@ -150,6 +156,15 @@ function ma_serie(PDO $pdo, int $mon_id, int $id): array
 
 switch ($action) {
 
+    /* ---------------- La session vit-elle encore ? ----------------
+       Posée par une page que le navigateur ressort de son cache de
+       navigation arrière (voir « pageshow » dans js/commun.js). Arrivée
+       jusqu'ici, la réponse est oui : exiger_connexion_api() a déjà
+       répondu 401 sinon. */
+    case 'session.verifier': {
+        reponse_json(['ok' => true]);
+    }
+
     /* ---------------- Ajout / modification ---------------- */
     case 'serie.enregistrer': {
         $id     = (int) ($_POST['id'] ?? 0);
@@ -159,10 +174,15 @@ switch ($action) {
         $statut = (string) ($_POST['statut'] ?? 'cours');
 
         if ($titre === '') {
-            reponse_json(['ok' => false, 'erreur' => 'Le titre est obligatoire.'], 422);
+            reponse_json(['ok' => false, 'champ' => 'titre', 'erreur' => 'Le titre est obligatoire.'], 422);
         }
         if (!isset(STATUTS[$statut])) {
             $statut = 'cours';
+        }
+        /* Une adresse refusée était ignorée sans un mot : la série
+           s'enregistrait « ✅ »… sans l'image que l'on croyait avoir mise. */
+        if (url_image_refusee($_POST['couverture_url'] ?? '')) {
+            reponse_json(['ok' => false, 'champ' => 'couverture_url', 'erreur' => MESSAGE_URL_IMAGE_REFUSEE], 422);
         }
 
         $ancienne = '';
@@ -186,7 +206,7 @@ switch ($action) {
         $erreur_image = null;
         $fichier = enregistrer_image('couverture_fichier', $erreur_image);
         if ($erreur_image !== null) {
-            reponse_json(['ok' => false, 'erreur' => $erreur_image], 422);
+            reponse_json(['ok' => false, 'champ' => 'couverture', 'erreur' => $erreur_image], 422);
         }
 
         $url_saisie = url_image_sure($_POST['couverture_url'] ?? '');
@@ -335,8 +355,14 @@ switch ($action) {
         $identifiant = texte($_POST['identifiant'] ?? '', 50);
         $email       = texte($_POST['email'] ?? '', 190);
 
+        /* « erreurs » range les messages par champ : le navigateur les pose
+           chacun sous le sien. « erreur » les reprend tous, pour qui n'en
+           lit qu'un. */
         if ($faiblesses = valider_profil($identifiant, $email, $mon_id)) {
-            reponse_json(['ok' => false, 'erreur' => implode(' ', $faiblesses)], 422);
+            reponse_json(['ok' => false, 'erreurs' => $faiblesses, 'erreur' => implode(' ', $faiblesses)], 422);
+        }
+        if (url_image_refusee($_POST['photo_url'] ?? '')) {
+            reponse_json(['ok' => false, 'champ' => 'photo_url', 'erreur' => MESSAGE_URL_IMAGE_REFUSEE], 422);
         }
 
         $email_change       = (strcasecmp($email, (string) $moi['email']) !== 0);
@@ -352,13 +378,13 @@ switch ($action) {
             exiger_mot_de_passe($mon_id);
         }
         if ($email_change && !email_disponible($email, $mon_id)) {
-            reponse_json(['ok' => false, 'erreur' => 'Cette adresse e-mail est déjà utilisée.'], 422);
+            reponse_json(['ok' => false, 'champ' => 'email', 'erreur' => 'Cette adresse e-mail est déjà utilisée.'], 422);
         }
 
         $erreur_image = null;
         $fichier = enregistrer_image('photo_fichier', $erreur_image);
         if ($erreur_image !== null) {
-            reponse_json(['ok' => false, 'erreur' => $erreur_image], 422);
+            reponse_json(['ok' => false, 'champ' => 'photo', 'erreur' => $erreur_image], 422);
         }
         $ancienne = (string) $moi['photo'];
         $photo    = photo_depuis_formulaire($fichier, $ancienne);
@@ -406,29 +432,50 @@ switch ($action) {
         reponse_json([
             'ok'        => true,
             'photo'     => $photo,
-            'email'     => $moi['email'],   // inchangée tant que non confirmée
+            /* L'adresse ACTIVE, que le champ doit réafficher : il montrait
+               la nouvelle, pas encore confirmée, et l'on ne savait plus
+               laquelle comptait. La demande en cours s'affiche à part. */
+            'email'     => $moi['email'],
+            'email_attente' => $email_change ? changement_email_en_attente($mon_id) : null,
             'initiales' => initiales(['prenom' => $prenom, 'nom' => $nom, 'identifiant' => $identifiant]),
             'message'   => $message,
         ]);
     }
 
-    /* ---------------- Mot de passe ---------------- */
+    /* ---------------- Mot de passe ----------------
+       « verifier = 1 » contrôle tout sans rien changer. Les Paramètres
+       s'en servent AVANT de laisser partir leur formulaire : celui-ci doit
+       rester un vrai POST (c'est la navigation qui fait proposer au
+       gestionnaire de mots de passe d'enregistrer le nouveau), mais un
+       POST refusé revenait avec les trois champs vides. Vérifié d'abord,
+       il ne part que s'il va réussir, et une erreur laisse la saisie en
+       place. Le POST, lui, revérifie tout. */
     case 'compte.motdepasse': {
         $actuel  = (string) ($_POST['actuel'] ?? '');
         $nouveau = (string) ($_POST['nouveau'] ?? '');
         $confirm = (string) ($_POST['confirmation'] ?? '');
 
+        $erreurs = [];
         $attente = null;
         if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente)) {
-            reponse_json(['ok' => false, 'attente' => $attente, 'erreur' => $attente > 0
+            $erreurs['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : 'Mot de passe actuel incorrect.'], $attente > 0 ? 429 : 422);
+                : 'Mot de passe actuel incorrect.';
         }
         if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
-            reponse_json(['ok' => false, 'erreur' => implode(' ', $faiblesses)], 422);
+            $erreurs['nouveau'] = $faiblesses;
         }
         if ($nouveau !== $confirm) {
-            reponse_json(['ok' => false, 'erreur' => 'Les deux nouveaux mots de passe ne correspondent pas.'], 422);
+            $erreurs['confirmation'] = 'Les deux nouveaux mots de passe ne correspondent pas.';
+        }
+        if ($erreurs) {
+            $tous = [];
+            array_walk_recursive($erreurs, static function ($m) use (&$tous) { $tous[] = $m; });
+            reponse_json(['ok' => false, 'attente' => $attente, 'erreurs' => $erreurs,
+                'erreur' => implode(' ', $tous)], $attente > 0 ? 429 : 422);
+        }
+        if (($_POST['verifier'] ?? '') === '1') {
+            reponse_json(['ok' => true]);
         }
 
         $req = $pdo->prepare('UPDATE utilisateur SET mot_de_passe = ? WHERE id = ?');
@@ -493,39 +540,74 @@ switch ($action) {
             reponse_json(['ok' => false, 'erreur' => "Ce fichier n'est pas une sauvegarde valide."], 422);
         }
 
-        if ($moi['forfait'] === 'illimite') {
-            $place_restante = PHP_INT_MAX;
-        } else {
-            $req_compte = $pdo->prepare('SELECT COUNT(*) FROM serie WHERE utilisateur_id = ?');
-            $req_compte->execute([$mon_id]);
-            $place_restante = MAX_SERIES_PAR_UTILISATEUR - (int) $req_compte->fetchColumn();
-        }
-
         $importees  = 0;
         $plafonnees = 0;
+        $presentes  = 0;   // déjà dans la bibliothèque : jamais dupliquées
+        $completees = 0;   // … parmi elles, celles à qui l'import a rendu une image ou l'étoile
+        $images_orphelines = [];
         /* Les images recréées sur disque pendant l'import ne font pas
            partie de la transaction : un ROLLBACK annule les lignes, pas
            les fichiers. On les suit pour pouvoir les effacer nous-mêmes
            si l'import échoue, au lieu de les laisser traîner. */
         $images_creees = [];
 
+        /* Une image envoyée comme fichier (et non comme lien https) a été
+           transmise en base64 par l'export : on la recrée sur disque ici,
+           sinon le chemin « uploads/xxx » d'origine ne pointe vers rien sur
+           ce serveur. Recréer la même image redonne le même fichier (son
+           nom est l'empreinte de son contenu) : rien ne s'accumule. */
+        $couverture_de = static function (array $s) use (&$images_creees): string {
+            $donnees = (string) ($s['couverture_donnees'] ?? '');
+            if ($donnees !== '') {
+                $chemin = enregistrer_image_depuis_donnees($donnees) ?? '';
+                if ($chemin !== '') {
+                    $images_creees[] = $chemin;
+                }
+                return $chemin;
+            }
+            $brute = is_array($s['cover'] ?? null) ? ($s['cover']['value'] ?? '') : ($s['couverture'] ?? '');
+            $url   = url_image_sure(is_string($brute) ? $brute : '');
+            // Un chemin local ("uploads/…") venant d'un autre export n'a
+            // aucune chance d'exister ici sans les données ci-dessus : on
+            // l'ignore plutôt que d'afficher une image cassée.
+            return preg_match('#^https://#i', $url) ? $url : '';
+        };
+
         /* La transaction doit être refermée quoi qu'il arrive : sans ce
            try/catch, une seule ligne invalide laissait la transaction
            ouverte et la connexion dans un état incohérent pour le reste
            de la requête. */
         try {
-            $req = $pdo->prepare(
-                'INSERT INTO serie (utilisateur_id, titre, auteur, tome_actuel, statut, couverture)
-                 VALUES (?, ?, ?, ?, ?, ?)'
+            /* « Même série » = même titre, à la casse et aux accents près
+               (c'est la collation de la colonne qui compare). Réimporter
+               une sauvegarde ne crée donc plus de doublons — le même
+               fichier importé deux fois donnait 300 séries dont 150 en
+               double. La série déjà là n'est pas écrasée : elle est
+               peut-être plus avancée que la sauvegarde. Elle reçoit
+               seulement ce qui lui MANQUE — l'image si elle n'en a pas,
+               l'étoile si la sauvegarde la portait. */
+            $existante = $pdo->prepare(
+                'SELECT id, couverture, favori FROM serie
+                  WHERE utilisateur_id = ? AND titre = ? ORDER BY id LIMIT 1'
+            );
+            $completer = $pdo->prepare(
+                'UPDATE serie SET couverture = ?, mangadex_id = ?, favori = ?
+                  WHERE id = ? AND utilisateur_id = ?'
+            );
+            /* Le quota est appliqué par l'insertion elle-même, comme pour
+               un ajout à la main : un décompte fait en PHP se laisse
+               doubler par deux imports simultanés. */
+            $inserer = $pdo->prepare(
+                'INSERT INTO serie (utilisateur_id, titre, auteur, tome_actuel, statut, favori, couverture, mangadex_id)
+                 SELECT ?, ?, ?, ?, ?, ?, ?, ?
+                   FROM DUAL
+                  WHERE ? = 1
+                     OR (SELECT n FROM (SELECT COUNT(*) AS n FROM serie WHERE utilisateur_id = ?) AS c) < ?'
             );
             $pdo->beginTransaction();
 
             foreach ($data['series'] as $s) {
                 if (!is_array($s)) {
-                    continue;
-                }
-                if ($place_restante <= 0) {
-                    $plafonnees++;
                     continue;
                 }
                 $titre = texte($s['titre'] ?? ($s['title'] ?? ''), 190);
@@ -536,40 +618,59 @@ switch ($action) {
                 if (!isset(STATUTS[$statut])) {
                     $statut = 'cours';
                 }
+                $favori = !empty($s['favori']) ? 1 : 0;
 
-                // Une image envoyée comme fichier (et non comme lien https) a été
-                // transmise en base64 par l'export : on la recrée sur disque ici, sinon
-                // le chemin « uploads/xxx » d'origine ne pointe vers rien sur ce serveur.
-                $couverture_brute = is_array($s['cover'] ?? null) ? ($s['cover']['value'] ?? '') : ($s['couverture'] ?? '');
-                $couverture_donnees = (string) ($s['couverture_donnees'] ?? '');
-                if ($couverture_donnees !== '') {
-                    $couverture = enregistrer_image_depuis_donnees($couverture_donnees) ?? '';
-                    if ($couverture !== '') {
-                        $images_creees[] = $couverture;
+                $existante->execute([$mon_id, $titre]);
+                if ($deja = $existante->fetch()) {
+                    $presentes++;
+                    $couverture = (string) $deja['couverture'];
+                    if ($couverture === '') {
+                        $couverture = $couverture_de($s);
                     }
-                } else {
-                    $couverture = url_image_sure(is_string($couverture_brute) ? $couverture_brute : '');
-                    // Un chemin local ("uploads/…") venant d'un autre export n'a aucune
-                    // chance d'exister ici sans les données ci-dessus : on l'ignore plutôt
-                    // que d'afficher une image cassée.
-                    if ($couverture !== '' && !preg_match('#^https://#i', $couverture)) {
-                        $couverture = '';
+                    $etoile = max((int) $deja['favori'], $favori);
+                    if ($couverture !== (string) $deja['couverture'] || $etoile !== (int) $deja['favori']) {
+                        $completer->execute([
+                            $couverture, mangadex_id_depuis_url($couverture), $etoile,
+                            (int) $deja['id'], $mon_id,
+                        ]);
+                        $completees++;
                     }
+                    continue;
                 }
 
-                $req->execute([
+                // Une fois la limite atteinte, la suite l'atteindra aussi :
+                // inutile de recréer des images pour des lignes refusées.
+                if ($plafonnees > 0) {
+                    $plafonnees++;
+                    continue;
+                }
+                $couverture = $couverture_de($s);
+                $inserer->execute([
                     $mon_id,
                     $titre,
                     texte($s['auteur'] ?? ($s['subtitle'] ?? ''), 190),
                     max(0, min(TOME_MAX, (int) ($s['tome_actuel'] ?? ($s['volume'] ?? 0)))),
                     $statut,
+                    $favori,
                     $couverture,
+                    // Le suivi MangaDex revient avec l'image : il s'en déduit.
+                    mangadex_id_depuis_url($couverture),
+                    $moi['forfait'] === 'illimite' ? 1 : 0,
+                    $mon_id,
+                    MAX_SERIES_PAR_UTILISATEUR,
                 ]);
+                if ($inserer->rowCount() === 0) {
+                    $plafonnees++;
+                    $images_orphelines[] = $couverture;
+                    continue;
+                }
                 $importees++;
-                $place_restante--;
             }
 
             $pdo->commit();
+            // L'image de la ligne refusée par le quota n'a personne pour la
+            // référencer (sauf si une autre série a la même : conservée).
+            supprimer_images_locales($images_orphelines);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -584,17 +685,22 @@ switch ($action) {
             reponse_json(['ok' => false, 'erreur' => "L'import a échoué. Vérifiez le fichier et réessayez."], 500);
         }
 
-        $message = $importees . ' série(s) importée(s) ✅';
+        $phrases = [$importees . ' série(s) ajoutée(s) ✅'];
+        if ($presentes > 0) {
+            $phrases[] = $presentes . ' déjà présente(s) dans la bibliothèque, non dupliquée(s)'
+                . ($completees > 0 ? ' — ' . $completees . ' complétée(s) (image ou favori)' : '');
+        }
         if ($plafonnees > 0) {
-            $message = $importees . ' série(s) importée(s), ' . $plafonnees . ' ignorée(s) car la limite de '
-                . MAX_SERIES_PAR_UTILISATEUR . ' séries par compte est atteinte. '
-                . 'Contactez l\'administrateur à ' . ADMIN_EMAIL . ' si besoin.';
+            $phrases[] = $plafonnees . ' ignorée(s) car la limite de ' . MAX_SERIES_PAR_UTILISATEUR
+                . ' séries par compte est atteinte. Contactez l\'administrateur à ' . ADMIN_EMAIL . ' si besoin';
         }
 
         reponse_json([
-            'ok'        => true,
-            'importees' => $importees,
-            'message'   => $message,
+            'ok'         => true,
+            'importees'  => $importees,
+            'presentes'  => $presentes,
+            'plafonnees' => $plafonnees,
+            'message'    => implode('. ', $phrases) . '.',
         ]);
     }
 
@@ -671,7 +777,8 @@ switch ($action) {
         $quota   = couverture_quota($moi);
         $attente = couverture_consommer($mon_id, $quota, COUVERTURE_FENETRE);
         if ($attente > 0) {
-            reponse_json(['ok' => false, 'attente' => $attente, 'erreur' =>
+            // « limite » : c'est le quota du COMPTE, pas l'encombrement du site.
+            reponse_json(['ok' => false, 'attente' => $attente, 'limite' => 'compte', 'erreur' =>
                 'Limite atteinte : ' . $quota . ' recherches par '
                 . couverture_tranche_lisible(COUVERTURE_FENETRE)
                 . '. Nouvelle recherche dans ' . $attente . ' secondes.'], 429);
@@ -706,6 +813,11 @@ switch ($action) {
             'ok'        => true,
             'tome'      => $tome,
             'resultats' => $resultats,
+            'recherches' => [
+                'restantes' => couverture_restantes($mon_id, $quota),
+                'quota'     => $quota,
+                'tranche'   => couverture_tranche_lisible(COUVERTURE_FENETRE),
+            ],
             /* Signaler le filtre seulement quand il a pu retirer quelque
                chose ET que l'utilisateur peut y faire quelque chose. Si
                le site n'autorise pas la levée, le mentionner ne serait

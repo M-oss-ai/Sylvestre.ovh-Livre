@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (424 tests, 35 fichiers de cas)
+php tests/lancer.php              # toute la suite (440 tests, 36 fichiers de cas)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
 php -l fichier.php                # lint (il n'y a pas d'autre vérificateur)
@@ -46,7 +46,7 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 | `includes/mailer.php` | Envoi SMTP direct + file de rattrapage (`mail_file`) |
 | `includes/images.php` | Chaîne GD : type déduit du contenu, ré-encodage WebP, nom = empreinte salée |
 | `includes/carte.php` | Le HTML d'une carte de série |
-| `includes/couvertures.php` | Client MangaDex. **Inclus par `api.php` seul** — un test qui s'en sert doit le demander explicitement |
+| `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
 
 ### Les points d'entrée
 
@@ -105,6 +105,24 @@ en entrée et restituer les fins de ligne d'origine, sinon le diff devient
 illisible.
 
 **Les messages de commit sont sans accents**, par convention du dépôt.
+
+**Une erreur de formulaire va sous SON champ, jamais dans une
+notification.** Convention d'identifiant partagée : le message porte
+l'id `<id du champ>-erreur`. En PHP, les erreurs sont rangées par champ
+et rendues par `champ_aria()` / `champ_erreur()` ; l'API nomme le champ
+(`champ`, ou `erreurs` pour plusieurs) et `Lib.erreurChamp()` le pose.
+`Lib.toast()` ne sert plus qu'aux confirmations.
+
+**La grille ne compte qu'un arrêt de tabulation.** `carte.php` pose
+`tabindex="-1"` sur tout ce qui est focalisable dans une carte, et
+`js/app.js` rend le sien à la carte active (`FOCUSABLES_CARTE`). Un
+nouveau bouton de carte qui oublierait l'un ou l'autre ramènerait des
+centaines d'arrêts.
+
+**Une page qui montre un compte est en `no-store`** (posé par
+`exiger_connexion()`) et porte `data-prive="1"` sur `<body>` : c'est ce
+qui l'empêche de revenir du cache par « Précédent » après une
+déconnexion (voir « pageshow » dans `js/commun.js`).
 
 ## Les trois freins, et pourquoi ils ne se ressemblent pas
 

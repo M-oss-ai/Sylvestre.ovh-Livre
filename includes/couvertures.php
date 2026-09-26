@@ -616,6 +616,23 @@ function couverture_consommer(int $utilisateur_id, int $quota, int $fenetre): in
 }
 
 /**
+ * Recherches encore possibles dans la tranche en cours — le quota entier
+ * si aucune tranche n'est ouverte. Annoncé après chaque recherche : une
+ * règle qu'on ne découvre qu'en butant dessus n'est pas une règle
+ * annoncée.
+ */
+function couverture_restantes(int $utilisateur_id, int $quota): int
+{
+    global $pdo;
+
+    $req = $pdo->prepare(
+        'SELECT essais FROM recherche_couverture WHERE utilisateur_id = ? AND fenetre_fin > NOW()'
+    );
+    $req->execute([$utilisateur_id]);
+    return max(0, $quota - (int) ($req->fetchColumn() ?: 0));
+}
+
+/**
  * Rend la recherche décomptée par couverture_consommer() lorsque
  * l'appel n'est finalement pas parti — file d'attente saturée, ou 429
  * renvoyé par MangaDex.

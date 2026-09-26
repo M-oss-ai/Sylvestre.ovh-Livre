@@ -135,6 +135,12 @@
     $emptyCollection.classList.toggle("hidden", toutes.length !== 0);
     $emptySearch.classList.toggle("hidden", !(toutes.length > 0 && visibles === 0));
     $grid.classList.toggle("hidden", visibles === 0);
+
+    // La carte active a pu disparaître sous un filtre : la grille doit
+    // garder son arrêt au clavier.
+    if (!carteActive || !carteActive.isConnected || carteActive.classList.contains("hidden")) {
+      rendreActive(visiblesDansLOrdre()[0] || null);
+    }
   }
 
   function majCompteurs(compte) {
@@ -143,6 +149,157 @@
       const el = document.getElementById("count-" + cle);
       if (el) el.textContent = valeur;
     });
+    majQuota();
+  }
+
+  /* ---------------- Clavier : un seul arrêt pour toute la grille ----------------
+
+     Chaque carte ajoutait cinq arrêts de tabulation (couverture, ←, →,
+     étoile, crayon) : 780 appuis sur Tab pour traverser 150 séries, et
+     les Paramètres au bout. Désormais une seule carte est « active » : ses
+     éléments sont dans l'ordre de tabulation, ceux des autres non
+     (tabindex -1, posé par carte.php). Les flèches passent d'une carte à
+     l'autre, Début et Fin vont aux extrémités ; Tab mène aux boutons de
+     la carte active, puis sort de la grille. */
+
+  const FOCUSABLES_CARTE = ".card-cover, .card-actions button";
+  let carteActive = null;
+
+  function rendreActive(carte) {
+    if (carte === carteActive) return;
+    if (carteActive) carteActive.querySelectorAll(FOCUSABLES_CARTE).forEach((el) => { el.tabIndex = -1; });
+    carteActive = carte;
+    if (carte) carte.querySelectorAll(FOCUSABLES_CARTE).forEach((el) => { el.tabIndex = 0; });
+  }
+
+  function visiblesDansLOrdre() {
+    return cartes().filter((c) => !c.classList.contains("hidden"));
+  }
+
+  /** La carte voisine dans la direction donnée, telle qu'elle s'affiche. */
+  function voisine(carte, direction) {
+    const visibles = visiblesDansLOrdre();
+    const i = visibles.indexOf(carte);
+    if (i < 0) return null;
+    if (direction === "premiere") return visibles[0];
+    if (direction === "derniere") return visibles[visibles.length - 1];
+    if (direction === "suivante") return visibles[i + 1] || null;
+    if (direction === "precedente") return visibles[i - 1] || null;
+
+    /* Haut / bas : la rangée voisine, et dans celle-ci la carte la plus
+       proche en abscisse. Le nombre de colonnes dépend de la largeur de
+       l'écran — une seule sur téléphone — d'où la mesure plutôt qu'un
+       calcul. */
+    const pas = direction === "bas" ? 1 : -1;
+    const haut = carte.offsetTop;
+    let j = i + pas;
+    while (visibles[j] && visibles[j].offsetTop === haut) j += pas;
+    if (!visibles[j]) return null;
+    const rangee = visibles[j].offsetTop;
+    let meilleure = visibles[j];
+    for (; visibles[j] && visibles[j].offsetTop === rangee; j += pas) {
+      if (Math.abs(visibles[j].offsetLeft - carte.offsetLeft)
+          < Math.abs(meilleure.offsetLeft - carte.offsetLeft)) meilleure = visibles[j];
+    }
+    return meilleure;
+  }
+
+  const DIRECTIONS = {
+    ArrowRight: "suivante", ArrowLeft: "precedente", ArrowDown: "bas", ArrowUp: "haut",
+    Home: "premiere", End: "derniere",
+  };
+
+  $grid.addEventListener("keydown", (e) => {
+    const direction = DIRECTIONS[e.key];
+    if (!direction || e.altKey || e.ctrlKey || e.metaKey) return;
+    const carte = e.target.closest(".card");
+    if (!carte) return;
+    const cible = voisine(carte, direction);
+    e.preventDefault(); // pas de défilement de la page en butée
+    if (!cible) return;
+    rendreActive(cible);
+    cible.querySelector(".card-cover").focus();
+  });
+
+  $grid.addEventListener("focusin", (e) => {
+    const carte = e.target.closest(".card");
+    if (!carte) return;
+    rendreActive(carte);
+    /* Le mode d'emploi n'est lu qu'en ENTRANT dans la grille : répété à
+       chaque carte, il noierait le titre de la série. */
+    const venuDeDehors = !e.relatedTarget || !$grid.contains(e.relatedTarget);
+    if (venuDeDehors && e.target.classList.contains("card-cover")) {
+      e.target.setAttribute("aria-describedby", "grille-aide");
+    }
+  });
+
+  $grid.addEventListener("focusout", (e) => {
+    if (e.target.classList && e.target.classList.contains("card-cover")) {
+      e.target.removeAttribute("aria-describedby");
+    }
+  });
+
+  /* Le lien d'évitement mène à la carte active — ou, bibliothèque vide,
+     au bouton qui la remplit. */
+  document.getElementById("lien-evitement").addEventListener("click", (e) => {
+    e.preventDefault();
+    const cible = carteActive && !carteActive.classList.contains("hidden")
+      ? carteActive.querySelector(".card-cover")
+      : document.querySelector("#empty-collection:not(.hidden) button") || $search;
+    if (cible) cible.focus();
+  });
+
+  /* ---------------- Limite de séries (forfait standard) ----------------
+     Annoncée dès 90 % du quota, et « ＋ » explique la limite au lieu
+     d'ouvrir une fiche qu'on remplirait pour rien : elle ne se
+     découvrait qu'à l'enregistrement, saisie et recherche de couverture
+     perdues. Le serveur reste le garde-fou (voir l'INSERT d'api.php). */
+
+  const QUOTA_SERIES = parseInt(document.body.dataset.quotaSeries || "0", 10) || 0;
+  const $quotaSeries = document.getElementById("quota-series");
+  const $btnAdd = document.getElementById("btn-add");
+  const $quotaOverlay = document.getElementById("quota-overlay");
+
+  const nombreSeries = () => parseInt(document.getElementById("count-all").textContent, 10) || 0;
+  const bibliothequePleine = () => QUOTA_SERIES > 0 && nombreSeries() >= QUOTA_SERIES;
+
+  function majQuota() {
+    if (!QUOTA_SERIES) return;
+    const n = nombreSeries();
+    const pleine = n >= QUOTA_SERIES;
+    $quotaSeries.classList.toggle("hidden", n < Math.ceil(QUOTA_SERIES * 0.9));
+    $quotaSeries.classList.toggle("quota-plein", pleine);
+    $quotaSeries.textContent = pleine
+      ? "Bibliothèque pleine : " + n + " / " + QUOTA_SERIES + " séries, la limite du forfait standard."
+      : n + " / " + QUOTA_SERIES + " séries — encore " + (QUOTA_SERIES - n)
+        + " avant la limite du forfait standard.";
+    $btnAdd.classList.toggle("btn-ajout-plein", pleine);
+    $btnAdd.title = pleine ? "Bibliothèque pleine" : "Ajouter une série";
+    $btnAdd.setAttribute("aria-label", pleine ? "Ajouter une série (bibliothèque pleine)" : "Ajouter une série");
+  }
+
+  let focusAvantQuota = null;
+
+  function ouvrirQuota() {
+    focusAvantQuota = document.activeElement;
+    $quotaOverlay.classList.remove("hidden");
+    document.getElementById("quota-ok").focus();
+  }
+
+  function fermerQuota() {
+    $quotaOverlay.classList.add("hidden");
+    if (focusAvantQuota && focusAvantQuota.focus) focusAvantQuota.focus();
+    focusAvantQuota = null;
+  }
+
+  if ($quotaOverlay) {
+    document.getElementById("quota-ok").addEventListener("click", fermerQuota);
+    $quotaOverlay.addEventListener("click", (e) => { if (e.target === $quotaOverlay) fermerQuota(); });
+  }
+
+  function demanderAjout() {
+    if (bibliothequePleine()) ouvrirQuota();
+    else ouvrirModale(null);
   }
 
   /**
@@ -157,7 +314,7 @@
    *   - une série NOUVELLE se met en TÊTE. Ajoutée en bas d'une liste de
    *     cent cinquante, il fallait recharger la page pour la retrouver.
    */
-  function poserCarte(html, id) {
+  function poserCarte(html, id, focus = null) {
     const gabarit = document.createElement("div");
     gabarit.innerHTML = html.trim(); // HTML produit et échappé par carte.php
     const nouvelle = gabarit.firstElementChild;
@@ -177,7 +334,31 @@
       // Une carte remplacée occupe la place de celle qu'elle remplace,
       // y compris dans l'ordre d'origine mémorisé.
       nouvelle._ordre = ancienne._ordre;
+      const etaitActive = ancienne === carteActive;
+      // Le focus peut aussi être DANS la carte sans qu'on l'ait signalé :
+      // la couverture qui suit le tome la remplace après coup, en
+      // arrière-plan (voir rafraichirCouverture).
+      const actif = document.activeElement;
+      if (!focus && actif && ancienne.contains(actif)) {
+        focus = actif.classList.contains("card-cover") ? "couverture" : actif.dataset.action || "couverture";
+      }
       ancienne.replaceWith(nouvelle);
+      // Elle hérite aussi de son arrêt au clavier…
+      if (etaitActive) {
+        carteActive = null;
+        rendreActive(nouvelle);
+      }
+      /* … et du focus, s'il était sur l'un de ses boutons : au clavier,
+         avancer d'un tome renvoyait sinon tout en haut de la page. Le
+         bouton « ← » d'une série revenue au tome 0 est désactivé : le
+         focus se rabat alors sur la couverture. */
+      if (focus) {
+        const cible = (focus !== "couverture"
+          && nouvelle.querySelector('[data-action="' + focus + '"]:not([disabled]):not(.card-cover)'))
+          || nouvelle.querySelector(".card-cover");
+        rendreActive(nouvelle);
+        cible.focus();
+      }
     } else {
       // En tête, et son rang la garde en tête quand une recherche est
       // effacée — sans quoi elle repartirait se cacher en bas de liste.
@@ -249,11 +430,15 @@
    * frappes rapides sur l'étoile ne peuvent donc pas laisser l'affichage
    * et la base en désaccord.
    */
+  /** L'action à refocaliser après remplacement de la carte, ou null. */
+  const focusSur = (bouton) => (document.activeElement === bouton ? bouton.dataset.action : null);
+
   async function basculerFavori(id, bouton) {
+    const focus = focusSur(bouton);
     bouton.disabled = true;
     try {
       const r = await L.api("serie.favori", { id });
-      poserCarte(r.carte, id);
+      poserCarte(r.carte, id, focus);
       majCompteurs(r.compte);
       L.toast(r.message);
       /* Le filtre « Favoris » peut faire disparaître la carte qu'on
@@ -266,10 +451,11 @@
   }
 
   async function avancer(id, bouton) {
+    const focus = focusSur(bouton);
     bouton.disabled = true;
     try {
       const r = await L.api("serie.avancer", { id });
-      poserCarte(r.carte, id);
+      poserCarte(r.carte, id, focus);
       majCompteurs(r.compte);
       L.toast(r.message);
       rafraichirCouverture(id);
@@ -280,10 +466,11 @@
   }
 
   async function reculer(id, bouton) {
+    const focus = focusSur(bouton);
     bouton.disabled = true;
     try {
       const r = await L.api("serie.reculer", { id });
-      poserCarte(r.carte, id);
+      poserCarte(r.carte, id, focus);
       majCompteurs(r.compte);
       L.toast(r.message);
       // Reculer aussi : la couverture redescend avec le tome.
@@ -460,10 +647,35 @@
   // la page à chaque fois.
   let focusAvantModale = null;
 
+  const $formErreur = document.getElementById("form-erreur");
+  const $quotaRecherche = document.getElementById("quota-recherche");
+
+  /** Une erreur qui ne tient à aucun champ : en haut de la fiche. */
+  function erreurFiche(message) {
+    $formErreur.textContent = message;
+    $formErreur.classList.remove("hidden");
+    $formErreur.focus(); // la fait défiler en vue, et la fait lire
+  }
+
+  function effacerErreursFiche() {
+    $formErreur.classList.add("hidden");
+    $formErreur.textContent = "";
+    L.effacerErreurs($form);
+    $coverStatus.classList.remove("erreur");
+  }
+
+  /** Un message sur l'image (fichier refusé…) : sous l'image, en évidence. */
+  function erreurImage(message) {
+    $coverStatus.textContent = message;
+    $coverStatus.classList.add("erreur");
+    $coverStatus.scrollIntoView({ block: "nearest" });
+  }
+
   function ouvrirModale(carte) {
     const edition = !!carte;
     idEnEdition = edition ? carte.dataset.id : "";
     focusAvantModale = document.activeElement;
+    effacerErreursFiche();
 
     $modalTitle.textContent = edition ? "Modifier la série" : "Nouvelle série";
     $fId.value = idEnEdition;
@@ -501,14 +713,26 @@
   function fermerModale() {
     $overlay.classList.add("hidden");
     $form.reset();
+    effacerErreursFiche();
+    /* La carte d'où l'on venait a pu être remplacée pendant l'édition
+       (enregistrement, couverture rafraîchie) : le focus va alors à la
+       nouvelle, pas dans le vide. */
+    let retour = focusAvantModale;
+    if (retour && !retour.isConnected && idEnEdition) {
+      const carte = $grid.querySelector('.card[data-id="' + CSS.escape(String(idEnEdition)) + '"]');
+      retour = carte ? carte.querySelector(".card-cover") : null;
+      if (carte) rendreActive(carte);
+    }
     idEnEdition = "";
     coverEnAttente = null;
-    if (focusAvantModale && focusAvantModale.focus) focusAvantModale.focus();
+    if (retour && retour.focus) retour.focus();
     focusAvantModale = null;
   }
 
   function majApercu() {
-    const src = coverEnAttente
+    // Une adresse refusée (http://…) n'a pas d'aperçu : l'image serait
+    // cassée, et on croirait qu'elle va s'enregistrer.
+    const src = coverEnAttente && !coverEnAttente.refusee
       ? coverEnAttente.type === "file"
         ? coverEnAttente.apercu
         : coverEnAttente.value
@@ -524,8 +748,8 @@
     }
   }
 
-  document.getElementById("btn-add").addEventListener("click", () => ouvrirModale(null));
-  document.getElementById("btn-add-first").addEventListener("click", () => ouvrirModale(null));
+  $btnAdd.addEventListener("click", demanderAjout);
+  document.getElementById("btn-add-first").addEventListener("click", demanderAjout);
   document.getElementById("btn-close").addEventListener("click", fermerModale);
   document.getElementById("btn-cancel").addEventListener("click", fermerModale);
   $overlay.addEventListener("click", (e) => { if (e.target === $overlay) fermerModale(); });
@@ -534,7 +758,17 @@
 
   $form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!$fTitle.value.trim()) { $fTitle.focus(); return; }
+    effacerErreursFiche();
+    if (!$fTitle.value.trim()) {
+      L.erreurChamp($fTitle, "Le titre est obligatoire.");
+      $fTitle.focus();
+      return;
+    }
+    if (coverEnAttente && coverEnAttente.refusee) {
+      L.erreurChamp($fImageUrl, L.MESSAGE_URL_REFUSEE);
+      $fImageUrl.focus();
+      return;
+    }
 
     const fd = new FormData();
     fd.set("id", $fId.value || "0");
@@ -563,7 +797,13 @@
       L.toast(r.message);
       fermerModale();
     } catch (err) {
-      L.toast(err.message);
+      /* Sous le champ concerné, et la fiche reste ouverte : une
+         notification de deux secondes posée sur les boutons disait
+         l'erreur sans dire où. */
+      const champ = L.erreursSurChamps(err, { titre: $fTitle, couverture_url: $fImageUrl });
+      if (champ) champ.focus();
+      else if (err.champ === "couverture") erreurImage(err.message);
+      else erreurFiche(err.message);
     } finally {
       envoiEnCours(false);
     }
@@ -610,14 +850,17 @@
   document.addEventListener("keydown", (e) => {
     const confirmOuverte = !$confirmOverlay.classList.contains("hidden");
     const modaleOuverte = !$overlay.classList.contains("hidden");
+    const quotaOuvert = !!$quotaOverlay && !$quotaOverlay.classList.contains("hidden");
 
     if (e.key === "Tab") {
-      if (confirmOuverte) L.piegerFocus($confirmOverlay, e);
+      if (quotaOuvert) L.piegerFocus($quotaOverlay, e);
+      else if (confirmOuverte) L.piegerFocus($confirmOverlay, e);
       else if (modaleOuverte) L.piegerFocus($overlay, e);
       return;
     }
     if (e.key !== "Escape") return;
-    if (confirmOuverte) fermerConfirmation();
+    if (quotaOuvert) fermerQuota();
+    else if (confirmOuverte) fermerConfirmation();
     else if (modaleOuverte) fermerModale();
   });
 
@@ -664,6 +907,7 @@
       });
       coverEnAttente = { type: "url", value: r.url };
       $fImageUrl.value = r.url;
+      L.effacerErreur($fImageUrl);
       $fImageFile.value = "";
       $fCoverRemoved.value = "0";
       majApercu();
@@ -697,6 +941,7 @@
       const r = await L.api("couverture.delier", { id: idEnEdition });
       coverEnAttente = { type: "url", value: r.url };
       $fImageUrl.value = "";
+      L.effacerErreur($fImageUrl);
       $fImageFile.value = "";
       $fCoverRemoved.value = "0";
       majApercu();
@@ -711,6 +956,7 @@
   document.getElementById("btn-remove-cover").addEventListener("click", () => {
     coverEnAttente = null;
     $fImageUrl.value = "";
+    L.effacerErreur($fImageUrl);
     $fImageFile.value = "";
     $fCoverRemoved.value = "1";
     $coverStatus.textContent = "Image retirée.";
@@ -745,6 +991,7 @@
 
     try {
       const r = await L.api("couverture.chercher", { titre, tome });
+      if (r.recherches) majQuotaRecherche(r.recherches);
       const resultats = r.resultats || [];
       if (!resultats.length) {
         $coverStatus.textContent = r.message || "Aucun résultat.";
@@ -800,7 +1047,14 @@
       if (r.filtre) mentionnerFiltre();
     } catch (err) {
       if (err.attente) {
-        $coverStatus.textContent = "Trop de recherches. Réessayez dans ";
+        /* Deux attentes différentes : la limite du COMPTE, que la page
+           annonce, ou l'encombrement du site, où l'on n'y est pour rien. */
+        const duCompte = err.donnees && err.donnees.limite === "compte";
+        if (duCompte) majQuotaRecherche({ restantes: 0, quota: QUOTA_RECHERCHE, tranche: TRANCHE_RECHERCHE });
+        $coverStatus.textContent = duCompte
+          ? "Limite atteinte : " + QUOTA_RECHERCHE + " recherches toutes les " + TRANCHE_RECHERCHE
+            + ". Nouvelle recherche dans "
+          : "Trop de recherches en cours sur le site. Réessayez dans ";
         const compteur = document.createElement("b");
         compteur.className = "delai";
         $coverStatus.appendChild(compteur);
@@ -810,6 +1064,17 @@
         $coverStatus.textContent = err.message || "Recherche indisponible.";
       }
     }
+  }
+
+  /* Le solde de recherches, après chacune : la règle annoncée d'emblée
+     (« 30 recherches toutes les 2 minutes ») ne dit pas où l'on en est. */
+  const QUOTA_RECHERCHE = parseInt(document.body.dataset.quotaRecherche || "0", 10) || 0;
+  const TRANCHE_RECHERCHE = document.body.dataset.trancheRecherche || "";
+
+  function majQuotaRecherche(q) {
+    $quotaRecherche.textContent = "Recherche auto : encore " + q.restantes + " sur " + q.quota
+      + " — le compteur repart à " + q.quota + " toutes les " + q.tranche + ".";
+    $quotaRecherche.classList.toggle("quota-epuise", q.restantes <= 0);
   }
 
   /* Une mention, pas un bouton : lever le filtre engage l'utilisateur
@@ -835,6 +1100,7 @@
     if (!el || !el.dataset.url) return;
     coverEnAttente = { type: "url", value: el.dataset.url };
     $fImageUrl.value = el.dataset.url;
+    L.effacerErreur($fImageUrl);
     $fImageFile.value = "";
     $fCoverRemoved.value = "0";
     majApercu();
@@ -847,4 +1113,5 @@
   lireFiltres();
   refleterFiltres();
   appliquerVue();
+  majQuota();
 })();

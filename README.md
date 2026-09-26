@@ -230,6 +230,40 @@ résultat plus difficile à deviner.
 Une série tout juste **créée** reçoit la même exception sur les trois
 catégories : elle apparaît toujours, quels que soient les filtres actifs.
 
+Les filtres sont en tête de la liste, **hors** de la barre collante :
+seuls le titre, la recherche et le « ＋ » restent en haut de l'écran.
+Sur téléphone, la barre occupait jusqu'au tiers de l'écran ; elle en
+prend désormais 15 %.
+
+### Au clavier
+
+La grille ne compte qu'**un** arrêt de tabulation : la carte active.
+Les flèches passent d'une série à l'autre (haut et bas restent dans la
+colonne), Début et Fin vont aux extrémités, Tab mène aux boutons de la
+carte puis sort de la grille. Chaque carte en ajoutait cinq : il
+fallait 780 appuis pour traverser 150 séries. Un lien « Aller aux
+séries », premier arrêt de la page, évite l'en-tête et les filtres.
+
+`carte.php` pose `tabindex="-1"` partout, `js/app.js` rend le sien à la
+carte active — et le garde à la carte qui la remplace après une action.
+
+### Limite de séries
+
+Le forfait standard est annoncé dès 90 % de la limite (« 148 / 150 »),
+et une fois la bibliothèque pleine, « ＋ » explique la limite au lieu
+d'ouvrir une fiche qu'on remplirait pour rien. Le serveur reste le
+garde-fou : le quota est appliqué dans l'`INSERT`.
+
+### Sauvegarde
+
+L'export (JSON, format version 2) contient les favoris ; le lien
+MangaDex se déduit de l'URL de la couverture, à l'import comme partout.
+L'import **n'ajoute que les séries absentes** : une série déjà présente
+(même titre, à la casse et aux accents près) n'est jamais dupliquée ;
+elle récupère seulement l'image ou l'étoile qui lui manquent. Réimporter
+le même fichier ne change donc rien. Le résultat reste affiché dans la
+page.
+
 ---
 
 ## Recherche de couverture
@@ -370,7 +404,9 @@ font pas le même travail :
   `COUVERTURE_QUOTA` recherches par tranche de `COUVERTURE_FENETRE`
   secondes (davantage pour le forfait illimité). Dépasser n'entraîne
   aucune sanction — seulement l'attente de la tranche suivante, et une
-  recherche qui n'est pas partie est rendue.
+  recherche qui n'est pas partie est rendue. La règle est dite **avant**
+  la première recherche (sous le bouton, et dans Paramètres › Forfait),
+  puis le solde après chacune : « encore 27 sur 30 ».
 
 Le rafraîchissement d'une série liée **ne consomme pas ce quota**. Un
 quota répartit une ressource coûteuse ; il s'agit ici d'un appel
@@ -455,7 +491,9 @@ pas couvert. `tests/LISEZMOI.md` en donne la liste exacte.
 (`htmlspecialchars`). Côté navigateur, rien n'est injecté en `innerHTML`
 sauf le HTML produit par `carte.php`, déjà échappé. Une **CSP** interdit
 tout script ou style inline. Les URL d'images sont filtrées : seuls
-`https://` et `uploads/…` passent.
+`https://` et `uploads/…` passent. Une adresse refusée est signalée
+sous son champ, dès la saisie puis par le serveur (422) : elle était
+ignorée en silence, et la série s'enregistrait « ✅ » sans son image.
 
 **Injections SQL** — requêtes préparées PDO partout, avec
 `EMULATE_PREPARES = false`.
@@ -516,6 +554,20 @@ ne l'efface, et entre deux liens de blocage, le plus ancien a le dernier
 mot. Il ne donne rien de plus à qui aurait volé la boîte : « Mot de passe
 oublié » lui ouvrait déjà le compte. Changer ou réinitialiser le mot de
 passe annule aussi un changement d'adresse en attente.
+
+Tant qu'elle attend, la demande s'affiche dans les Paramètres sous le
+champ E-mail — qui, lui, montre l'adresse **active** — avec un bouton
+pour l'annuler.
+
+**Erreurs de formulaire** — chaque message s'affiche sous son champ,
+qui le désigne (`aria-describedby`) et se déclare invalide
+(`aria-invalid`) ; le premier champ fautif prend le focus, et le message
+s'efface dès qu'on corrige. Côté PHP, les erreurs sont rangées par champ
+(`champ_aria()`, `champ_erreur()`) ; côté API, la réponse nomme le champ
+(`champ`, ou `erreurs` pour plusieurs) et `Lib.erreurChamp()` le pose.
+Le changement de mot de passe est vérifié avant de partir (`verifier`) :
+une erreur laisse la saisie en place au lieu de vider les trois champs,
+et le vrai POST garde la proposition du gestionnaire de mots de passe.
 
 **Confidentialité des adresses** — l'inscription répond la même chose que
 l'adresse soit déjà enregistrée ou non, et ne connecte jamais
@@ -578,9 +630,13 @@ Chez OVH : Hébergements → Statistiques et logs.
   page — l'espace des mutualisés OVH est monté en NFS, où chaque accès au
   disque est un aller-retour réseau. Même raison pour le `.env`, lu à un
   seul emplacement par requête.
-- Pages HTML en `private, no-cache` plutôt que `no-store` : le cache de
-  navigation arrière reste actif, et un « Précédent » ne relance pas tout
-  le PHP.
+- Pages publiques en `private, no-cache`. Celles qui montrent un compte
+  (bibliothèque, paramètres) passent en `no-store`, au prix d'un
+  « Précédent » qui relance le PHP : sur un ordinateur partagé, il
+  réaffichait sinon le profil depuis le cache après une déconnexion, ou
+  même après la suppression du compte. Une page que le navigateur garde
+  malgré tout en mémoire (bfcache) est masquée à son retour, le temps de
+  vérifier auprès du serveur que la session vit encore.
 - `content-visibility` sur les cartes : le navigateur ignore celles qui
   sont hors écran. Le fondu d'apparition est réservé aux cartes que le JS
   vient d'insérer, sinon il se rejoue à chaque passage devant l'écran.

@@ -24,10 +24,11 @@ header('Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
 /* Aucune page n'est publique : « private » interdit tout cache partagé
    (proxy d'entreprise, cache FAI), « no-cache » impose une revalidation.
 
-   Pas « no-store », qui désactiverait aussi le cache de navigation
-   arrière : chaque « Précédent » relancerait tout le PHP. En échange, la
-   page reste sur le disque du navigateur — acceptable pour des titres de
-   mangas. L'API, elle, garde « no-store » (voir reponse_json). */
+   C'est le réglage des pages sans compte (connexion, mentions…). Celles
+   qui montrent un compte passent à « no-store » (voir exiger_connexion) :
+   sur un ordinateur partagé, « Précédent » réaffichait le profil depuis
+   le cache même après la déconnexion ou la suppression du compte. L'API
+   garde « no-store » elle aussi (voir reponse_json). */
 header('Cache-Control: private, no-cache, must-revalidate');
 
 /* Content-Security-Policy : aucun script ni style « inline » n'est autorisé.
@@ -70,6 +71,9 @@ header(
  * et toute reconnexion automatique finissait en erreur 500.
  */
 const REMEMBER_SURSIS = 60; // secondes
+
+/** Refus d'une adresse d'image (voir url_image_refusee), partout le même. */
+const MESSAGE_URL_IMAGE_REFUSEE = "Seules les adresses d'image en https:// sont acceptées.";
 
 if (session_status() === PHP_SESSION_NONE) {
     /* use_strict_mode : PHP refuse un identifiant de session qu'il n'a pas
@@ -576,7 +580,17 @@ function utilisateur_actuel(): ?array
     return $cache = $u;
 }
 
-/** Pages HTML : redirige vers la connexion si nécessaire. */
+/**
+ * Pages HTML : redirige vers la connexion si nécessaire.
+ *
+ * Une page qui montre un compte n'est jamais gardée par le navigateur
+ * (« no-store ») : après une déconnexion ou une suppression de compte,
+ * « Précédent » la redemande donc au serveur, qui renvoie vers la
+ * connexion. Avec « no-cache », elle revenait du cache, identifiant et
+ * adresse e-mail compris. Le cache de navigation arrière (bfcache), qui
+ * peut garder la page en mémoire malgré tout, est traité côté navigateur
+ * (voir « pageshow » dans js/commun.js).
+ */
 function exiger_connexion(): array
 {
     $u = utilisateur_actuel();
@@ -584,6 +598,7 @@ function exiger_connexion(): array
         header('Location: connexion.php');
         exit;
     }
+    header('Cache-Control: no-store, private');
     return $u;
 }
 
@@ -605,6 +620,9 @@ function exiger_connexion_api(): array
  * parametres.php (POST classique, sans JavaScript). Ces deux chemins
  * avaient chacun leur copie des règles : une correction faite d'un côté
  * n'atteignait pas l'autre, et rien ne le signalait.
+ *
+ * Les erreurs sont rangées par champ (« identifiant », « email ») : le
+ * message s'affiche sous le champ fautif, pas dans une liste à part.
  */
 function valider_profil(string $identifiant, string $email, int $utilisateur_id): array
 {
@@ -612,10 +630,10 @@ function valider_profil(string $identifiant, string $email, int $utilisateur_id)
     $erreurs = [];
 
     if (!preg_match('/^[A-Za-z0-9._-]{3,30}$/', $identifiant)) {
-        $erreurs[] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
+        $erreurs['identifiant'] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $erreurs[] = "L'adresse e-mail n'est pas valide.";
+        $erreurs['email'] = "L'adresse e-mail n'est pas valide.";
     }
     if ($erreurs) {
         return $erreurs;   // inutile d'interroger la base sur une saisie invalide
@@ -624,9 +642,67 @@ function valider_profil(string $identifiant, string $email, int $utilisateur_id)
     $req = $pdo->prepare('SELECT id FROM utilisateur WHERE identifiant = ? AND id <> ?');
     $req->execute([$identifiant, $utilisateur_id]);
     if ($req->fetch()) {
-        $erreurs[] = 'Cet identifiant est déjà utilisé.';
+        $erreurs['identifiant'] = 'Cet identifiant est déjà utilisé.';
     }
     return $erreurs;
+}
+
+/* ---------------------------------------------------------------------
+   Erreurs rattachées à leur champ (formulaires envoyés en POST classique)
+
+   $erreurs est rangé par champ : ['email' => 'message', …], dans l'ordre
+   du formulaire. Un message s'affiche sous SON champ, qui le désigne
+   (aria-describedby) et se déclare invalide (aria-invalid) ; le premier
+   champ fautif reçoit le focus. Une liste en haut de la page ne disait
+   ni quel champ corriger, ni où il se trouvait.
+
+   Un champ peut porter plusieurs messages (les règles du mot de passe) :
+   la valeur est alors une liste.
+   --------------------------------------------------------------------- */
+
+/**
+ * Attributs à poser sur le champ $id, pour la clé $champ de $erreurs.
+ * $aide : id d'un texte d'aide déjà présent, que le champ garde.
+ */
+function champ_aria(array $erreurs, string $champ, string $id, string $aide = ''): string
+{
+    $en_erreur = isset($erreurs[$champ]);
+    $decrit    = array_filter([$en_erreur ? $id . '-erreur' : '', $aide]);
+
+    $attributs = $decrit ? ' aria-describedby="' . e(implode(' ', $decrit)) . '"' : '';
+    if ($en_erreur) {
+        $attributs .= ' aria-invalid="true"';
+        // Le premier champ fautif seulement : deux « autofocus » dans une
+        // page, et c'est le navigateur qui choisit.
+        if (array_key_first($erreurs) === $champ) {
+            $attributs .= ' autofocus';
+        }
+    }
+    return $attributs;
+}
+
+/** Le message à poser juste sous le champ $id, ou rien. */
+function champ_erreur(array $erreurs, string $champ, string $id): string
+{
+    if (!isset($erreurs[$champ])) {
+        return '';
+    }
+    $lignes = array_map('e', array_map('strval', (array) $erreurs[$champ]));
+    return '<p class="erreur-champ" id="' . e($id) . '-erreur">' . implode('<br>', $lignes) . '</p>';
+}
+
+/**
+ * Une adresse d'image a-t-elle été saisie… puis refusée ?
+ *
+ * url_image_sure() rend une chaîne vide dans les deux cas, et c'est ce
+ * qui faisait disparaître une adresse en http:// sans un mot : la série
+ * s'enregistrait « ✅ », sans l'image. Les appelants répondent désormais
+ * par une erreur sur le champ.
+ */
+function url_image_refusee(mixed $saisie): bool
+{
+    $saisie = is_string($saisie) ? trim($saisie) : '';
+    return $saisie !== '' && url_image_sure($saisie) === '';
 }
 
 /** L'adresse est-elle libre pour ce compte ? */
@@ -636,6 +712,33 @@ function email_disponible(string $email, int $utilisateur_id): bool
     $req = $pdo->prepare('SELECT id FROM utilisateur WHERE email = ? AND id <> ?');
     $req->execute([$email, $utilisateur_id]);
     return !$req->fetch();
+}
+
+/**
+ * Le changement d'adresse qui attend sa confirmation, s'il y en a un :
+ * ['adresse' => …, 'expire' => « 27/09/2026 à 14 h 05 »], sinon null.
+ *
+ * Sans lui, les Paramètres réaffichaient l'ancienne adresse sans rien
+ * dire de la demande en cours : on ne savait plus laquelle comptait, et
+ * l'on redemandait — mot de passe et e-mails à la clé.
+ */
+function changement_email_en_attente(int $utilisateur_id): ?array
+{
+    global $pdo;
+    $req = $pdo->prepare(
+        "SELECT donnee, expire FROM jeton_action
+          WHERE utilisateur_id = ? AND type = 'changement_email' AND expire > NOW()
+          ORDER BY id DESC LIMIT 1"
+    );
+    $req->execute([$utilisateur_id]);
+    $j = $req->fetch();
+    if (!$j || (string) $j['donnee'] === '') {
+        return null;
+    }
+    return [
+        'adresse' => (string) $j['donnee'],
+        'expire'  => date('d/m/Y à H \h i', (int) strtotime((string) $j['expire'])),
+    ];
 }
 
 /**

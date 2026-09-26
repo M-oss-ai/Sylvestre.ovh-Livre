@@ -14,10 +14,17 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
+require_once __DIR__ . '/includes/couvertures.php';   // le quota de recherche, annoncé dans « Forfait »
 
 $moi = exiger_connexion();
 
-$erreurs = [];
+/* Les erreurs sont rangées par formulaire, puis par champ : chacune
+   s'affiche dans SA carte, sous SON champ. Une liste unique en haut de
+   la page laissait l'erreur du mot de passe au-dessus du Profil, loin du
+   formulaire qu'elle concernait. */
+$erreurs_profil = [];
+$erreurs_mdp    = [];
+$saisie_profil  = null;
 $info    = '';
 
 /* ---------------------------------------------------------------------
@@ -38,16 +45,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $attente = null;
         if (!verifier_mot_de_passe_limite((int) $moi['id'], $actuel, $attente)) {
-            $erreurs[] = $attente > 0
+            $erreurs_mdp['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
                 : 'Mot de passe actuel incorrect.';
         }
-        $erreurs = array_merge($erreurs, valider_mot_de_passe($nouveau, (string) $moi['identifiant']));
+        if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
+            $erreurs_mdp['nouveau'] = $faiblesses;
+        }
         if ($nouveau !== $confirm) {
-            $erreurs[] = 'Les deux nouveaux mots de passe ne correspondent pas.';
+            $erreurs_mdp['confirmation'] = 'Les deux nouveaux mots de passe ne correspondent pas.';
         }
 
-        if (!$erreurs) {
+        if (!$erreurs_mdp) {
             $pdo->prepare('UPDATE utilisateur SET mot_de_passe = ? WHERE id = ?')
                 ->execute([password_hash($nouveau, PASSWORD_DEFAULT), (int) $moi['id']]);
             invalider_sessions((int) $moi['id']);
@@ -69,7 +78,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $identifiant = texte($_POST['identifiant'] ?? '', 50);
         $email       = texte($_POST['email'] ?? '', 190);
 
-        $erreurs = array_merge($erreurs, valider_profil($identifiant, $email, (int) $moi['id']));
+        // En cas d'erreur, le formulaire réaffiche CE QUI A ÉTÉ SAISI :
+        // un message « adresse invalide » sous l'ancienne adresse,
+        // réaffichée à sa place, ne voudrait rien dire.
+        $saisie_profil = [
+            'prenom' => $prenom, 'nom' => $nom, 'identifiant' => $identifiant, 'email' => $email,
+            'photo_url' => texte($_POST['photo_url'] ?? '', 500),
+        ];
+
+        /* Dans l'ordre du formulaire : c'est le premier champ fautif qui
+           reçoit le focus (voir champ_aria). */
+        if (url_image_refusee($_POST['photo_url'] ?? '')) {
+            $erreurs_profil['photo_url'] = MESSAGE_URL_IMAGE_REFUSEE;
+        }
+        $erreurs_profil += valider_profil($identifiant, $email, (int) $moi['id']);
 
         /* Mêmes règles que api.php : l'adresse e-mail ET l'identifiant
            servent à reprendre le compte, donc tous deux demandent le mot
@@ -80,26 +102,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($email_change || $identifiant_change) {
             $attente = null;
             if (!verifier_mot_de_passe_limite((int) $moi['id'], (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
-                $erreurs[] = $attente > 0
+                $erreurs_profil['mot_de_passe'] = $attente > 0
                     ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
                     : "Pour changer votre identifiant ou votre adresse e-mail, saisissez votre mot de passe actuel.";
             }
         }
-        if (!$erreurs && $email_change && !email_disponible($email, (int) $moi['id'])) {
-            $erreurs[] = 'Cette adresse e-mail est déjà utilisée.';
+        // Après le mot de passe, jamais avant : sans lui, dire qu'une
+        // adresse est prise révélerait qu'un compte existe.
+        if (!$erreurs_profil && $email_change && !email_disponible($email, (int) $moi['id'])) {
+            $erreurs_profil['email'] = 'Cette adresse e-mail est déjà utilisée.';
         }
 
-        if (!$erreurs) {
+        if (!$erreurs_profil) {
             // Photo : mêmes règles et mêmes priorités que api.php
             // (fichier envoyé > URL saisie > image retirée > image actuelle).
             $erreur_image = null;
             $fichier = enregistrer_image('photo_fichier', $erreur_image);
             if ($erreur_image !== null) {
-                $erreurs[] = $erreur_image;
+                $erreurs_profil['photo'] = $erreur_image;
             }
         }
 
-        if (!$erreurs) {
+        if (!$erreurs_profil) {
             $ancienne  = (string) $moi['photo'];
             $photo_maj = photo_depuis_formulaire($fichier, $ancienne);
 
@@ -132,6 +156,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    /* Renoncer au changement d'adresse demandé : le lien envoyé à la
+       nouvelle adresse cesse de fonctionner. Rien d'autre ne bouge — en
+       particulier le lien de blocage reçu par l'ancienne adresse reste
+       valable (voir avertir_changement_email_demande). */
+    if ($formulaire === 'annuler_email') {
+        $pdo->prepare("DELETE FROM jeton_action WHERE utilisateur_id = ? AND type = 'changement_email'")
+            ->execute([(int) $moi['id']]);
+        journal_securite('changement_email_annule', ['utilisateur' => (int) $moi['id']]);
+        header('Location: parametres.php?profil=3');
+        exit;
+    }
+
     // Une erreur : on relit le compte pour réafficher des valeurs à jour.
     $moi = exiger_connexion();
 }
@@ -146,9 +182,25 @@ if (($_GET['profil'] ?? '') === '2') {
     $info = "Profil enregistré ✅ — un lien de confirmation a été envoyé à votre nouvelle adresse. "
           . "Votre adresse actuelle reste active jusqu'au clic.";
 }
+if (($_GET['profil'] ?? '') === '3') {
+    $info = "Demande de changement d'adresse annulée. Votre adresse actuelle reste celle du compte.";
+}
 
-$photo = url_image_sure($moi['photo']);
-$csrf  = jeton_csrf();
+$photo   = url_image_sure($moi['photo']);
+$csrf    = jeton_csrf();
+$attente_email = changement_email_en_attente((int) $moi['id']);
+
+// Valeurs affichées dans le Profil : la saisie refusée, sinon le compte.
+$v = $erreurs_profil && $saisie_profil ? $saisie_profil : [
+    'prenom' => (string) $moi['prenom'], 'nom' => (string) $moi['nom'],
+    'identifiant' => (string) $moi['identifiant'], 'email' => (string) $moi['email'],
+    'photo_url' => preg_match('#^https://#i', $photo) ? $photo : '',
+];
+
+/* Le quota de recherche automatique de couverture n'était annoncé nulle
+   part : on le découvrait en butant dessus. */
+$quota_recherche = couverture_quota($moi);
+$tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
 
 $req = $pdo->prepare('SELECT COUNT(*) FROM serie WHERE utilisateur_id = ?');
 $req->execute([(int) $moi['id']]);
@@ -166,7 +218,7 @@ $nb_series = (int) $req->fetchColumn();
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
-      data-import-max="<?= IMPORT_TAILLE_MAX ?>">
+      data-import-max="<?= IMPORT_TAILLE_MAX ?>" data-prive="1">
 
 <header class="topbar settings-topbar">
   <div class="topbar-row settings-topbar-row">
@@ -179,22 +231,16 @@ $nb_series = (int) $req->fetchColumn();
 <main class="settings-main">
 
   <?php if ($info): ?>
-    <div class="alert alert-info"><?= e($info) ?></div>
-  <?php endif; ?>
-
-  <?php if ($erreurs): ?>
-    <div class="alert alert-error" role="alert">
-      <ul>
-        <?php foreach ($erreurs as $msg): ?>
-          <li><?= e($msg) ?></li>
-        <?php endforeach; ?>
-      </ul>
-    </div>
+    <div class="alert alert-info" role="status"><?= e($info) ?></div>
   <?php endif; ?>
 
   <!-- ---------------- Profil ---------------- -->
-  <section class="settings-card">
+  <section class="settings-card" id="profil">
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">👤</span> Profil</h2>
+
+    <?php if (isset($erreurs_profil['photo'])): ?>
+      <div class="alert alert-error" role="alert"><?= e($erreurs_profil['photo']) ?></div>
+    <?php endif; ?>
 
     <div class="profile-avatar-row">
       <div id="settings-dropzone" class="settings-avatar-dropzone" tabindex="0" role="button" aria-label="Modifier la photo de profil">
@@ -204,9 +250,14 @@ $nb_series = (int) $req->fetchColumn();
         <span class="avatar-edit-badge" aria-hidden="true">✏️</span>
       </div>
       <div class="profile-avatar-actions">
-        <input id="a-image-url" name="photo_url" type="url" placeholder="Coller une URL d'image…" inputmode="url" maxlength="500"
-               form="profil-form"
-               value="<?= preg_match('#^https://#i', $photo) ? e($photo) : '' ?>">
+        <!-- Une étiquette, et pas seulement un texte indicatif : celui-ci
+             disparaît à la première lettre, et un lecteur d'écran
+             n'annonçait rien. -->
+        <label for="a-image-url" class="sous-label">Adresse d'une image (https://…)</label>
+        <input id="a-image-url" name="photo_url" type="url" placeholder="https://…" inputmode="url" maxlength="500"
+               form="profil-form"<?= champ_aria($erreurs_profil, 'photo_url', 'a-image-url') ?>
+               value="<?= e($v['photo_url']) ?>">
+        <?= champ_erreur($erreurs_profil, 'photo_url', 'a-image-url') ?>
         <div class="cover-actions-buttons">
           <label class="btn btn-ghost small file-label">
             📁 Choisir un fichier
@@ -218,7 +269,10 @@ $nb_series = (int) $req->fetchColumn();
       </div>
     </div>
 
-    <form id="profil-form" method="post" action="parametres.php" enctype="multipart/form-data">
+    <!-- novalidate : les bulles du navigateur s'effacent d'elles-mêmes ;
+         les erreurs s'affichent sous le champ, et restent. Le serveur
+         valide tout de toute façon. -->
+    <form id="profil-form" method="post" action="parametres.php#profil" enctype="multipart/form-data" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="formulaire" value="profil">
       <input type="hidden" name="photo_retiree" id="a-photo-removed" value="0">
@@ -226,28 +280,46 @@ $nb_series = (int) $req->fetchColumn();
       <div class="field-row">
         <div class="field">
           <label for="a-firstname">Prénom</label>
-          <input id="a-firstname" name="prenom" type="text" autocomplete="given-name" maxlength="80" value="<?= e($moi['prenom']) ?>">
+          <input id="a-firstname" name="prenom" type="text" autocomplete="given-name" maxlength="80" value="<?= e($v['prenom']) ?>">
         </div>
         <div class="field">
           <label for="a-lastname">Nom</label>
-          <input id="a-lastname" name="nom" type="text" autocomplete="family-name" maxlength="80" value="<?= e($moi['nom']) ?>">
+          <input id="a-lastname" name="nom" type="text" autocomplete="family-name" maxlength="80" value="<?= e($v['nom']) ?>">
         </div>
       </div>
 
+      <!-- data-compte : la valeur ENREGISTRÉE, à laquelle le JS compare la
+           saisie. Après une erreur, le champ réaffiche la saisie refusée ;
+           comparer à elle cacherait le champ du mot de passe. -->
       <div class="field">
         <label for="a-username">Identifiant</label>
-        <input id="a-username" name="identifiant" type="text" autocomplete="username" maxlength="30" required value="<?= e($moi['identifiant']) ?>">
-        <p class="hint">Il sert à vous connecter : le changer demande votre mot de passe.</p>
+        <input id="a-username" name="identifiant" type="text" autocomplete="username" maxlength="30" required
+               data-compte="<?= e($moi['identifiant']) ?>" value="<?= e($v['identifiant']) ?>"<?= champ_aria($erreurs_profil, 'identifiant', 'a-username', 'a-username-aide') ?>>
+        <?= champ_erreur($erreurs_profil, 'identifiant', 'a-username') ?>
+        <p class="hint" id="a-username-aide">Il sert à vous connecter : le changer demande votre mot de passe.</p>
       </div>
 
       <div class="field">
         <label for="a-email">E-mail</label>
-        <input id="a-email" name="email" type="email" autocomplete="email" maxlength="190" required value="<?= e($moi['email']) ?>">
-        <p class="hint">
+        <input id="a-email" name="email" type="email" autocomplete="email" maxlength="190" required
+               data-compte="<?= e($moi['email']) ?>" value="<?= e($v['email']) ?>"<?= champ_aria($erreurs_profil, 'email', 'a-email', 'a-email-aide') ?>>
+        <?= champ_erreur($erreurs_profil, 'email', 'a-email') ?>
+        <p class="hint" id="a-email-aide">
           Changer d'adresse demande votre mot de passe, et la nouvelle adresse doit être
           confirmée par e-mail. L'adresse actuelle reste active jusque-là — une faute de
           frappe ne peut donc pas vous enfermer dehors.
         </p>
+        <!-- La demande en cours, qui ne se voyait nulle part : le champ
+             montre l'adresse ACTIVE, et ce bloc celle qui attend. -->
+        <div id="email-attente" class="email-attente<?= $attente_email ? '' : ' hidden' ?>">
+          <p>
+            ✉️ Changement vers <b id="email-attente-adresse"><?= e($attente_email['adresse'] ?? '') ?></b>
+            en attente : cliquez sur le lien envoyé à cette adresse (valable jusqu'au
+            <span id="email-attente-expire"><?= e($attente_email['expire'] ?? '') ?></span>).
+            D'ici là, votre adresse actuelle reste celle du compte.
+          </p>
+          <button type="submit" form="annuler-email-form" class="btn btn-ghost small">Annuler cette demande</button>
+        </div>
       </div>
 
       <!-- Affiché par le JS quand l'identifiant ou l'adresse change ;
@@ -256,14 +328,27 @@ $nb_series = (int) $req->fetchColumn();
         <label for="a-email-password">Mot de passe actuel
           <span class="hint">(requis si vous changez d'identifiant ou d'adresse)</span></label>
         <div class="password-wrap">
-          <input id="a-email-password" name="mot_de_passe" type="password" autocomplete="current-password">
+          <input id="a-email-password" name="mot_de_passe" type="password" autocomplete="current-password"<?= champ_aria($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="a-email-password" aria-label="Afficher le mot de passe">👁️</button>
         </div>
+        <?= champ_erreur($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>
       </div>
+
+      <!-- Les erreurs qui ne tiennent à aucun champ, à côté du bouton qui
+           vient d'être pressé. -->
+      <p id="profil-erreur" class="erreur-form hidden" role="alert" tabindex="-1"></p>
 
       <div class="settings-save-bar">
         <button type="submit" class="btn btn-primary full">Enregistrer les modifications</button>
       </div>
+    </form>
+
+    <!-- Hors du formulaire de profil (un formulaire ne peut pas en contenir
+         un autre) : le bouton « Annuler cette demande » s'y rattache par
+         son attribut « form ». -->
+    <form id="annuler-email-form" method="post" action="parametres.php#profil" class="hidden">
+      <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+      <input type="hidden" name="formulaire" value="annuler_email">
     </form>
 
     <?php if (!$moi['email_verifie']): ?>
@@ -273,11 +358,13 @@ $nb_series = (int) $req->fetchColumn();
     <?php endif; ?>
   </section>
 
-  <!-- ---------------- Sécurité ---------------- -->
-  <section class="settings-card">
+  <!-- ---------------- Sécurité ----------------
+       « #securite » dans l'action : après un envoi refusé, la page revient
+       sur CETTE carte, où l'erreur s'affiche — et non tout en haut. -->
+  <section class="settings-card" id="securite">
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔒</span> Sécurité</h2>
 
-    <form id="mdp-form" method="post" action="parametres.php">
+    <form id="mdp-form" method="post" action="parametres.php#securite" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="formulaire" value="motdepasse">
 
@@ -293,28 +380,31 @@ $nb_series = (int) $req->fetchColumn();
       <div class="field">
         <label for="a-current">Mot de passe actuel</label>
         <div class="password-wrap">
-          <input id="a-current" name="mot_de_passe_actuel" type="password" autocomplete="current-password" required>
+          <input id="a-current" name="mot_de_passe_actuel" type="password" autocomplete="current-password" required<?= champ_aria($erreurs_mdp, 'actuel', 'a-current') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="a-current" aria-label="Afficher le mot de passe">👁️</button>
         </div>
+        <?= champ_erreur($erreurs_mdp, 'actuel', 'a-current') ?>
       </div>
 
       <div class="field">
         <label for="a-new">Nouveau mot de passe</label>
         <div class="password-wrap">
           <input id="a-new" name="mot_de_passe_nouveau" type="password" autocomplete="new-password" required
-                 minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="<?= MDP_MIN ?> caractères minimum">
+                 minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="<?= MDP_MIN ?> caractères minimum"<?= champ_aria($erreurs_mdp, 'nouveau', 'a-new', 'mdp-regle') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="a-new" aria-label="Afficher le mot de passe">👁️</button>
         </div>
+        <?= champ_erreur($erreurs_mdp, 'nouveau', 'a-new') ?>
       </div>
 
       <div class="field">
         <label for="a-new2">Confirmer le nouveau mot de passe</label>
         <div class="password-wrap">
           <input id="a-new2" name="mot_de_passe_confirmation" type="password" autocomplete="new-password" required
-                 minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>">
+                 minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>"<?= champ_aria($erreurs_mdp, 'confirmation', 'a-new2') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="a-new2" aria-label="Afficher le mot de passe">👁️</button>
         </div>
-        <p class="hint"><?= e(MDP_REGLE) ?></p>
+        <?= champ_erreur($erreurs_mdp, 'confirmation', 'a-new2') ?>
+        <p class="hint" id="mdp-regle"><?= e(MDP_REGLE) ?></p>
       </div>
 
       <button type="submit" class="btn btn-primary full">Changer le mot de passe</button>
@@ -346,6 +436,13 @@ $nb_series = (int) $req->fetchColumn();
         <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a> pour passer au forfait supérieur.
       </p>
     <?php endif; ?>
+    <p class="hint">
+      Recherche automatique de couverture : <b><?= $quota_recherche ?> recherches toutes les <?= e($tranche) ?></b>.
+      <?php if ($moi['forfait'] !== 'illimite' && COUVERTURE_QUOTA_ILLIMITE > $quota_recherche): ?>
+        Le forfait illimité en permet <?= COUVERTURE_QUOTA_ILLIMITE ?>.
+      <?php endif; ?>
+      Au-delà, il suffit d'attendre la fin des <?= e($tranche) ?> : le compteur repart de zéro.
+    </p>
   </section>
 
   <!-- ---------------- Images sensibles ----------------
@@ -410,6 +507,14 @@ $nb_series = (int) $req->fetchColumn();
         <input id="btn-import-all" type="file" accept="application/json,.json" class="visually-hidden">
       </label>
     </div>
+    <!-- Le résultat de l'import reste ici, lisible : il partait dans une
+         notification de deux secondes, suivie d'une redirection. -->
+    <p id="import-statut" class="import-statut hidden" role="status"></p>
+    <p class="hint">
+      Importer une sauvegarde n'ajoute que les séries absentes : une série déjà présente
+      (même titre) n'est jamais dupliquée, elle récupère seulement l'image ou l'étoile qui
+      lui manquent.
+    </p>
 
     <button id="btn-clear-library" type="button" class="btn btn-danger full">🗑️ Vider ma bibliothèque</button>
     <p class="hint">Supprime toutes vos séries. Votre compte est conservé.</p>

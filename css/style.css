@@ -88,13 +88,6 @@ code {
 
 .topbar-row h1 { font-size: 22px; white-space: nowrap; }
 
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: none;
-}
-
 .avatar-btn {
   flex: none;
   width: 42px;
@@ -129,13 +122,59 @@ code {
   letter-spacing: 0.3px;
 }
 
-.search-row { max-width: 1400px; margin: 0 auto; width: 100%; }
+/* La recherche et le « ＋ » partagent une rangée : un bouton pleine
+   largeur « Ajouter une série » occupait sur téléphone une rangée entière
+   de la barre collante. */
+.search-row {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
 
 .search-wrap {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 0;
 }
+
+.btn-ajout {
+  flex: none;
+  width: 48px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* Bibliothèque pleine : le bouton reste actionnable — il explique la
+   limite — mais ne se présente plus comme l'action principale. */
+.btn-ajout-plein {
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-dim);
+  border-color: var(--border-strong);
+}
+
+/* ---------- Lien d'évitement ----------
+   Hors de l'écran tant qu'il n'a pas le focus : premier arrêt de Tab, il
+   mène droit aux séries sans traverser l'en-tête et les filtres. */
+.lien-evitement {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 300;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--gold);
+  color: #1a1410;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.lien-evitement:focus { top: calc(10px + env(safe-area-inset-top, 0px)); }
 
 .search-icon {
   position: absolute;
@@ -216,6 +255,23 @@ code {
 .filter-btn.status-termine.active { border-color: var(--termine); background: var(--termine-bg); color: var(--termine); }
 .filter-btn.status-abandon.active { border-color: var(--abandon); background: var(--abandon-bg); color: var(--abandon); }
 
+/* Les filtres vivent désormais en tête de la page, hors de la barre
+   collante : ils défilent avec la liste. */
+main > .filters { margin-bottom: 16px; }
+main > .filters-image { margin-top: -8px; }
+
+/* Place restante du forfait standard, à l'approche de la limite. */
+.quota-series {
+  margin: -4px 0 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.quota-series.quota-plein {
+  color: var(--gold-light);
+  font-weight: 600;
+}
+
 /* ---------- Grille ---------- */
 
 main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
@@ -276,6 +332,20 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+/* Au clavier, les flèches passent d'une carte à l'autre (js/app.js) : la
+   carte atteinte doit se voir, et ne pas glisser sous la barre collante
+   du haut en remontant. */
+.card-cover:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: -3px;
+}
+
+.card-cover,
+.card-actions button {
+  scroll-margin-top: 150px;
+  scroll-margin-bottom: 16px;
 }
 
 .card-cover img {
@@ -356,35 +426,46 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .filter-favori.active { color: var(--gold); }
 
+/* Pastille de statut posée SUR la couverture : son fond doit être
+   opaque. Il était teinté à 15 % : sur une couverture claire, le texte
+   coloré tombait vers 2:1 de contraste, illisible. Sur ce fond presque
+   noir, chaque couleur de statut dépasse 5:1 même posée sur une
+   couverture blanche (le pire cas) — le seuil WCAG est 4,5:1. */
 .badge {
   position: absolute;
   top: 8px;
   left: 8px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   padding: 4px 9px;
   border-radius: 999px;
-  backdrop-filter: blur(4px);
+  background: rgba(14, 11, 8, 0.9);
+  border: 1px solid currentColor;
 }
 
-.status-cours .badge { background: var(--cours-bg); color: var(--cours); border: 1px solid var(--cours); }
-.status-envie .badge { background: var(--envie-bg); color: var(--envie); border: 1px solid var(--envie); }
-.status-termine .badge { background: var(--termine-bg); color: var(--termine); border: 1px solid var(--termine); }
-.status-abandon .badge { background: var(--abandon-bg); color: var(--abandon); border: 1px solid var(--abandon); }
+.status-cours .badge { color: var(--cours); }
+.status-envie .badge { color: var(--envie); }
+.status-termine .badge { color: var(--termine); }
+.status-abandon .badge { color: var(--abandon); }
 
+/* « Tome x à emprunter » : même problème, même remède. Le dégradé
+   s'éclaircissait vers le HAUT du texte, qui se retrouvait sur l'image
+   presque nue. Le fond reste désormais sombre sous toute la ligne, et ne
+   s'estompe qu'au-dessus d'elle. */
 .next-tag {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+  background: linear-gradient(to top, rgba(10, 8, 6, 0.9) 0%, rgba(10, 8, 6, 0.9) 68%, rgba(10, 8, 6, 0) 100%);
   color: var(--gold-light);
   font-size: 12px;
   font-weight: 700;
   padding: 18px 10px 8px;
   text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .card-body {
@@ -522,8 +603,6 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 }
 
 .btn-primary:hover { filter: brightness(1.08); }
-
-.btn-primary .plus { font-size: 16px; margin-right: 2px; }
 
 .btn-ghost { background: transparent; color: var(--text); }
 
@@ -791,6 +870,78 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .cover-actions-buttons .btn { flex: 1; text-align: center; }
 
 .hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
+
+/* ---------- Erreurs de formulaire ----------
+   Sous le champ fautif, pas dans une notification passagère ni dans une
+   liste en haut de page. Le champ se borde de rouge en même temps. */
+.erreur-champ {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #f0b4b4;
+  font-weight: 600;
+}
+
+.erreur-champ::before { content: "⚠️ "; }
+
+.field input[aria-invalid="true"],
+.cover-actions input[aria-invalid="true"],
+.profile-avatar-actions input[aria-invalid="true"] {
+  border-color: var(--abandon);
+}
+
+/* Ce qui ne tient à aucun champ (limite de séries, erreur réseau…). */
+.erreur-form {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--abandon);
+  border-radius: var(--radius-sm);
+  background: var(--abandon-bg);
+  color: #f0c3c3;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.erreur-form:focus { outline: 2px solid var(--abandon); outline-offset: 2px; }
+
+/* Un message d'état qui devient une erreur (image refusée, import raté). */
+.hint.erreur,
+.import-statut.erreur { color: #f0b4b4; font-weight: 600; }
+
+/* Étiquette discrète d'un champ secondaire (adresse d'une image). */
+.sous-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+/* Résultat d'un import : il reste affiché, lisible. */
+.import-statut {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Changement d'adresse en attente de confirmation (Paramètres). */
+.email-attente {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed var(--cours);
+  border-radius: var(--radius-sm);
+  background: var(--cours-bg);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cfe8f1;
+}
+
+.email-attente p { margin-bottom: 8px; }
+
+/* Solde de recherches automatiques épuisé. */
+.quota-recherche.quota-epuise { color: var(--gold-light); }
+
+/* Page ressortie du cache arrière : masquée tant que le serveur n'a pas
+   confirmé que la session vit encore (voir « pageshow », js/commun.js). */
+html.verification-session body { visibility: hidden; }
 
 .cover-results {
   margin-top: 10px;
@@ -1235,22 +1386,14 @@ select,
 /* ---------- Responsive (l'app est pensée d'abord pour le téléphone) ---------- */
 
 @media (max-width: 640px) {
-  /* En passant a la ligne, le bloc d actions emportait l avatar avec le
-     bouton et le laissait cale a gauche. On repartit donc en grille : titre
-     et avatar sur la premiere ligne, bouton pleine largeur sous eux, a
-     portee du pouce. « display: contents » dissout le conteneur pour que
-     ses deux enfants entrent directement dans la grille. */
-  .topbar-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "titre avatar" "ajout ajout";
-    align-items: center;
-    gap: 10px 12px;
-  }
-  .topbar-row h1 { grid-area: titre; font-size: 19px; }
-  .topbar-actions { display: contents; }
-  .avatar-btn { grid-area: avatar; }
-  #btn-add { grid-area: ajout; width: 100%; padding: 13px 14px; font-size: 14px; }
+  /* Le bouton d'ajout pleine largeur, qui imposait ici une grille à deux
+     rangées, est devenu un « ＋ » à côté de la recherche : la rangée du
+     titre redevient un simple titre + avatar. Cette grille s'appliquait
+     d'ailleurs aussi à l'en-tête des Paramètres et des Mentions légales,
+     où elle renvoyait la flèche de retour à droite du titre. */
+  .topbar { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 10px; gap: 10px; }
+  .topbar-row h1 { font-size: 19px; }
+  .avatar-btn { width: 38px; height: 38px; }
   /* Clavier ouvert, « vh » compte toujours l ecran entier et la modale
      debordait. « dvh » suit la hauteur reellement visible. */
   .modal { padding: 16px; max-height: 92dvh; }
@@ -1325,11 +1468,15 @@ select,
     aspect-ratio: auto;
   }
 
+  /* 10 px et non plus 8,5 : c'est déjà le plus petit texte de la page. La
+     couverture ne fait que 92 px de large ici, d'où l'espacement resserré
+     pour que « ABANDONNÉE » y tienne. */
   .badge {
-    font-size: 8.5px;
-    padding: 3px 6px;
-    top: 6px;
-    left: 6px;
+    font-size: 10px;
+    letter-spacing: 0;
+    padding: 3px 5px;
+    top: 5px;
+    left: 5px;
   }
 
   .next-tag {

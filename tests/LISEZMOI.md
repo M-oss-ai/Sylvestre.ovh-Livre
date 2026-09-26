@@ -183,6 +183,9 @@ de données ni le réseau.
 `exiger_csrf`, `post_trop_gros`, `message_post_trop_gros`,
 `journal_securite`, `url_image_sure`, `type_image` (la provenance
 d'une couverture, pour le filtre avancé), `photo_depuis_formulaire`,
+`url_image_refusee` (une adresse saisie puis refusée, à distinguer de
+« rien de saisi »), `champ_aria` et `champ_erreur` (l'erreur d'un
+formulaire rattachée à son champ),
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
 `cron_en_ligne_de_commande`, `cron_refus_navigateur`,
 `cron_appelant_authentifie`, `cron_reglages`, `rapport_du`,
@@ -216,9 +219,11 @@ fenêtre glissante), les sessions persistantes (`creer_session_persistante`,
 la rotation des jetons, le plafond d'appareils), les jetons d'action
 (`generer_jeton_action`, `consommer_jeton_action`), les comptes
 (`utilisateur_actuel`, `connecter`, `invalider_sessions`,
-`email_disponible`), la file d'e-mails (`empiler_mail`,
-`traiter_file_mail`), `couverture_consommer` et `couverture_rendre` (le
-quota de recherche par compte : le barème est testé, le comptage non), `compter_series`, le cloisonnement par
+`email_disponible`, `changement_email_en_attente`), la file d'e-mails
+(`empiler_mail`, `traiter_file_mail`), `couverture_consommer`,
+`couverture_rendre` et `couverture_restantes` (le quota de recherche par
+compte : le barème est testé, le comptage non), `compter_series`,
+l'import d'une sauvegarde (ce qui distingue une série déjà présente), le cloisonnement par
 `utilisateur_id` d'`api.php` et le contenu chiffré du rapport de
 `purger.php` et la date de son dernier envoi (`rapport_etat`,
 `rapport_noter_envoi` : ses requêtes. Quand il part et sur quelle

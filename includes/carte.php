@@ -52,6 +52,10 @@ function carte_html(array $s): string
 
     $libelle_progression = $en_cours ? 'Vous en êtes au tome' : 'Dernier tome lu';
 
+    /* tabindex="-1" partout : au clavier, la grille ne compte qu'UN arrêt,
+       la carte « active », que js/app.js remet à 0 (les flèches passent
+       d'une carte à l'autre). Cinq arrêts par carte faisaient 780 appuis
+       sur Tab pour traverser 150 séries. */
     return '
       <article class="card status-' . e($statut) . '"
                data-id="' . (int) $s['id'] . '"
@@ -63,7 +67,7 @@ function carte_html(array $s): string
                data-mangadex="' . e((string) ($s['mangadex_id'] ?? '')) . '"
                data-favori="' . ($favori ? '1' : '0') . '"
                data-image="' . e(type_image($couverture)) . '">
-        <div class="card-cover" data-action="edit" role="button" tabindex="0" aria-label="Modifier ' . e($titre) . '">
+        <div class="card-cover" data-action="edit" role="button" tabindex="-1" aria-label="Modifier ' . e($titre) . '">
           ' . $image . '
           <span class="badge">' . e(STATUTS[$statut]) . '</span>
           ' . $etiquette . '
@@ -73,18 +77,18 @@ function carte_html(array $s): string
           <p class="card-subtitle">' . e($auteur) . '</p>
           <p class="card-progress">' . $libelle_progression . ' <b>' . $tome . '</b></p>
           <div class="card-actions">
-            <button type="button" class="btn-undo" data-action="undo"
+            <button type="button" class="btn-undo" data-action="undo" tabindex="-1"
                     title="Annuler : revenir au tome précédent"
                     aria-label="Annuler la dernière lecture"' . ($tome <= 0 ? ' disabled' : '') . '>←</button>
-            <button type="button" class="btn-advance" data-action="advance"
+            <button type="button" class="btn-advance" data-action="advance" tabindex="-1"
                     title="Marquer le tome ' . $suivant . ' comme lu"
                     aria-label="Marquer le tome ' . $suivant . ' comme lu">→</button>
-            <button type="button" class="btn-favori' . ($favori ? ' actif' : '') . '"
+            <button type="button" class="btn-favori' . ($favori ? ' actif' : '') . '" tabindex="-1"
                     data-action="favori" aria-pressed="' . ($favori ? 'true' : 'false') . '"
                     title="' . ($favori ? 'Retirer des favoris' : 'Mettre en favori') . '"
                     aria-label="' . ($favori ? 'Retirer' : 'Mettre') . ' &quot;' . e($titre) . '&quot; ' . ($favori ? 'des' : 'en') . ' favori' . ($favori ? 's' : '') . '">'
               . ETOILE_SVG . '</button>
-            <button type="button" class="btn-edit" data-action="edit"
+            <button type="button" class="btn-edit" data-action="edit" tabindex="-1"
                     title="Modifier / gérer la couverture" aria-label="Modifier ' . e($titre) . '">✏️</button>
           </div>
         </div>

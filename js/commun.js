@@ -72,21 +72,130 @@ window.Lib = (() => {
       // l'appelant peut en faire un compte à rebours plutôt que de
       // répéter un chiffre qui ne bougera plus.
       if (data.attente) erreur.attente = data.attente;
+      // Le champ fautif (« champ »), ou un message par champ (« erreurs ») :
+      // l'appelant pose chaque message sous son champ (voir erreurChamp).
+      if (data.champ) erreur.champ = data.champ;
+      if (data.erreurs && typeof data.erreurs === "object") erreur.erreurs = data.erreurs;
+      erreur.donnees = data; // le reste de la réponse, pour qui en a l'usage
       throw erreur;
     }
     return data;
   }
 
-  /* ---------- Toast ---------- */
+  /* ---------- Toast ----------
+     Pour les confirmations (« Série ajoutée ✅ ») : les ERREURS d'un
+     formulaire vont sous leur champ, voir erreurChamp().
 
-  function toast(msg, ms = 2600) {
+     La durée suit la longueur du message — 60 ms par caractère, quatre
+     secondes au moins. Elle était fixe (2,6 s), si bien qu'un message de
+     deux lignes disparaissait avant d'avoir été lu. Le survol ou le
+     focus la suspendent, et un clic la ferme. */
+
+  const TOAST_MIN_MS = 4000;
+  const TOAST_MS_PAR_CARACTERE = 60;
+
+  function toast(msg, ms) {
     const el = document.getElementById("toast");
     if (!el) return;
     el.textContent = msg; // textContent : jamais d'interprétation HTML
     el.classList.remove("hidden");
-    clearTimeout(toast._t);
-    toast._t = setTimeout(() => el.classList.add("hidden"), ms);
+    toast._duree = ms || Math.max(TOAST_MIN_MS, String(msg).length * TOAST_MS_PAR_CARACTERE);
+    toastArmer(el);
   }
+
+  function toastArmer(el) {
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.add("hidden"), toast._duree);
+  }
+
+  (() => {
+    const el = document.getElementById("toast");
+    if (!el) return;
+    const suspendre = () => clearTimeout(toast._t);
+    const reprendre = () => { if (!el.classList.contains("hidden")) toastArmer(el); };
+    el.addEventListener("mouseenter", suspendre);
+    el.addEventListener("mouseleave", reprendre);
+    el.addEventListener("focusin", suspendre);
+    el.addEventListener("focusout", reprendre);
+    el.addEventListener("click", () => { clearTimeout(toast._t); el.classList.add("hidden"); });
+  })();
+
+  /* ---------- Erreurs rattachées à leur champ ----------
+     Le message s'affiche SOUS le champ, qui le désigne (aria-describedby)
+     et se déclare invalide (aria-invalid) : un lecteur d'écran l'annonce
+     avec le champ, et l'œil le trouve à côté de sa cause. Il s'efface dès
+     qu'on corrige. Même convention d'identifiant (« <id>-erreur ») que les
+     messages posés par PHP (champ_erreur), qui s'effacent donc de même. */
+
+  function erreurChamp(champ, message) {
+    if (!champ) return;
+    const id = champ.id + "-erreur";
+    let p = document.getElementById(id);
+    if (!p) {
+      p = document.createElement("p");
+      p.className = "erreur-champ";
+      p.id = id;
+      (champ.closest(".password-wrap") || champ).after(p);
+    }
+    p.textContent = message;
+    champ.setAttribute("aria-invalid", "true");
+    const decrit = (champ.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    if (!decrit.includes(id)) champ.setAttribute("aria-describedby", [id, ...decrit].join(" "));
+  }
+
+  function effacerErreur(champ) {
+    if (!champ || !champ.id) return;
+    const id = champ.id + "-erreur";
+    const p = document.getElementById(id);
+    if (p) p.remove();
+    champ.removeAttribute("aria-invalid");
+    const reste = (champ.getAttribute("aria-describedby") || "").split(/\s+/).filter((x) => x && x !== id);
+    if (reste.length) champ.setAttribute("aria-describedby", reste.join(" "));
+    else champ.removeAttribute("aria-describedby");
+  }
+
+  function effacerErreurs(racine) {
+    racine.querySelectorAll('[aria-invalid="true"]').forEach(effacerErreur);
+  }
+
+  /**
+   * Pose les erreurs d'une réponse de l'API sur les champs : `champs`
+   * fait correspondre le nom côté serveur à l'élément. Retourne le premier
+   * champ marqué (à focaliser), ou null si aucune erreur n'y correspondait.
+   */
+  function erreursSurChamps(err, champs) {
+    const messages = err.erreurs
+      ? Object.entries(err.erreurs)
+      : err.champ ? [[err.champ, err.message]] : [];
+    let premier = null;
+    messages.forEach(([nom, msg]) => {
+      const champ = champs[nom];
+      if (!champ) return;
+      erreurChamp(champ, Array.isArray(msg) ? msg.join(" ") : String(msg));
+      if (!premier) premier = champ;
+    });
+    return premier;
+  }
+
+  // Corriger le champ efface son erreur : elle ne doit pas survivre à ce
+  // qui l'a causée. En phase de CAPTURE, donc avant les écouteurs du champ
+  // lui-même : celui d'une adresse d'image peut ainsi reposer aussitôt
+  // l'erreur si la nouvelle saisie est encore refusée.
+  document.addEventListener(
+    "input",
+    (e) => {
+      const champ = e.target;
+      if (champ && champ.getAttribute && champ.getAttribute("aria-invalid") === "true") effacerErreur(champ);
+    },
+    true
+  );
+
+  /* ---------- Adresse d'image : https uniquement ----------
+     La Content-Security-Policy n'accepte que « https: » pour les images,
+     et le serveur refuse le reste. Une adresse en http:// s'affichait en
+     image cassée, puis la série s'enregistrait « ✅ »… sans elle. */
+  const MESSAGE_URL_REFUSEE = "Seules les adresses d'image en https:// sont acceptées.";
+  const urlImageAcceptee = (val) => /^https:\/\/[^\s/]+/i.test(val);
 
   /* ---------- Attendre une pause dans la frappe ---------- */
 
@@ -305,7 +414,7 @@ window.Lib = (() => {
         if (statusEl) statusEl.textContent = "Image trop lourde (" + tailleLisible(max) + " maximum).";
         return;
       }
-      if (urlInput) urlInput.value = "";
+      if (urlInput) { urlInput.value = ""; effacerErreur(urlInput); }
       onChange({ type: "file", file, apercu: URL.createObjectURL(file) });
       if (statusEl) {
         statusEl.textContent = file === choisi
@@ -318,6 +427,16 @@ window.Lib = (() => {
       urlInput.addEventListener("input", () => {
         const val = urlInput.value.trim();
         if (fileInput) fileInput.value = "";
+        /* Refusée dès la saisie, avec la raison sous le champ — et non
+           plus acceptée à l'écran puis jetée sans un mot par le serveur.
+           « refusee » : l'appelant n'en fait pas d'aperçu, et bloque
+           l'enregistrement tant qu'elle reste dans le champ. */
+        if (val && !urlImageAcceptee(val)) {
+          erreurChamp(urlInput, MESSAGE_URL_REFUSEE);
+          onChange({ type: "url", value: val, refusee: true });
+          return;
+        }
+        effacerErreur(urlInput);
         onChange(val ? { type: "url", value: val } : null);
       });
     }
@@ -351,8 +470,8 @@ window.Lib = (() => {
         const uri = (dt.getData("text/uri-list") || dt.getData("text/plain") || "").trim();
         // https uniquement : la Content-Security-Policy n'autorise pas les
         // images en http, une URL http déposée donnerait une image cassée.
-        if (/^https:\/\//i.test(uri)) {
-          if (urlInput) urlInput.value = uri;
+        if (urlImageAcceptee(uri)) {
+          if (urlInput) { urlInput.value = uri; effacerErreur(urlInput); }
           if (fileInput) fileInput.value = "";
           onChange({ type: "url", value: uri });
           if (statusEl) statusEl.textContent = "Image liée depuis une URL déposée.";
@@ -706,9 +825,38 @@ window.Lib = (() => {
     });
   }
 
+  /* ---------- Retour arrière sur une page privée ----------
+
+     Le navigateur peut garder une page entière en mémoire et la
+     ressortir telle quelle au « Précédent » (bfcache), sans rien demander
+     au serveur — « no-store » n'y suffit pas partout. Après une
+     déconnexion ou la suppression du compte, la personne suivante
+     retrouvait ainsi le profil ou la bibliothèque de celle qui venait de
+     partir.
+
+     Une page marquée data-prive est donc masquée dès qu'elle ressort de
+     ce cache, le temps de demander au serveur si la session vit encore :
+     oui, elle réapparaît ; non (ou pas de réponse), elle cède la place à
+     la connexion, sans laisser d'entrée dans l'historique. */
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted || document.body.dataset.prive !== "1") return;
+    document.documentElement.classList.add("verification-session");
+    const fd = new FormData();
+    fd.set("action", "session.verifier");
+    fd.set("csrf", csrf());
+    fetch("api.php", { method: "POST", body: fd, credentials: "same-origin" })
+      .then((r) => {
+        if (!r.ok) throw new Error("session");
+        document.documentElement.classList.remove("verification-session");
+      })
+      .catch(() => window.location.replace("connexion.php"));
+  });
+
   return {
     csrf, api, toast, debounce, limite, tailleLisible,
     normalize, levenshtein, correspond, prepareRecherche, correspondPrepare,
     wireImagePicker, brancherToggleMotDePasse, piegerFocus,
+    erreurChamp, effacerErreur, effacerErreurs, erreursSurChamps, urlImageAcceptee,
+    MESSAGE_URL_REFUSEE,
   };
 })();
