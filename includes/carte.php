@@ -50,7 +50,12 @@ function carte_html(array $s): string
         ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>'
         : '';
 
-    $libelle_progression = $en_cours ? 'Vous en êtes au tome' : 'Dernier tome lu';
+    /* Le même libellé quel que soit le statut : c'est le dernier tome
+       TERMINÉ, ce que « Vous en êtes au tome » ne disait pas. À 0, aucun
+       tome n'est lu, et « tome 0 » ne voudrait rien dire. */
+    $progression = $tome > 0
+        ? 'Vous avez lu le tome <b>' . $tome . '</b>'
+        : 'Série non commencée';
 
     /* tabindex="-1" partout : au clavier, la grille ne compte qu'UN arrêt,
        la carte « active », que js/app.js remet à 0 (les flèches passent
@@ -75,7 +80,7 @@ function carte_html(array $s): string
         <div class="card-body">
           <h3 class="card-title">' . e($titre) . '</h3>
           <p class="card-subtitle">' . e($auteur) . '</p>
-          <p class="card-progress">' . $libelle_progression . ' <b>' . $tome . '</b></p>
+          <p class="card-progress">' . $progression . '</p>
           <div class="card-actions">
             <button type="button" class="btn-undo" data-action="undo" tabindex="-1"
                     title="Annuler : revenir au tome précédent"

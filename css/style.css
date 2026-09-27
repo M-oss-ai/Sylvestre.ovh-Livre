@@ -342,6 +342,15 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   animation: fade-in 0.25s ease;
 }
 
+/* Une carte posée par le script (créée, modifiée, étoilée) est dessinée
+   normalement, sans « content-visibility ». Sur iPhone — WebKit, sous
+   tous les navigateurs d'iOS — une carte insérée ainsi restait parfois
+   un cadre vide : son contenu, jugé hors de l'écran à l'insertion, n'était
+   plus jamais dessiné, et la série semblait avoir disparu. Elles ne sont
+   que quelques-unes par visite ; le gain de « content-visibility » tient
+   aux cent cinquante cartes du chargement, qui le gardent. */
+.card.card-posee { content-visibility: visible; }
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -494,7 +503,15 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   bottom: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(to top, rgba(10, 8, 6, 0.9) 0%, rgba(10, 8, 6, 0.9) 68%, rgba(10, 8, 6, 0) 100%);
+
+  background: linear-gradient(
+    to top,
+    rgba(10, 8, 6, 0.8) 0%,
+    rgba(10, 8, 6, 0.8) 40%,
+    rgba(10, 8, 6, 0.5) 75%,
+    rgba(10, 8, 6, 0) 100%
+  );
+
   color: var(--gold-light);
   font-size: 12px;
   font-weight: 700;
@@ -502,7 +519,6 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
-
 .card-body {
   padding: 12px 14px 14px;
   display: flex;
@@ -905,6 +921,17 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .cover-actions-buttons .btn { flex: 1; text-align: center; }
 
 .hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
+
+/* Inscription : la légende de l'astérisque, et la mention des champs
+   facultatifs, en casse normale dans une étiquette en capitales. */
+.legende-obligatoire { margin: 0 0 4px; text-align: right; }
+.field label .facultatif { text-transform: none; font-weight: 400; letter-spacing: 0; }
+
+/* L'aide sous « Tome lu » : collée au champ, sans pousser la rangée. */
+.field-row .hint { margin-top: 4px; }
+
+/* Le bouton « Exporter d'abord » dans la confirmation d'effacement. */
+.confirm-export { margin: 12px 0 4px; }
 
 /* ---------- Erreurs de formulaire ----------
    Sous le champ fautif, pas dans une notification passagère ni dans une

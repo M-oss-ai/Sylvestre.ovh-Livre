@@ -106,7 +106,40 @@ window.Bibliotheque = (() => {
       + " — le compteur repart à " + q.quota + " toutes les " + q.tranche + ".";
   }
 
-  return { voisine, suiviDefilement, annonceQuota, texteQuotaRecherche };
+  /**
+   * La couverture de la fiche, réduite à ce qui la distingue : "" sans
+   * image, l'adresse pour une URL, nom + taille + date pour un fichier.
+   */
+  function signatureCouverture(c) {
+    if (!c) return "";
+    if (c.type === "file") {
+      const f = c.file || {};
+      return "fichier:" + f.name + ":" + f.size + ":" + f.lastModified;
+    }
+    return "url:" + (c.value || "");
+  }
+
+  /**
+   * La fiche a-t-elle changé depuis son ouverture ? `avant` et `apres` :
+   * { titre, auteur, tome, statut, couverture }. Les blancs autour du
+   * titre et de l'auteur ne comptent pas (le serveur les retire), ni un
+   * tome vide, qui s'enregistre comme 0.
+   */
+  function ficheModifiee(avant, apres) {
+    if (!avant || !apres) return false;
+    const net = (v) => String(v == null ? "" : v).trim();
+    const tome = (v) => parseInt(v, 10) || 0;
+    return net(avant.titre) !== net(apres.titre)
+      || net(avant.auteur) !== net(apres.auteur)
+      || tome(avant.tome) !== tome(apres.tome)
+      || avant.statut !== apres.statut
+      || avant.couverture !== apres.couverture;
+  }
+
+  return {
+    voisine, suiviDefilement, annonceQuota, texteQuotaRecherche,
+    signatureCouverture, ficheModifiee,
+  };
 })();
 
 (() => {
@@ -454,6 +487,9 @@ window.Bibliotheque = (() => {
     // retirée dès l'animation finie, sinon « content-visibility » la
     // rejouerait à chaque fois que la carte repasse devant l'écran.
     nouvelle.classList.add("card-nouvelle");
+    // Hors de « content-visibility » pour de bon : voir .card-posee dans
+    // css/style.css (cartes vides sur iPhone).
+    nouvelle.classList.add("card-posee");
     nouvelle.addEventListener(
       "animationend",
       () => nouvelle.classList.remove("card-nouvelle"),
@@ -573,11 +609,16 @@ window.Bibliotheque = (() => {
      localStorage peut lever — navigation privée, stockage bloqué — et
      peut revenir vide. La page doit donc s'afficher correctement sans
      lui, d'où les deux try/catch et le repli sur « aucun filtre », qui
-     est le bon défaut. */
-  const CLE_FILTRES = "livre.filtres";
+     est le bon défaut.
+
+     Une clé par compte (voir Lib.cleFiltres). */
+  const CLE_FILTRES = L.cleFiltres(document.body.dataset.compte);
 
   function lireFiltres() {
     try {
+      // L'ancienne clé, commune à tous les comptes : on ne sait plus à qui
+      // elle appartenait, elle ne sert donc plus à personne.
+      localStorage.removeItem(L.CLE_FILTRES);
       const brut = localStorage.getItem(CLE_FILTRES);
       if (!brut) return;
       const f = JSON.parse(brut) || {};
@@ -848,6 +889,7 @@ window.Bibliotheque = (() => {
     $coverResults.replaceChildren();
 
     majApercu();
+    ficheAOuverture = etatFiche();
     $overlay.classList.remove("hidden");
     /* Pas de focus automatique sur un ecran tactile : il ouvre le clavier,
        qui recouvre aussitot l'apercu de la couverture — precisement ce qu'on
@@ -871,9 +913,50 @@ window.Bibliotheque = (() => {
     }
     idEnEdition = "";
     coverEnAttente = null;
+    ficheAOuverture = null;
     if (retour && retour.focus) retour.focus();
     focusAvantModale = null;
   }
+
+  /* ---------------- Modifications non enregistrées ----------------
+     Échap ou un clic à côté de la fiche la fermaient en jetant la saisie,
+     y compris une couverture qu'une recherche de plusieurs secondes venait
+     de trouver. Ces deux gestes-là sont des réflexes : ils demandent donc
+     confirmation dès que la fiche a changé. « Annuler » et « ✕ », eux,
+     disent clairement ce qu'ils font et ferment sans question. */
+
+  let ficheAOuverture = null;
+  const $abandonOverlay = document.getElementById("abandon-overlay");
+
+  function etatFiche() {
+    return {
+      titre: $fTitle.value,
+      auteur: $fSubtitle.value,
+      tome: $fVolume.value,
+      statut: $fStatus.value,
+      couverture: B.signatureCouverture(coverEnAttente),
+    };
+  }
+
+  function fermerSiRienNeChange() {
+    if (!B.ficheModifiee(ficheAOuverture, etatFiche())) {
+      fermerModale();
+      return;
+    }
+    $abandonOverlay.classList.remove("hidden");
+    // Le choix sans perte d'abord : un Entrée réflexe ne jette rien.
+    document.getElementById("abandon-non").focus();
+  }
+
+  function fermerAbandon(abandonner) {
+    $abandonOverlay.classList.add("hidden");
+    if (abandonner) fermerModale();
+    else $fTitle.focus();
+  }
+
+  document.getElementById("abandon-non").addEventListener("click", () => fermerAbandon(false));
+  document.getElementById("abandon-oui").addEventListener("click", () => fermerAbandon(true));
+  $abandonOverlay.addEventListener("click", (e) => { if (e.target === $abandonOverlay) fermerAbandon(false); });
 
   function majApercu() {
     // Une adresse refusée (http://…) n'a pas d'aperçu : l'image serait
@@ -898,7 +981,7 @@ window.Bibliotheque = (() => {
   document.getElementById("btn-add-first").addEventListener("click", demanderAjout);
   document.getElementById("btn-close").addEventListener("click", fermerModale);
   document.getElementById("btn-cancel").addEventListener("click", fermerModale);
-  $overlay.addEventListener("click", (e) => { if (e.target === $overlay) fermerModale(); });
+  $overlay.addEventListener("click", (e) => { if (e.target === $overlay) fermerSiRienNeChange(); });
 
   /* ---------------- Enregistrement ---------------- */
 
@@ -997,17 +1080,20 @@ window.Bibliotheque = (() => {
     const confirmOuverte = !$confirmOverlay.classList.contains("hidden");
     const modaleOuverte = !$overlay.classList.contains("hidden");
     const quotaOuvert = !!$quotaOverlay && !$quotaOverlay.classList.contains("hidden");
+    const abandonOuvert = !$abandonOverlay.classList.contains("hidden");
 
     if (e.key === "Tab") {
       if (quotaOuvert) L.piegerFocus($quotaOverlay, e);
+      else if (abandonOuvert) L.piegerFocus($abandonOverlay, e);
       else if (confirmOuverte) L.piegerFocus($confirmOverlay, e);
       else if (modaleOuverte) L.piegerFocus($overlay, e);
       return;
     }
     if (e.key !== "Escape") return;
     if (quotaOuvert) fermerQuota();
+    else if (abandonOuvert) fermerAbandon(false);   // Échap annule la question, pas la saisie
     else if (confirmOuverte) fermerConfirmation();
-    else if (modaleOuverte) fermerModale();
+    else if (modaleOuverte) fermerSiRienNeChange();
   });
 
   /* ---------------- Couverture ---------------- */
@@ -1218,6 +1304,7 @@ window.Bibliotheque = (() => {
   const TRANCHE_RECHERCHE = document.body.dataset.trancheRecherche || "";
 
   function majQuotaRecherche(q) {
+    if (!$quotaRecherche) return; // forfait illimité : aucun quota à annoncer
     $quotaRecherche.textContent = B.texteQuotaRecherche(q);
     $quotaRecherche.classList.toggle("quota-epuise", q.restantes <= 0);
   }

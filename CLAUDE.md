@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (531 tests : 487 PHP en 38 fichiers, 44 JavaScript)
+php tests/lancer.php              # toute la suite (550 tests : 495 PHP en 39 fichiers, 55 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -141,6 +141,17 @@ PREMIER élément de `<main class="bibliotheque">`, qui n'a pas de
 rembourrage haut : c'est ce qui la fait coller dès le premier pixel, et
 ce qui permet au script de la dire « collée » dès que `scrollY > 0`.
 
+**Un message après redirection passe par `flash()`, jamais par l'URL.**
+`?mdp=1` réaffichait « Mot de passe modifié » à chaque rechargement.
+`flash()` le range dans la session, `flash_prendre()` le lit une fois.
+La suppression du compte s'en sert aussi : `api.php` vide la session et
+la renouvelle (`session_regenerate_id`) au lieu de la détruire, pour que
+`connexion.php` puisse dire que c'est fait.
+
+**Les filtres mémorisés sont par compte** : `Lib.cleFiltres(id)`, avec
+l'id posé en `data-compte` sur `<body>`. Une clé commune faisait ouvrir
+à l'un sa bibliothèque sous le filtre laissé par l'autre.
+
 **Une page qui montre un compte est en `no-store`** (posé par
 `exiger_connexion()`) et porte `data-prive="1"` sur `<body>` : c'est ce
 qui l'empêche de revenir du cache par « Précédent » après une
@@ -154,7 +165,7 @@ Les confondre a déjà coûté cher. Ils ne protègent pas les mêmes choses.
 |---|---|---|
 | `limiteur_echec` / `tentative_ip` | les **comptes**, contre la force brute | Compte des **échecs**, double la peine à chaque récidive |
 | `mangadex_attendre_son_tour()` | l'**adresse IP du serveur**, face à MangaDex | File d'attente (`flock`, 250 ms). Ne compte personne, ne sanctionne personne |
-| `couverture_quota()` / `couverture_consommer()` | l'**équité entre comptes** | Règle fixe et annoncée : 30 recherches / 2 min (120 en forfait `illimite`). Aucune escalade |
+| `couverture_quota()` / `couverture_consommer()` | l'**équité entre comptes** | Règle fixe et annoncée : 30 recherches / 2 min en forfait standard. **Aucun quota en `illimite`** (`couverture_quota()` rend 0) : illimité veut dire illimité, seule la file d'attente l'espace. Aucune escalade |
 
 Le limiteur à peine doublante convient à des mots de passe essayés au
 hasard. L'appliquer à l'usage normal d'une fonctionnalité revient à
@@ -337,6 +348,14 @@ Déplier « Image ▾ » fait de même. Lu comme un geste, ce recalage cachait
 les filtres au moment précis où on les voulait. `suivreDefilement()`
 (`js/app.js`) ignore donc le mouvement de toute image où la hauteur de
 `<main>` ou de la barre a changé.
+
+**`content-visibility: auto` et WebKit.** Sur iPhone (tous les
+navigateurs d'iOS sont WebKit), une carte insérée par le script restait
+parfois un cadre vide : son contenu, jugé hors de l'écran à l'insertion,
+n'était plus jamais dessiné — « la série a disparu ». `poserCarte()`
+pose donc `.card-posee`, qui rend ces cartes en `content-visibility:
+visible`. Les cartes du chargement gardent `auto`, c'est là qu'est le
+gain. Non reproduit dans Chromium : à vérifier sur un vrai iPhone.
 
 **Un rapprochement symétrique a besoin d'un plancher de longueur.** La
 recherche de la bibliothèque (`correspondPrepare`, `js/commun.js`)

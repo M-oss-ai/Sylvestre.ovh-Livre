@@ -26,7 +26,7 @@ if (utilisateur_actuel()) {
    Les seuils et les durées se règlent dans le .env (voir config.php). */
 
 $erreur      = '';
-$info        = '';
+$info        = flash_prendre();   // « Votre compte a été supprimé », laissé par api.php
 /* Secondes restantes avant de pouvoir réessayer. Séparé du message :
    le gabarit en fait un compte à rebours, et le serveur le recalcule à
    chaque affichage — un rechargement au milieu d'une attente reprend

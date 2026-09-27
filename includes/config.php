@@ -488,13 +488,10 @@ define('COUVERTURE_FILE_MAX', min(5000, max(200, (int) env('COUVERTURE_FILE_MAX'
 define('COUVERTURE_FENETRE', min(3600, max(10, (int) env('COUVERTURE_FENETRE', '120'))));
 define('COUVERTURE_QUOTA', min(1000, max(1, (int) env('COUVERTURE_QUOTA', '30'))));
 
-/* Le forfait illimité a un plafond lui aussi, simplement plus haut :
-   sans plafond du tout, une page laissée à boucler occuperait la file
-   toute la journée et en priverait les autres comptes. Jamais sous le
-   quota ordinaire — ce serait un forfait « illimité » plus sévère que
-   les autres. */
-define('COUVERTURE_QUOTA_ILLIMITE',
-    min(5000, max(COUVERTURE_QUOTA, (int) env('COUVERTURE_QUOTA_ILLIMITE', '120'))));
+/* Le forfait illimité n'a PAS de quota de recherche : illimité veut dire
+   illimité. Seule la file d'attente vers MangaDex (COUVERTURE_ESPACEMENT,
+   plus haut) le ralentit, comme tout le monde — c'est elle qui protège le
+   serveur, pas un décompte par compte. Voir couverture_quota(). */
 
 /* Borne haute du numéro de tome (colonne INT UNSIGNED). */
 define('TOME_MAX', max(1, (int) env('TOME_MAX', '9999')));

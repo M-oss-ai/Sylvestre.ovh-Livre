@@ -67,7 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // redemande pas l'envoi du formulaire, et le gestionnaire de
             // mots de passe voit une navigation réussie — c'est ce qui
             // déclenche sa proposition d'enregistrement.
-            header('Location: parametres.php?mdp=1');
+            flash('Mot de passe modifié ✅ — les autres appareils ont été déconnectés.');
+            header('Location: parametres.php#securite');
             exit;
         }
     }
@@ -151,7 +152,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     . "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message."
                 );
             }
-            header('Location: parametres.php?profil=' . ($email_change ? '2' : '1'));
+            flash($email_change
+                ? "Profil enregistré ✅ — un lien de confirmation a été envoyé à votre nouvelle adresse. "
+                  . "Votre adresse actuelle reste active jusqu'au clic."
+                : 'Profil enregistré ✅');
+            header('Location: parametres.php#profil');
             exit;
         }
     }
@@ -164,7 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->prepare("DELETE FROM jeton_action WHERE utilisateur_id = ? AND type = 'changement_email'")
             ->execute([(int) $moi['id']]);
         journal_securite('changement_email_annule', ['utilisateur' => (int) $moi['id']]);
-        header('Location: parametres.php?profil=3');
+        flash("Demande de changement d'adresse annulée. Votre adresse actuelle reste celle du compte.");
+        header('Location: parametres.php#profil');
         exit;
     }
 
@@ -172,19 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $moi = exiger_connexion();
 }
 
-if (isset($_GET['mdp'])) {
-    $info = 'Mot de passe modifié ✅ — les autres appareils ont été déconnectés.';
-}
-if (($_GET['profil'] ?? '') === '1') {
-    $info = 'Profil enregistré ✅';
-}
-if (($_GET['profil'] ?? '') === '2') {
-    $info = "Profil enregistré ✅ — un lien de confirmation a été envoyé à votre nouvelle adresse. "
-          . "Votre adresse actuelle reste active jusqu'au clic.";
-}
-if (($_GET['profil'] ?? '') === '3') {
-    $info = "Demande de changement d'adresse annulée. Votre adresse actuelle reste celle du compte.";
-}
+// Laissé par la redirection qui suit un enregistrement : affiché une fois.
+$info = flash_prendre();
 
 $photo   = url_image_sure($moi['photo']);
 $csrf    = jeton_csrf();
@@ -218,7 +213,9 @@ $nb_series = (int) $req->fetchColumn();
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
-      data-import-max="<?= IMPORT_TAILLE_MAX ?>" data-prive="1">
+      data-import-max="<?= IMPORT_TAILLE_MAX ?>" data-prive="1"
+      data-compte="<?= (int) $moi['id'] ?>" data-series="<?= $nb_series ?>"
+      data-forfait="<?= e((string) $moi['forfait']) ?>">
 
 <header class="topbar settings-topbar">
   <div class="topbar-row settings-topbar-row">
@@ -436,13 +433,15 @@ $nb_series = (int) $req->fetchColumn();
         <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a> pour passer au forfait supérieur.
       </p>
     <?php endif; ?>
-    <p class="hint">
-      Recherche automatique de couverture : <b><?= $quota_recherche ?> recherches toutes les <?= e($tranche) ?></b>.
-      <?php if ($moi['forfait'] !== 'illimite' && COUVERTURE_QUOTA_ILLIMITE > $quota_recherche): ?>
-        Le forfait illimité en permet <?= COUVERTURE_QUOTA_ILLIMITE ?>.
-      <?php endif; ?>
-      Au-delà, il suffit d'attendre la fin des <?= e($tranche) ?> : le compteur repart de zéro.
-    </p>
+    <?php if ($quota_recherche > 0): ?>
+      <p class="hint">
+        Recherche automatique de couverture : <b><?= $quota_recherche ?> recherches toutes les <?= e($tranche) ?></b>.
+        Au-delà, il suffit d'attendre la fin des <?= e($tranche) ?> : le compteur repart de zéro.
+        Le forfait illimité n'a pas cette limite.
+      </p>
+    <?php else: ?>
+      <p class="hint">Recherche automatique de couverture : <b>sans limite</b>.</p>
+    <?php endif; ?>
   </section>
 
   <!-- ---------------- Images sensibles ----------------
@@ -546,6 +545,14 @@ $nb_series = (int) $req->fetchColumn();
   <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
     <h2 id="confirm-title">Confirmer ?</h2>
     <p id="confirm-text" class="hint">Cette action est définitive.</p>
+    <!-- Dernière occasion de sauvegarder, dans la fenêtre même qui efface :
+         un « pensez à exporter » ne servait à rien sans le bouton à côté.
+         Le fichier se télécharge sans quitter la page. -->
+    <form id="confirm-export" method="post" action="api.php" class="confirm-export hidden">
+      <input type="hidden" name="action" value="donnees.exporter">
+      <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+      <button type="submit" class="btn btn-ghost full">⬇️ Exporter d'abord mes <?= $nb_series ?> série(s)</button>
+    </form>
     <div class="field">
       <label for="confirm-password">Saisissez votre mot de passe pour confirmer</label>
       <div class="password-wrap">

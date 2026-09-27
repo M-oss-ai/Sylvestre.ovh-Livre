@@ -243,16 +243,10 @@ $csrf = jeton_csrf();
     <form method="post" action="inscription.php" autocomplete="on" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
 
-      <div class="field-row">
-        <div class="field">
-          <label for="prenom">Prénom</label>
-          <input id="prenom" name="prenom" type="text" autocomplete="given-name" value="<?= e($valeurs['prenom']) ?>">
-        </div>
-        <div class="field">
-          <label for="nom">Nom</label>
-          <input id="nom" name="nom" type="text" autocomplete="family-name" value="<?= e($valeurs['nom']) ?>">
-        </div>
-      </div>
+      <!-- L'essentiel d'abord, le facultatif (prénom, nom) en dernier : ce
+           dernier ouvrait le formulaire, et l'astérisque n'était expliqué
+           nulle part. -->
+      <p class="hint legende-obligatoire">* obligatoire</p>
 
       <div class="field">
         <label for="identifiant">Identifiant *</label>
@@ -284,12 +278,23 @@ $csrf = jeton_csrf();
         <label for="confirmation">Confirmer le mot de passe *</label>
         <div class="password-wrap">
           <input id="confirmation" name="confirmation" type="password" required
-                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="••••••••"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
+                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="confirmation"
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
         <p class="hint" id="mdp-regle"><?= e(MDP_REGLE) ?></p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="prenom">Prénom <span class="facultatif">(facultatif)</span></label>
+          <input id="prenom" name="prenom" type="text" autocomplete="given-name" value="<?= e($valeurs['prenom']) ?>">
+        </div>
+        <div class="field">
+          <label for="nom">Nom <span class="facultatif">(facultatif)</span></label>
+          <input id="nom" name="nom" type="text" autocomplete="family-name" value="<?= e($valeurs['nom']) ?>">
+        </div>
       </div>
 
       <button type="submit" class="btn btn-primary full">Créer mon compte</button>

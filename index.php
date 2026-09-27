@@ -45,7 +45,7 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
       data-quota-series="<?= (int) $quota_series ?>"
       data-quota-recherche="<?= (int) $quota_recherche ?>" data-tranche-recherche="<?= e($tranche) ?>"
-      data-prive="1">
+      data-compte="<?= (int) $moi['id'] ?>" data-prive="1">
 
 <!-- Premier arrêt au clavier : sans lui, atteindre la première série
      demandait de traverser tout l'en-tête et les filtres. -->
@@ -179,8 +179,13 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
 
       <div class="field-row">
         <div class="field">
-          <label for="f-volume">Tome actuel</label>
-          <input id="f-volume" name="tome_actuel" type="number" min="0" max="<?= TOME_MAX ?>" step="1" value="0" inputmode="numeric">
+          <!-- « Tome actuel » se lisait « celui que je lis », alors qu'on
+               attend le dernier tome TERMINÉ : la carte en déduit le tome
+               à emprunter. -->
+          <label for="f-volume">Tome lu</label>
+          <input id="f-volume" name="tome_actuel" type="number" min="0" max="<?= TOME_MAX ?>" step="1" value="0" inputmode="numeric"
+                 aria-describedby="f-volume-aide">
+          <p class="hint" id="f-volume-aide">0 : série non commencée</p>
         </div>
         <div class="field">
           <label for="f-status">Statut</label>
@@ -224,9 +229,11 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
         <p id="cover-status" class="hint" aria-live="polite"></p>
         <!-- La règle est dite AVANT la première recherche, puis le solde
              après chacune (voir chercherCouverture dans js/app.js). -->
+        <?php if ($quota_recherche > 0): ?>
         <p id="quota-recherche" class="hint quota-recherche">
           Recherche auto : <?= (int) $quota_recherche ?> recherches toutes les <?= e($tranche) ?>.
         </p>
+        <?php endif; ?>
 
         <div id="cover-results" class="cover-results hidden"></div>
       </div>
@@ -249,6 +256,20 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
       <div class="grow"></div>
       <button type="button" id="confirm-cancel" class="btn btn-ghost">Annuler</button>
       <button type="button" id="confirm-ok" class="btn btn-danger">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Échap ou un clic à côté d'une fiche modifiée : on demande avant de
+     jeter la saisie (voir fermerSiRienNeChange dans js/app.js). -->
+<div id="abandon-overlay" class="overlay hidden">
+  <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="abandon-titre" aria-describedby="abandon-texte">
+    <h2 id="abandon-titre">Abandonner les modifications ?</h2>
+    <p id="abandon-texte" class="hint">Ce que vous avez changé dans cette fiche n'est pas enregistré et sera perdu.</p>
+    <div class="modal-actions">
+      <div class="grow"></div>
+      <button type="button" id="abandon-non" class="btn btn-ghost">Continuer la saisie</button>
+      <button type="button" id="abandon-oui" class="btn btn-danger">Abandonner</button>
     </div>
   </div>
 </div>

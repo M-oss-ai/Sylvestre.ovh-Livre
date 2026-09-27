@@ -205,7 +205,8 @@ pour faire le ménage, pas un réglage du quotidien ; une pastille sur
 le bouton signale qu'il est actif alors qu'il est replié.
 
 L'état est gardé dans le `localStorage` du navigateur, sous
-`livre.filtres`. Il peut être indisponible — navigation privée,
+`livre.filtres.<numéro du compte>` : deux comptes du même appareil ne
+se partagent pas leurs filtres. Il peut être indisponible — navigation privée,
 stockage bloqué — et la page s'affiche alors sans filtre, ce qui est
 le bon défaut.
 
@@ -408,7 +409,8 @@ font pas le même travail :
   N secondes » plutôt que de retenir un processus PHP.
 - **Un quota par compte**, annoncé et sans escalade :
   `COUVERTURE_QUOTA` recherches par tranche de `COUVERTURE_FENETRE`
-  secondes (davantage pour le forfait illimité). Dépasser n'entraîne
+  secondes. Le forfait illimité n'a **pas** de quota : seule la file
+  d'attente ci-dessus l'espace, comme tout le monde. Dépasser n'entraîne
   aucune sanction — seulement l'attente de la tranche suivante, et une
   recherche qui n'est pas partie est rendue. La règle est dite **avant**
   la première recherche (sous le bouton, et dans Paramètres › Forfait),

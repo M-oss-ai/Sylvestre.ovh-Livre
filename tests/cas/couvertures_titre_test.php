@@ -117,19 +117,12 @@ test('un titre vide est ignoré au profit du suivant', function () {
 
 groupe('couverture_quota() — le barème par compte');
 
-test('le forfait illimité a droit à davantage', function () {
-    vrai(couverture_quota(['forfait' => 'illimite']) > couverture_quota(['forfait' => 'standard']),
-        'plus haut que le forfait ordinaire');
-    egale(COUVERTURE_QUOTA_ILLIMITE, couverture_quota(['forfait' => 'illimite']),
-        'exactement le réglage prévu pour lui');
-});
-
-test('« illimité » ne veut pas dire sans plafond', function () {
-    /* Sans aucun plafond, une page laissée à boucler occuperait la file
-       toute la journée et en priverait les autres comptes. Le forfait
-       donne droit à plus, pas à tout. */
-    vrai(couverture_quota(['forfait' => 'illimite']) > 0, 'un nombre fini');
-    vrai(is_int(couverture_quota(['forfait' => 'illimite'])), 'un entier de recherches');
+test('le forfait illimité n a pas de quota de recherche', function () {
+    /* Illimité veut dire illimité : 0, rien n est décompté (api.php ne
+       compte que si le quota est positif). Seule la file d attente vers
+       MangaDex espace ses recherches, comme celles de tout le monde. */
+    egale(0, couverture_quota(['forfait' => 'illimite']), 'aucun quota');
+    vrai(COUVERTURE_ESPACEMENT >= 100, 'la file d attente, elle, reste en place');
 });
 
 test('les autres forfaits reçoivent le quota ordinaire', function () {

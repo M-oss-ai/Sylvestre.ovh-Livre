@@ -7,10 +7,40 @@
    rien n'est cassé.
    ========================================================= */
 
+/* ---------------- Logique pure ----------------
+   Testée par tests/js, comme window.Bibliotheque dans app.js. */
+
+window.Parametres = (() => {
+  "use strict";
+
+  /**
+   * Ce que la suppression du compte emporte, dit AVANT de confirmer :
+   * le nombre de séries, et pour l'illimité, que le forfait ne revient
+   * pas avec un nouveau compte.
+   */
+  function texteSuppressionCompte(nbSeries, forfait) {
+    const series = nbSeries > 0
+      ? (nbSeries > 1 ? "vos " + nbSeries + " séries" : "votre série")
+      : "votre bibliothèque (vide)";
+    let texte = "Votre compte, votre profil et " + series + " seront définitivement effacés.";
+    if (forfait === "illimite") {
+      texte += " Le forfait illimité est attaché à ce compte : il ne reviendra pas si vous en créez un nouveau.";
+    }
+    return texte + " Cette action est irréversible.";
+  }
+
+  return { texteSuppressionCompte };
+})();
+
 (() => {
   "use strict";
 
   const L = window.Lib;
+  const P = window.Parametres;
+
+  // Hors de la page Paramètres — le banc de tests charge ce fichier pour
+  // sa logique pure : rien à brancher.
+  if (!document.getElementById("settings-dropzone")) return;
 
   L.brancherToggleMotDePasse();
 
@@ -366,6 +396,8 @@
   const $confirmText = document.getElementById("confirm-text");
   const $confirmOk = document.getElementById("confirm-ok");
   const $confirmPwd = document.getElementById("confirm-password");
+  const $confirmExport = document.getElementById("confirm-export");
+  const NB_SERIES = parseInt(document.body.dataset.series || "0", 10) || 0;
   let actionEnAttente = null;
   let elementDeclencheur = null;
 
@@ -373,6 +405,8 @@
     $confirmTitle.textContent = titre;
     $confirmText.textContent = texte;
     $confirmOk.textContent = libelle;
+    // Rien à sauvegarder dans une bibliothèque vide.
+    $confirmExport.classList.toggle("hidden", NB_SERIES === 0);
     $confirmPwd.value = "";
     L.effacerErreur($confirmPwd);
     actionEnAttente = action;
@@ -415,6 +449,8 @@
       const r = await L.api(action, { mot_de_passe: motDePasse });
       L.toast(r.message);
       fermerConfirmation();
+      // Les filtres mémorisés de ce compte ne serviront plus à personne.
+      if (action === "compte.supprimer") L.oublierFiltres(document.body.dataset.compte);
       if (r.redirection) {
         /* replace() et non une navigation ordinaire : la page du compte
            supprimé quitte l'historique, « Précédent » ne peut plus y
@@ -463,7 +499,7 @@
   document.getElementById("btn-clear-library").addEventListener("click", () => {
     demanderConfirmation(
       "Vider la bibliothèque ?",
-      "Toutes vos séries seront supprimées. Votre compte et votre profil sont conservés. Pensez à exporter une sauvegarde avant.",
+      "Toutes vos séries seront supprimées. Votre compte et votre profil sont conservés.",
       "Tout vider",
       "donnees.vider"
     );
@@ -472,7 +508,7 @@
   document.getElementById("btn-delete-account").addEventListener("click", () => {
     demanderConfirmation(
       "Supprimer le compte ?",
-      "Votre compte, votre profil et l'intégralité de votre bibliothèque seront définitivement supprimés. Cette action est irréversible.",
+      P.texteSuppressionCompte(NB_SERIES, document.body.dataset.forfait),
       "Supprimer définitivement",
       "compte.supprimer"
     );

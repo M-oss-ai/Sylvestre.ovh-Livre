@@ -1038,6 +1038,48 @@ function initiales(array $u): string
     return mb_strtoupper(mb_substr((string) ($u['identifiant'] ?? ''), 0, 2, 'UTF-8'), 'UTF-8');
 }
 
+/**
+ * Un message pour la PROCHAINE page affichée, et pour elle seule.
+ *
+ * Porté par l'URL (« ?mdp=1 »), il revenait à chaque rechargement :
+ * « Mot de passe modifié ✅ » s'affichait encore après avoir vidé la
+ * bibliothèque. Rangé dans la session, il disparaît dès qu'il est lu.
+ */
+function flash(string $message): void
+{
+    $_SESSION['flash'] = $message;
+}
+
+/** Le message laissé par flash(), retiré de la session au passage. */
+function flash_prendre(): string
+{
+    $message = (string) ($_SESSION['flash'] ?? '');
+    unset($_SESSION['flash']);
+    return $message;
+}
+
+/**
+ * Une durée en secondes, dite dans la plus grande unité qui la divise
+ * exactement : 31536000 → « 1 an », 2592000 → « 30 jours ».
+ * Sert aux mentions légales, qui lisent la durée des cookies dans le
+ * .env au lieu de l'écrire en dur.
+ */
+function duree_cookie_lisible(int $secondes): string
+{
+    $unites = [
+        [31536000, 'an', 'ans'], [86400, 'jour', 'jours'], [3600, 'heure', 'heures'],
+        [60, 'minute', 'minutes'], [1, 'seconde', 'secondes'],
+    ];
+    $secondes = max(0, $secondes);
+    foreach ($unites as [$taille, $un, $plusieurs]) {
+        if ($secondes >= $taille && $secondes % $taille === 0) {
+            $n = intdiv($secondes, $taille);
+            return $n . ' ' . ($n > 1 ? $plusieurs : $un);
+        }
+    }
+    return '0 seconde';
+}
+
 /* ---------------------------------------------------------------------
    6. Réponses JSON (API)
    --------------------------------------------------------------------- */

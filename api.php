@@ -734,8 +734,13 @@ switch ($action) {
            la ligne n'a plus besoin d'exister pour qu'on sache où écrire. */
         avertir_compte_supprime((string) $moi['email'], (string) $moi['identifiant']);
 
+        /* Une session vidée et renouvelée plutôt que détruite : la page
+           de connexion qui suit doit pouvoir dire que c'est fait. Elle
+           s'affichait sans un mot, et l'on se demandait si ça avait marché. */
         $_SESSION = [];
-        session_destroy();
+        session_regenerate_id(true);
+        flash('Votre compte et votre bibliothèque ont été supprimés. '
+            . 'Un e-mail de confirmation a été envoyé à ' . $moi['email'] . '.');
 
         reponse_json(['ok' => true, 'message' => 'Compte supprimé.', 'redirection' => 'connexion.php']);
     }
@@ -761,8 +766,8 @@ switch ($action) {
 
            Celle qui protège le SERVEUR vit dans mangadex_get(), sous
            forme de file d'attente : elle ne compte personne. */
-        $quota   = couverture_quota($moi);
-        $attente = couverture_consommer($mon_id, $quota, COUVERTURE_FENETRE);
+        $quota   = couverture_quota($moi);   // 0 : forfait illimité, rien n'est décompté
+        $attente = $quota > 0 ? couverture_consommer($mon_id, $quota, COUVERTURE_FENETRE) : 0;
         if ($attente > 0) {
             // « limite » : c'est le quota du COMPTE, pas l'encombrement du site.
             reponse_json(['ok' => false, 'attente' => $attente, 'limite' => 'compte', 'erreur' =>
@@ -790,7 +795,9 @@ switch ($action) {
             /* Rendue, puisqu'elle n'a rien donné et que l'utilisateur
                n'y est pour rien : son quota ne doit pas payer une
                indisponibilité du site. */
-            couverture_rendre($mon_id);
+            if ($quota > 0) {
+                couverture_rendre($mon_id);
+            }
             reponse_json(['ok' => false, 'attente' => $retard, 'erreur' =>
                 'Trop de recherches en cours sur le site. Réessayez dans '
                 . $retard . ' secondes.'], 429);
@@ -800,11 +807,12 @@ switch ($action) {
             'ok'        => true,
             'tome'      => $tome,
             'resultats' => $resultats,
-            'recherches' => [
+            // Pas de solde à annoncer sans quota (forfait illimité).
+            'recherches' => $quota > 0 ? [
                 'restantes' => couverture_restantes($mon_id, $quota),
                 'quota'     => $quota,
                 'tranche'   => couverture_tranche_lisible(COUVERTURE_FENETRE),
-            ],
+            ] : null,
             /* Signaler le filtre seulement quand il a pu retirer quelque
                chose ET que l'utilisateur peut y faire quelque chose. Si
                le site n'autorise pas la levée, le mentionner ne serait

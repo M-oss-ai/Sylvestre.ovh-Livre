@@ -99,6 +99,25 @@ window.Lib = (() => {
     return Math.max(TOAST_MIN_MS, String(msg).length * TOAST_MS_PAR_CARACTERE);
   }
 
+  /* Les filtres de la bibliothèque, mémorisés dans ce navigateur. La clé
+     porte le numéro du compte : sous une clé unique, deux comptes du même
+     appareil se partageaient leurs filtres — l'un ouvrait sa bibliothèque
+     sous le filtre laissé par l'autre, et ne trouvait plus ses séries. */
+  const CLE_FILTRES = "livre.filtres";
+
+  function cleFiltres(compte) {
+    return CLE_FILTRES + "." + String(compte || "");
+  }
+
+  /** Efface les filtres d'un compte qu'on supprime. Sans stockage, rien à faire. */
+  function oublierFiltres(compte) {
+    try {
+      localStorage.removeItem(cleFiltres(compte));
+    } catch (e) {
+      /* Stockage indisponible : il n'y a rien à effacer. */
+    }
+  }
+
   function toast(msg, ms) {
     const el = document.getElementById("toast");
     if (!el) return;
@@ -858,7 +877,7 @@ window.Lib = (() => {
   });
 
   return {
-    csrf, api, toast, dureeToast, debounce, limite, tailleLisible,
+    csrf, api, toast, dureeToast, cleFiltres, oublierFiltres, CLE_FILTRES, debounce, limite, tailleLisible,
     normalize, levenshtein, correspond, prepareRecherche, correspondPrepare,
     wireImagePicker, brancherToggleMotDePasse, piegerFocus,
     erreurChamp, effacerErreur, effacerErreurs, erreursSurChamps, urlImageAcceptee,

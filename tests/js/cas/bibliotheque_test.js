@@ -175,3 +175,44 @@ test("le solde, et quand il se reconstitue", () => {
   contient("encore 0 sur 120", B.texteQuotaRecherche({ restantes: 0, quota: 120, tranche: "2 minutes" }),
     "épuisé, forfait illimité");
 });
+
+groupe("Bibliotheque.ficheModifiee() — Échap ne jette plus une saisie");
+
+const FICHE = { titre: "One Piece", auteur: "Oda", tome: "3", statut: "cours", couverture: "url:https://x/a.jpg" };
+
+test("une fiche intacte se ferme sans question", () => {
+  faux(B.ficheModifiee(FICHE, { ...FICHE }), "rien n a changé");
+});
+
+test("chaque champ compte", () => {
+  vrai(B.ficheModifiee(FICHE, { ...FICHE, titre: "Naruto" }), "le titre — le cas relevé par l audit");
+  vrai(B.ficheModifiee(FICHE, { ...FICHE, auteur: "" }), "l auteur");
+  vrai(B.ficheModifiee(FICHE, { ...FICHE, tome: "4" }), "le tome");
+  vrai(B.ficheModifiee(FICHE, { ...FICHE, statut: "termine" }), "le statut");
+  vrai(B.ficheModifiee(FICHE, { ...FICHE, couverture: "" }), "l image retirée");
+});
+
+test("ce que le serveur ignorerait ne compte pas", () => {
+  faux(B.ficheModifiee(FICHE, { ...FICHE, titre: "  One Piece " }), "des blancs autour du titre");
+  faux(B.ficheModifiee({ ...FICHE, tome: "0" }, { ...FICHE, tome: "" }), "un tome vide vaut 0");
+});
+
+test("sans état d ouverture, pas de question", () => {
+  faux(B.ficheModifiee(null, FICHE), "fiche jamais ouverte");
+});
+
+groupe("Bibliotheque.signatureCouverture() — ce qui distingue une image");
+
+test("aucune image, une adresse, un fichier", () => {
+  egale("", B.signatureCouverture(null), "pas d image");
+  egale("url:https://x/a.jpg", B.signatureCouverture({ type: "url", value: "https://x/a.jpg" }), "une adresse");
+  egale("fichier:a.png:10:5",
+    B.signatureCouverture({ type: "file", file: { name: "a.png", size: 10, lastModified: 5 } }), "un fichier");
+});
+
+test("la même adresse, qu elle vienne de la base ou d une recherche", () => {
+  // « existante » ne fait pas une image différente : rouvrir puis fermer
+  // une fiche ne doit rien demander.
+  egale(B.signatureCouverture({ type: "url", value: "https://x/a.jpg", existante: true }),
+    B.signatureCouverture({ type: "url", value: "https://x/a.jpg" }), "même signature");
+});

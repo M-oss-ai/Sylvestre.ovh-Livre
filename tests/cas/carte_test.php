@@ -70,10 +70,18 @@ test('un statut inventé ne se glisse pas dans le HTML', function () {
 
 groupe('carte_html() — le tome et le repli des valeurs');
 
+test('une série à 0 est dite « non commencée », pas « tome 0 »', function () {
+    foreach (['cours', 'envie', 'termine', 'abandon'] as $statut) {
+        $html = carte_html(serie(['tome_actuel' => 0, 'statut' => $statut]));
+        contient('Série non commencée', $html, "statut {$statut}");
+        sans('lu le tome', $html, "aucun tome lu annoncé ({$statut})");
+    }
+});
+
 test('le tome suivant est annoncé pour une série en cours', function () {
     $html = carte_html(serie(['tome_actuel' => 3, 'statut' => 'cours']));
     contient('Tome 4 à emprunter', $html, 'le tome suivant, pas le tome courant');
-    contient('Vous en êtes au tome', $html, 'et le libellé de progression correspond');
+    contient('Vous avez lu le tome <b>3</b>', $html, 'et le dernier tome lu est dit tel quel');
 });
 
 test('une série « envie » annonce elle aussi un tome à emprunter', function () {
@@ -86,7 +94,7 @@ test('une série terminée n annonce plus rien à emprunter', function () {
        continue. */
     $html = carte_html(serie(['tome_actuel' => 27, 'statut' => 'termine']));
     sans('à emprunter', $html, 'aucune étiquette de tome suivant');
-    contient('Dernier tome lu', $html, 'le libellé change');
+    contient('Vous avez lu le tome <b>27</b>', $html, 'le même libellé qu en cours');
 });
 
 test('une série abandonnée non plus', function () {

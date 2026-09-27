@@ -251,8 +251,8 @@ il part, sur quelle période, et comment il l'affiche),
 `mots_encodes` (l'e-mail tel qu'il part : texte et HTML, liens vers le
 site seulement, en-têtes encodés), `import_serie` et `import_complement`
 (une ligne de sauvegarde, et ce que l'import rend à une série déjà
-présente), `titre_normalise`, `mangadex_titre`,
-`couverture_quota`, `couverture_tranche_lisible`,
+présente), `flash` et `flash_prendre` (le message qui ne revient pas au rechargement), `duree_cookie_lisible` et les mentions légales rendues selon `SESSION_DUREE` / `REMEMBER_DUREE_VIP`, `titre_normalise`, `mangadex_titre`,
+`couverture_quota` (0 pour l illimité : aucun quota), `couverture_tranche_lisible`,
 `mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
 qu'il refuse), `couverture_tome_vise`, `mangadex_image_locale` (son
 garde-fou avant tout réseau, seul le téléchargement lui-même ne l'est
@@ -296,7 +296,7 @@ effacée dès qu'on le corrige), `Lib.urlImageAcceptee`, `Lib.dureeToast`,
 `Bibliotheque.voisine` (les flèches dans la grille),
 `Bibliotheque.suiviDefilement` (les filtres qui s'effacent et reviennent,
 rebonds et recalages du navigateur compris), `Bibliotheque.annonceQuota`
-et `texteQuotaRecherche`.
+et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`.
 
 **Non couvert, côté navigateur** — le branchement sur la page : les
 écouteurs d'`app.js` et de `settings.js`, les appels à l'API, les

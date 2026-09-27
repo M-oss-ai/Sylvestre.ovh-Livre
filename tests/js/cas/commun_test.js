@@ -195,3 +195,24 @@ test("une erreur sans champ ne marque rien", () => {
   // Réseau coupé, session expirée… : c'est à l'appelant de l'afficher ailleurs.
   estNul(Lib.erreursSurChamps(new Error("Réseau indisponible."), {}), "rien à marquer");
 });
+
+groupe("Lib.cleFiltres() — des filtres par compte, pas par navigateur");
+
+test("chaque compte a sa clé", () => {
+  egale("livre.filtres.53", Lib.cleFiltres(53), "le numéro du compte");
+  differe(Lib.cleFiltres(53), Lib.cleFiltres(54), "deux comptes du même appareil ne se mélangent plus");
+  differe(Lib.CLE_FILTRES, Lib.cleFiltres(53), "et aucun ne retombe sur l ancienne clé commune");
+});
+
+test("oublierFiltres() efface ceux d un compte supprimé, et eux seuls", () => {
+  try {
+    localStorage.setItem(Lib.cleFiltres(901), "{}");
+    localStorage.setItem(Lib.cleFiltres(902), "{}");
+  } catch (e) {
+    return; // stockage indisponible (fichier local, navigation privée) : rien à vérifier
+  }
+  Lib.oublierFiltres(901);
+  estNul(localStorage.getItem(Lib.cleFiltres(901)), "le compte supprimé");
+  egale("{}", localStorage.getItem(Lib.cleFiltres(902)), "l autre compte garde les siens");
+  localStorage.removeItem(Lib.cleFiltres(902));
+});
