@@ -144,6 +144,8 @@ $connecte = utilisateur_actuel() !== null;
           les paramètres efface immédiatement et définitivement l'ensemble.</li>
       <li><b>Compteurs de tentatives</b> — 30 jours.</li>
       <li><b>Liens de confirmation et de réinitialisation</b> — 24 h et 1 h respectivement.</li>
+      <li><b>Lien de blocage d'un changement d'adresse</b> — 7 jours. Il conserve pendant ce
+          délai l'ancienne adresse, pour pouvoir la rendre au compte.</li>
       <li><b>Journaux du serveur</b> — conservés par l'hébergeur selon sa propre politique.</li>
     </ul>
 
@@ -172,9 +174,23 @@ $connecte = utilisateur_actuel() !== null;
       fonctionnement, qui ne demandent donc pas de consentement :
     </p>
     <ul class="legal-puces">
-      <li><code>LIVRE_SESSION</code> — maintient votre session le temps de votre visite.</li>
-      <li><code>LIVRE_REMEMBER</code> — uniquement sur les comptes au forfait illimité,
-          pour éviter de se reconnecter à chaque visite. Supprimé à la déconnexion.</li>
+      <?php /* Les durées sont lues dans la configuration (SESSION_DUREE,
+               REMEMBER_DUREE_VIP) et non écrites ici : le texte annonçait
+               « le temps de votre visite » alors que le serveur réglait le
+               cookie sur un an. */ ?>
+      <?php if (SESSION_DUREE > 0): ?>
+        <li><code>LIVRE_SESSION</code> — maintient votre session. Votre navigateur le
+            conserve <?= e(duree_cookie_lisible(SESSION_DUREE)) ?> au plus ; il est effacé à la
+            déconnexion.</li>
+      <?php else: ?>
+        <li><code>LIVRE_SESSION</code> — maintient votre session le temps de votre visite :
+            il disparaît à la fermeture du navigateur, ou à la déconnexion.</li>
+      <?php endif; ?>
+      <?php if (REMEMBER_DUREE_VIP > 0): ?>
+        <li><code>LIVRE_REMEMBER</code> — uniquement sur les comptes au forfait illimité,
+            pour éviter de se reconnecter à chaque visite. Conservé
+            <?= e(duree_cookie_lisible(REMEMBER_DUREE_VIP)) ?> au plus, et supprimé à la déconnexion.</li>
+      <?php endif; ?>
     </ul>
     <p class="hint">Aucun cookie de mesure d'audience ni de publicité.</p>
   </section>

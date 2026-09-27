@@ -44,23 +44,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $mdp                    = (string) ($_POST['mot_de_passe'] ?? '');
     $mdp2                   = (string) ($_POST['confirmation'] ?? '');
 
-    if ($bloque === 0) {
+    /* Rangées par champ, dans l'ordre du formulaire : chaque message
+       s'affiche sous son champ, et le premier champ fautif prend le focus
+       (voir champ_aria). La clé '' porte ce qui ne tient à aucun champ.
+
+       Bloqué, on s'ARRÊTE là. Les contrôles ci-dessous étaient sautés,
+       mais la liste d'erreurs restait vide, si bien que la suite créait
+       le compte quand même : sans aucune vérification (un mot de passe
+       « x » passait) et sans rien décompter. Le limiteur ne limitait
+       plus rien du tout. */
+    if ($bloque > 0) {
+        $erreurs[''] = '';   // le message est celui du compte à rebours, plus bas
+    } else {
         if (!preg_match('/^[A-Za-z0-9._-]{3,30}$/', $valeurs['identifiant'])) {
-            $erreurs[] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
+            $erreurs['identifiant'] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
         }
         if (!filter_var($valeurs['email'], FILTER_VALIDATE_EMAIL)) {
-            $erreurs[] = "L'adresse e-mail n'est pas valide.";
+            $erreurs['email'] = "L'adresse e-mail n'est pas valide.";
         }
-        $erreurs = array_merge($erreurs, valider_mot_de_passe($mdp, $valeurs['identifiant']));
+        if ($faiblesses = valider_mot_de_passe($mdp, $valeurs['identifiant'])) {
+            $erreurs['mot_de_passe'] = $faiblesses;
+        }
         if ($mdp !== $mdp2) {
-            $erreurs[] = 'Les deux mots de passe ne correspondent pas.';
+            $erreurs['confirmation'] = 'Les deux mots de passe ne correspondent pas.';
         }
     }
 
     if (!$erreurs) {
         $nb_utilisateurs = (int) $pdo->query('SELECT COUNT(*) FROM utilisateur')->fetchColumn();
         if ($nb_utilisateurs >= MAX_UTILISATEURS) {
-            $erreurs[] = 'Le nombre maximum de comptes (' . MAX_UTILISATEURS . ') a été atteint. '
+            $erreurs[''] = 'Le nombre maximum de comptes (' . MAX_UTILISATEURS . ') a été atteint. '
                 . 'Merci de contacter l\'administrateur à ' . ADMIN_EMAIL . '.';
         }
     }
@@ -72,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $req = $pdo->prepare('SELECT id FROM utilisateur WHERE identifiant = ?');
         $req->execute([$valeurs['identifiant']]);
         if ($req->fetch()) {
-            $erreurs[] = 'Cet identifiant est déjà pris, choisissez-en un autre.';
+            $erreurs['identifiant'] = 'Cet identifiant est déjà pris, choisissez-en un autre.';
         }
     }
 
@@ -80,8 +93,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
        et n'est jamais connecté : c'est ce qui rend les deux cas
        (adresse libre / adresse déjà inscrite) indiscernables. */
     if (!$erreurs) {
-        $req = $pdo->prepare('SELECT id, identifiant FROM utilisateur WHERE email = ?');
-        $req->execute([$valeurs['email']]);
+        /* Une adresse que son titulaire peut encore rétablir (lien de
+           blocage en cours de validité, voir reinitialiser-mot-de-passe.php)
+           compte comme prise. Sinon l'attaquant, une fois son changement
+           d'adresse confirmé, inscrirait un compte avec celle de sa victime :
+           le lien de blocage heurterait alors la contrainte d'unicité, et
+           l'adresse ne pourrait plus être rendue. */
+        $req = $pdo->prepare(
+            "SELECT id, identifiant FROM utilisateur WHERE email = ?
+             UNION
+             SELECT u.id, u.identifiant
+               FROM jeton_action j
+               JOIN utilisateur u ON u.id = j.utilisateur_id
+              WHERE j.type = 'blocage_email' AND j.donnee = ? AND j.expire > NOW()
+             LIMIT 1"
+        );
+        $req->execute([$valeurs['email'], $valeurs['email']]);
         $existant = $req->fetch();
 
         if ($existant) {
@@ -202,65 +229,72 @@ $csrf = jeton_csrf();
       <p class="hint">Votre bibliothèque vous suit d'un appareil à l'autre.</p>
     </div>
 
-    <?php if ($erreurs || $attente > 0): ?>
+    <!-- Seules les erreurs qui ne tiennent à aucun champ restent ici ; les
+         autres s'affichent sous leur champ. -->
+    <?php if (($erreurs[''] ?? '') !== '' || $attente > 0): ?>
       <div class="alert alert-error" role="alert">
-        <ul>
-          <?php if ($attente > 0): ?>
-            <li>Trop de tentatives depuis cette adresse. Réessayez dans <b class="delai" data-restant="<?= (int) $attente ?>"><?= (int) $attente ?> secondes</b>.</li>
-          <?php endif; ?>
-          <?php foreach ($erreurs as $msg): ?>
-            <li><?= e($msg) ?></li>
-          <?php endforeach; ?>
-        </ul>
+        <?php if ($attente > 0): ?>
+          Trop de tentatives depuis cette adresse. Réessayez dans <b class="delai" data-restant="<?= (int) $attente ?>"><?= (int) $attente ?> secondes</b>.
+        <?php endif; ?>
+        <?= e($erreurs[''] ?? '') ?>
       </div>
     <?php endif; ?>
 
     <form method="post" action="inscription.php" autocomplete="on" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
 
-      <div class="field-row">
-        <div class="field">
-          <label for="prenom">Prénom</label>
-          <input id="prenom" name="prenom" type="text" autocomplete="given-name" value="<?= e($valeurs['prenom']) ?>">
-        </div>
-        <div class="field">
-          <label for="nom">Nom</label>
-          <input id="nom" name="nom" type="text" autocomplete="family-name" value="<?= e($valeurs['nom']) ?>">
-        </div>
-      </div>
+      <!-- L'essentiel d'abord, le facultatif (prénom, nom) en dernier : ce
+           dernier ouvrait le formulaire, et l'astérisque n'était expliqué
+           nulle part. -->
+      <p class="hint legende-obligatoire">* obligatoire</p>
 
       <div class="field">
         <label for="identifiant">Identifiant *</label>
         <input id="identifiant" name="identifiant" type="text" required autocomplete="username"
-               placeholder="Ex. lecteur-manga" value="<?= e($valeurs['identifiant']) ?>">
+               placeholder="Ex. lecteur-manga" value="<?= e($valeurs['identifiant']) ?>"<?= champ_aria($erreurs, 'identifiant', 'identifiant') ?>>
+        <?= champ_erreur($erreurs, 'identifiant', 'identifiant') ?>
       </div>
 
       <div class="field">
         <label for="email">E-mail *</label>
         <input id="email" name="email" type="email" required autocomplete="email"
-               placeholder="vous@exemple.com" value="<?= e($valeurs['email']) ?>">
-        <p class="hint">Vous recevrez un lien de confirmation : il faut le suivre pour activer le compte.</p>
+               placeholder="vous@exemple.com" value="<?= e($valeurs['email']) ?>"<?= champ_aria($erreurs, 'email', 'email', 'email-aide') ?>>
+        <?= champ_erreur($erreurs, 'email', 'email') ?>
+        <p class="hint" id="email-aide">Vous recevrez un lien de confirmation : il faut le suivre pour activer le compte.</p>
       </div>
 
       <div class="field">
         <label for="mot_de_passe">Mot de passe *</label>
         <div class="password-wrap">
           <input id="mot_de_passe" name="mot_de_passe" type="password" required
-                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="<?= MDP_MIN ?> caractères minimum">
+                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="<?= MDP_MIN ?> caractères minimum"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe', 'mdp-regle') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="mot_de_passe"
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
+        <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
       </div>
 
       <div class="field">
         <label for="confirmation">Confirmer le mot de passe *</label>
         <div class="password-wrap">
           <input id="confirmation" name="confirmation" type="password" required
-                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="••••••••">
+                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="confirmation"
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
-        <p class="hint"><?= e(MDP_REGLE) ?></p>
+        <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
+        <p class="hint" id="mdp-regle"><?= e(MDP_REGLE) ?></p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="prenom">Prénom <span class="facultatif">(facultatif)</span></label>
+          <input id="prenom" name="prenom" type="text" autocomplete="given-name" value="<?= e($valeurs['prenom']) ?>">
+        </div>
+        <div class="field">
+          <label for="nom">Nom <span class="facultatif">(facultatif)</span></label>
+          <input id="nom" name="nom" type="text" autocomplete="family-name" value="<?= e($valeurs['nom']) ?>">
+        </div>
       </div>
 
       <button type="submit" class="btn btn-primary full">Créer mon compte</button>

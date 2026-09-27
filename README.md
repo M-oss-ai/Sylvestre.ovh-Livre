@@ -61,10 +61,48 @@ curl -H "X-Cron-Token: VOTRE_CRON_TOKEN" https://votredomaine.fr/purger.php
 Elle supprime les jetons expirés, les compteurs de tentatives périmés,
 les images orphelines, et rejoue les e-mails qui n'étaient pas partis.
 
-Chaque passage envoie un **rapport d'activité** à `ADMIN_EMAIL` :
-nombre de comptes et de séries, nouveautés des dernières 24 h,
-tentatives de connexion échouées, e-mails bloqués, taille de la base
-et des images, et le détail du ménage effectué.
+Elle envoie un **rapport d'activité** à `ADMIN_EMAIL` : nombre de
+comptes et de séries, nouveautés de la période, tentatives de connexion
+échouées, e-mails bloqués, taille de la base et des images, et le
+détail du ménage effectué.
+
+**Le cron reste quotidien, le rapport peut s'espacer.** Deux réglages
+du `.env`, en heures :
+
+| Variable | Rôle | Exemple |
+|---|---|---|
+| `CRON_HEURES` | L'espacement réglé chez l'hébergeur | `24` (défaut) |
+| `RAPPORT_HEURES` | Tous les combien d'heures le rapport part. `0` = à chaque passage (défaut) | `168` = chaque semaine |
+
+Espacer le cron lui-même serait une fausse bonne idée : c'est aussi lui
+qui rejoue les e-mails bloqués (confirmation d'inscription, mot de passe
+oublié). Avec un passage hebdomadaire, un utilisateur pourrait attendre
+son lien jusqu'à une semaine, et il aurait peut-être expiré entre-temps.
+
+Le serveur retient la date du dernier rapport envoyé (table
+`rapport_cron`). Le suivant part au premier passage où `RAPPORT_HEURES`
+sont écoulées, avec une marge d'une demi-période de cron. Un cron que
+l'hébergeur lance « dans l'heure », tantôt à 3 h 02, tantôt à 3 h 58, ne
+saute ni ne double donc aucun rapport. C'est à ça que sert
+`CRON_HEURES`, et c'est pourquoi `RAPPORT_HEURES` ne peut pas lui être
+inférieur.
+
+Le rapport couvre le temps **réellement écoulé** depuis le précédent, et
+l'affiche ainsi :
+
+| Écoulé | Affiché |
+|---|---|
+| 1 à 47 heures | `depuis 1 heure`, `depuis 47 heures` |
+| 48 heures et plus | `depuis 2 jours`, `depuis 7 j et 5 heures` |
+
+**Une anomalie n'attend pas l'échéance** (e-mail perdu, file d'envoi
+bloquée) : le rapport part tout de suite, avec `[ANOMALIE]` dans le
+sujet, sans décaler le suivant. Un rapport dû mais qui n'a pas pu partir
+(SMTP en panne) est retenté au passage suivant.
+
+Plafond de 720 heures (30 jours) : la purge efface au-delà les compteurs
+de tentatives de connexion, et la rubrique sécurité ne couvrirait plus
+la période annoncée.
 
 Ce rapport part en envoi **direct**, sans passer par la file de
 rattrapage : un rapport est périssable, le suivant arrive au passage
@@ -127,6 +165,7 @@ importantes :
 | `APP_URL` | Adresse publique. Sert à fabriquer les liens des e-mails |
 | `DB_*` · `SMTP_*` | Base de données et compte d'envoi |
 | `CRON_TOKEN` | Jeton exigé par `purger.php` en HTTP |
+| `CRON_HEURES` · `RAPPORT_HEURES` | Espacement du cron réglé chez l'hébergeur, et tous les combien d'heures part son rapport (24 et 168 : cron quotidien, rapport hebdomadaire) |
 | `UPLOAD_SECRET` | Sel des noms de fichiers envoyés |
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |
@@ -136,6 +175,101 @@ importantes :
 | `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `LEGAL_*` | Mentions légales |
+
+---
+
+## Favoris et filtres
+
+L'étoile de chaque carte pose ou retire un favori. Elle vit dans la
+rangée d'actions et non sur la couverture : sur téléphone la carte
+passe à l'horizontale et sa vignette ne fait plus que 70 px, où
+l'étoile se cognait à la pastille de statut.
+
+Les filtres **se cumulent** et **survivent au rechargement** :
+
+| Filtre | Valeurs |
+|---|---|
+| Statut | En cours · Envie · Terminée · Abandonnée |
+| Favoris | oui / non |
+| Type d'image | Pas d'image · MangaDex · Importée · Lien |
+
+Cocher deux statuts montre les deux ; les familles se croisent
+(« terminées **et** sans image »). « Toutes » n'est pas un filtre de
+plus, c'est la remise à zéro des statuts.
+
+Le type d'image est classé côté serveur par `type_image()` et voyage
+dans un attribut `data-image` : le navigateur n'a pas à redécouvrir
+ce qu'une URL veut dire, et la règle ne peut pas diverger entre les
+deux. Ce panneau est replié par défaut — c'est un filtre qu'on sort
+pour faire le ménage, pas un réglage du quotidien ; une pastille sur
+le bouton signale qu'il est actif alors qu'il est replié.
+
+L'état est gardé dans le `localStorage` du navigateur, sous
+`livre.filtres.<numéro du compte>` : deux comptes du même appareil ne
+se partagent pas leurs filtres. Il peut être indisponible — navigation privée,
+stockage bloqué — et la page s'affiche alors sans filtre, ce qui est
+le bon défaut.
+
+### Une série qu'on modifie ne disparaît pas sous vos yeux
+
+Retirer une série des favoris pendant que le filtre « Favoris » est
+actif, ou changer son image pendant que le filtre « Image » exclut la
+nouvelle — sans précaution, la carte se serait effacée au moment même
+où on vient de la toucher.
+
+Une série créée ou modifiée reçoit donc une **exception**, par
+catégorie de filtre (statut, favoris, image — jamais la recherche) :
+elle reste visible même si elle ne correspond plus, jusqu'à ce qu'on
+retouche cette catégorie précise. « Retouche » veut dire n'importe quel
+clic dans la catégorie, pas forcément le bouton exact qui l'exclut —
+cliquer sur « Abandonnée » revérifie aussi une exception née d'un
+passage à « En cours ». C'est la règle la plus simple des deux
+possibles : l'autre (ne réagir qu'à la valeur exacte) demanderait de
+suivre, par carte, ce qu'elle portait au moment de l'exception, pour un
+résultat plus difficile à deviner.
+
+Une série tout juste **créée** reçoit la même exception sur les trois
+catégories : elle apparaît toujours, quels que soient les filtres actifs.
+
+Les filtres sont en tête de la liste, **hors** de la barre collante :
+seuls le titre, la recherche et le « ＋ » restent en haut de l'écran.
+Sur téléphone, la barre occupait jusqu'au tiers de l'écran ; elle en
+prend désormais 15 %.
+
+Pas besoin de remonter tout en haut pour autant : les filtres se
+collent sous la barre, s'y effacent quand on descend et reviennent dès
+qu'on remonte d'une dizaine de pixels. Un filtre changé depuis là
+ramène en haut de la liste, pour la lire depuis son début. Au clavier,
+revenir sur les filtres (Maj+Tab depuis la grille) les fait réapparaître.
+
+### Au clavier
+
+La grille ne compte qu'**un** arrêt de tabulation : la carte active.
+Les flèches passent d'une série à l'autre (haut et bas restent dans la
+colonne), Début et Fin vont aux extrémités, Tab mène aux boutons de la
+carte puis sort de la grille. Chaque carte en ajoutait cinq : il
+fallait 780 appuis pour traverser 150 séries. Un lien « Aller aux
+séries », premier arrêt de la page, évite l'en-tête et les filtres.
+
+`carte.php` pose `tabindex="-1"` partout, `js/app.js` rend le sien à la
+carte active — et le garde à la carte qui la remplace après une action.
+
+### Limite de séries
+
+Le forfait standard est annoncé dès 90 % de la limite (« 148 / 150 »),
+et une fois la bibliothèque pleine, « ＋ » explique la limite au lieu
+d'ouvrir une fiche qu'on remplirait pour rien. Le serveur reste le
+garde-fou : le quota est appliqué dans l'`INSERT`.
+
+### Sauvegarde
+
+L'export (JSON, format version 2) contient les favoris ; le lien
+MangaDex se déduit de l'URL de la couverture, à l'import comme partout.
+L'import **n'ajoute que les séries absentes** : une série déjà présente
+(même titre, à la casse et aux accents près) n'est jamais dupliquée ;
+elle récupère seulement l'image ou l'étoile qui lui manquent. Réimporter
+le même fichier ne change donc rien. Le résultat reste affiché dans la
+page.
 
 ---
 
@@ -170,9 +304,19 @@ l'image** (`mangadex_id_depuis_url()`). Conséquence directe, et voulue :
 | un fichier depuis votre appareil | **coupé** |
 | une URL d'un autre site | **coupé** |
 | « Retirer l'image » | **coupé** |
+| **🔓 Délier de MangaDex** | **coupé**, image conservée |
 
 Les deux ne peuvent donc pas se contredire, et votre image n'est jamais
 écrasée par une mise à jour automatique.
+
+Le bouton **🔓 Délier de MangaDex** couvre le cas qui manquait : garder
+l'image affichée sans qu'elle continue à suivre les tomes — une édition
+particulière qu'on a choisie à la main, par exemple. Il rapatrie la
+couverture en local (même traitement que n'importe quelle image
+envoyée : redimension, ré-encodage WebP), ce qui lui fait perdre son URL
+MangaDex — et le lien disparaît alors de lui-même, par la même règle que
+tout le reste de cette section. Il n'apparaît, comme son voisin, que sur
+une série déjà liée.
 
 Le rafraîchissement automatique **n'accepte que la couverture du tome
 exact**. Si ce tome n'en a pas — fréquent au-delà des premiers — l'image
@@ -265,9 +409,12 @@ font pas le même travail :
   N secondes » plutôt que de retenir un processus PHP.
 - **Un quota par compte**, annoncé et sans escalade :
   `COUVERTURE_QUOTA` recherches par tranche de `COUVERTURE_FENETRE`
-  secondes (davantage pour le forfait illimité). Dépasser n'entraîne
+  secondes. Le forfait illimité n'a **pas** de quota : seule la file
+  d'attente ci-dessus l'espace, comme tout le monde. Dépasser n'entraîne
   aucune sanction — seulement l'attente de la tranche suivante, et une
-  recherche qui n'est pas partie est rendue.
+  recherche qui n'est pas partie est rendue. La règle est dite **avant**
+  la première recherche (sous le bouton, et dans Paramètres › Forfait),
+  puis le solde après chacune : « encore 27 sur 30 ».
 
 Le rafraîchissement d'une série liée **ne consomme pas ce quota**. Un
 quota répartit une ressource coûteuse ; il s'agit ici d'un appel
@@ -324,7 +471,13 @@ Sans dépendance, comme le reste : le lanceur tient en deux fichiers. Le
 script se termine avec un code de retour non nul en cas d'échec.
 
 Pour n'exécuter qu'une partie des fichiers, passez un fragment de leur
-nom — `php tests/lancer.php mot_de_passe`.
+nom — `php tests/lancer.php mot_de_passe`, ou `php tests/lancer.php
+javascript` pour le seul JavaScript.
+
+**Le JavaScript se teste dans un vrai navigateur**, sans Node : le même
+lanceur ouvre `tests/js/banc.html` dans Edge ou Chrome, sans fenêtre, et
+relit le compte rendu. Sans navigateur trouvé, il le dit et passe ; la
+page s'ouvre aussi à la main, d'un double-clic.
 
 **MySQL doit tourner**, même si aucun de ces tests n'interroge la base :
 `includes/config.php` ouvre une connexion PDO dès son inclusion, et il
@@ -337,8 +490,11 @@ Le périmètre est celui des **fonctions pures** : politique de mot de
 passe, échappement HTML, filtrage des URL d'images, traitement des
 images envoyées (y compris la rotation EXIF et le refus des bombes de
 décompression), identification du client derrière un répartiteur,
-journal de sécurité, jeton CSRF, gabarit des cartes, et les planchers de
-toutes les constantes du `.env`.
+journal de sécurité, jeton CSRF, gabarit des cartes, composition des
+e-mails, lecture d'une sauvegarde à importer, et les planchers de
+toutes les constantes du `.env`. Côté navigateur : les erreurs posées
+sous leur champ, la navigation au clavier dans la grille, le défilement
+qui cache et ramène les filtres, les textes des quotas.
 
 Ce qui demande la base de données — limiteur anti force brute, jetons,
 sessions persistantes, file d'e-mails, cloisonnement par compte — n'est
@@ -352,7 +508,9 @@ pas couvert. `tests/LISEZMOI.md` en donne la liste exacte.
 (`htmlspecialchars`). Côté navigateur, rien n'est injecté en `innerHTML`
 sauf le HTML produit par `carte.php`, déjà échappé. Une **CSP** interdit
 tout script ou style inline. Les URL d'images sont filtrées : seuls
-`https://` et `uploads/…` passent.
+`https://` et `uploads/…` passent. Une adresse refusée est signalée
+sous son champ, dès la saisie puis par le serveur (422) : elle était
+ignorée en silence, et la série s'enregistrait « ✅ » sans son image.
 
 **Injections SQL** — requêtes préparées PDO partout, avec
 `EMULATE_PREPARES = false`.
@@ -403,6 +561,31 @@ l'est de tout changement de mot de passe et de la suppression du compte.
 C'est le seul signal qu'a le titulaire légitime quand quelqu'un d'autre a
 son mot de passe.
 
+Cet avis porte donc un recours : un lien, valable 7 jours, qui **bloque
+le changement et fait choisir un nouveau mot de passe**, en déconnectant
+tous les appareils. Il fonctionne même une fois le changement confirmé —
+l'attaquant, qui tient la nouvelle boîte, confirme en quelques secondes :
+l'ancienne adresse est alors rendue au compte, et personne ne peut
+s'inscrire avec elle tant que le lien est valable. Aucune autre demande
+ne l'efface, et entre deux liens de blocage, le plus ancien a le dernier
+mot. Il ne donne rien de plus à qui aurait volé la boîte : « Mot de passe
+oublié » lui ouvrait déjà le compte. Changer ou réinitialiser le mot de
+passe annule aussi un changement d'adresse en attente.
+
+Tant qu'elle attend, la demande s'affiche dans les Paramètres sous le
+champ E-mail — qui, lui, montre l'adresse **active** — avec un bouton
+pour l'annuler.
+
+**Erreurs de formulaire** — chaque message s'affiche sous son champ,
+qui le désigne (`aria-describedby`) et se déclare invalide
+(`aria-invalid`) ; le premier champ fautif prend le focus, et le message
+s'efface dès qu'on corrige. Côté PHP, les erreurs sont rangées par champ
+(`champ_aria()`, `champ_erreur()`) ; côté API, la réponse nomme le champ
+(`champ`, ou `erreurs` pour plusieurs) et `Lib.erreurChamp()` le pose.
+Le changement de mot de passe est vérifié avant de partir (`verifier`) :
+une erreur laisse la saisie en place au lieu de vider les trois champs,
+et le vrai POST garde la proposition du gestionnaire de mots de passe.
+
 **Confidentialité des adresses** — l'inscription répond la même chose que
 l'adresse soit déjà enregistrée ou non, et ne connecte jamais
 directement. Si l'adresse est prise, son propriétaire en est informé par
@@ -423,6 +606,14 @@ le rejoue.
 l'en-tête `Host`, qui est choisi par le client. Sinon, un attaquant peut
 demander une réinitialisation pour un tiers en falsifiant `Host` : la
 victime reçoit un e-mail authentique dont le lien pointe chez lui.
+
+Chaque e-mail part en deux versions, texte brut et HTML. En texte brut,
+une adresse n'est que du texte : c'est la messagerie qui décide d'en
+faire un lien, et Proton, sur ordinateur, ne le faisait pas. La version
+HTML porte de vrais liens — vers les adresses qui commencent par
+`APP_URL`, et elles seules : un identifiant ou une adresse saisis par
+quelqu'un d'autre restent du texte, pour ne jamais devenir un lien
+cliquable dans un message authentique du site.
 
 **Jetons** — confirmation, réinitialisation et connexion par appareil ne
 sont jamais stockés en clair : seule leur empreinte sha256 va en base. Un
@@ -464,9 +655,13 @@ Chez OVH : Hébergements → Statistiques et logs.
   page — l'espace des mutualisés OVH est monté en NFS, où chaque accès au
   disque est un aller-retour réseau. Même raison pour le `.env`, lu à un
   seul emplacement par requête.
-- Pages HTML en `private, no-cache` plutôt que `no-store` : le cache de
-  navigation arrière reste actif, et un « Précédent » ne relance pas tout
-  le PHP.
+- Pages publiques en `private, no-cache`. Celles qui montrent un compte
+  (bibliothèque, paramètres) passent en `no-store`, au prix d'un
+  « Précédent » qui relance le PHP : sur un ordinateur partagé, il
+  réaffichait sinon le profil depuis le cache après une déconnexion, ou
+  même après la suppression du compte. Une page que le navigateur garde
+  malgré tout en mémoire (bfcache) est masquée à son retour, le temps de
+  vérifier auprès du serveur que la session vit encore.
 - `content-visibility` sur les cartes : le navigateur ignore celles qui
   sont hors écran. Le fondu d'apparition est réservé aux cartes que le JS
   vient d'insérer, sinon il se rejoue à chaque passage devant l'écran.

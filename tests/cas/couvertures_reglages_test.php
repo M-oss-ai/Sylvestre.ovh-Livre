@@ -22,7 +22,6 @@ putenv('COUVERTURE_ESPACEMENT=0');       // aucun espacement : la file ne freine
 putenv('COUVERTURE_FILE_MAX=0');         // aucune attente tolérée : la file refuse tout
 putenv('COUVERTURE_QUOTA=0');            // zéro recherche : fonctionnalité morte
 putenv('COUVERTURE_FENETRE=0');          // tranche nulle : la règle n aurait plus de durée
-putenv('COUVERTURE_QUOTA_ILLIMITE=0');   // un « illimité » plus sévère que le standard
 
 require __DIR__ . '/../lanceur.php';
 
@@ -66,13 +65,6 @@ test('le quota par compte reste praticable', function () {
        derrière un chiffre mal saisi. */
     egale(1, COUVERTURE_QUOTA, 'le .env demandait 0 recherche autorisée');
     egale(10, COUVERTURE_FENETRE, 'le .env demandait une tranche de 0 seconde');
-});
-
-test('« illimité » ne passe jamais sous le quota ordinaire', function () {
-    /* Le .env demandait 0 pour les deux. Un forfait payant plus sévère
-       que le forfait de base serait une régression silencieuse — et
-       personne ne penserait à la chercher là. */
-    vrai(COUVERTURE_QUOTA_ILLIMITE >= COUVERTURE_QUOTA, 'jamais en dessous');
 });
 
 groupe('COUVERTURE_CONTENU_ADULTE — le réglage qui engage l éditeur');

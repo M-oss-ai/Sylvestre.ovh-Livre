@@ -24,10 +24,11 @@ header('Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
 /* Aucune page n'est publique : « private » interdit tout cache partagé
    (proxy d'entreprise, cache FAI), « no-cache » impose une revalidation.
 
-   Pas « no-store », qui désactiverait aussi le cache de navigation
-   arrière : chaque « Précédent » relancerait tout le PHP. En échange, la
-   page reste sur le disque du navigateur — acceptable pour des titres de
-   mangas. L'API, elle, garde « no-store » (voir reponse_json). */
+   C'est le réglage des pages sans compte (connexion, mentions…). Celles
+   qui montrent un compte passent à « no-store » (voir exiger_connexion) :
+   sur un ordinateur partagé, « Précédent » réaffichait le profil depuis
+   le cache même après la déconnexion ou la suppression du compte. L'API
+   garde « no-store » elle aussi (voir reponse_json). */
 header('Cache-Control: private, no-cache, must-revalidate');
 
 /* Content-Security-Policy : aucun script ni style « inline » n'est autorisé.
@@ -70,6 +71,9 @@ header(
  * et toute reconnexion automatique finissait en erreur 500.
  */
 const REMEMBER_SURSIS = 60; // secondes
+
+/** Refus d'une adresse d'image (voir url_image_refusee), partout le même. */
+const MESSAGE_URL_IMAGE_REFUSEE = "Seules les adresses d'image en https:// sont acceptées.";
 
 if (session_status() === PHP_SESSION_NONE) {
     /* use_strict_mode : PHP refuse un identifiant de session qu'il n'a pas
@@ -492,6 +496,42 @@ function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$a
    sur TROIS lignes et recouvrait l'image — d'où des libellés courts,
    d'un seul mot quand c'est possible. La clé, elle, ne change jamais :
    c'est la valeur stockée en base. */
+/* Les quatre provenances possibles d'une couverture.
+
+   La classification vit ICI, en PHP, et voyage jusqu'au navigateur
+   dans un attribut « data-image » : le JavaScript n'a pas à
+   redécouvrir ce qu'une URL veut dire, et la règle ne peut pas
+   diverger entre les deux. */
+const IMAGES_TYPES = [
+    'aucune'   => 'Pas d\'image',
+    'mangadex' => 'MangaDex',
+    'importee' => 'Importée',
+    'lien'     => 'Lien',
+];
+
+/**
+ * D'où vient cette couverture ? Retourne une clé d'IMAGES_TYPES.
+ *
+ * Le test MangaDex est un simple préfixe d'hôte, et non la
+ * vérification complète de mangadex_id_depuis_url() : ici on CLASSE
+ * pour un filtre, on n'autorise rien. Et couvertures.php, qui porte
+ * l'autre fonction, n'est pas chargé par les pages.
+ */
+function type_image(string $couverture): string
+{
+    $c = trim($couverture);
+    if ($c === '') {
+        return 'aucune';
+    }
+    if (stripos($c, 'https://uploads.mangadex.org/covers/') === 0) {
+        return 'mangadex';
+    }
+    if (stripos($c, 'uploads/') === 0) {
+        return 'importee';
+    }
+    return 'lien';
+}
+
 const STATUTS = [
     'cours'   => 'En cours',
     'envie'   => 'Envie',
@@ -540,7 +580,17 @@ function utilisateur_actuel(): ?array
     return $cache = $u;
 }
 
-/** Pages HTML : redirige vers la connexion si nécessaire. */
+/**
+ * Pages HTML : redirige vers la connexion si nécessaire.
+ *
+ * Une page qui montre un compte n'est jamais gardée par le navigateur
+ * (« no-store ») : après une déconnexion ou une suppression de compte,
+ * « Précédent » la redemande donc au serveur, qui renvoie vers la
+ * connexion. Avec « no-cache », elle revenait du cache, identifiant et
+ * adresse e-mail compris. Le cache de navigation arrière (bfcache), qui
+ * peut garder la page en mémoire malgré tout, est traité côté navigateur
+ * (voir « pageshow » dans js/commun.js).
+ */
 function exiger_connexion(): array
 {
     $u = utilisateur_actuel();
@@ -548,6 +598,7 @@ function exiger_connexion(): array
         header('Location: connexion.php');
         exit;
     }
+    header('Cache-Control: no-store, private');
     return $u;
 }
 
@@ -569,6 +620,9 @@ function exiger_connexion_api(): array
  * parametres.php (POST classique, sans JavaScript). Ces deux chemins
  * avaient chacun leur copie des règles : une correction faite d'un côté
  * n'atteignait pas l'autre, et rien ne le signalait.
+ *
+ * Les erreurs sont rangées par champ (« identifiant », « email ») : le
+ * message s'affiche sous le champ fautif, pas dans une liste à part.
  */
 function valider_profil(string $identifiant, string $email, int $utilisateur_id): array
 {
@@ -576,10 +630,10 @@ function valider_profil(string $identifiant, string $email, int $utilisateur_id)
     $erreurs = [];
 
     if (!preg_match('/^[A-Za-z0-9._-]{3,30}$/', $identifiant)) {
-        $erreurs[] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
+        $erreurs['identifiant'] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $erreurs[] = "L'adresse e-mail n'est pas valide.";
+        $erreurs['email'] = "L'adresse e-mail n'est pas valide.";
     }
     if ($erreurs) {
         return $erreurs;   // inutile d'interroger la base sur une saisie invalide
@@ -588,9 +642,127 @@ function valider_profil(string $identifiant, string $email, int $utilisateur_id)
     $req = $pdo->prepare('SELECT id FROM utilisateur WHERE identifiant = ? AND id <> ?');
     $req->execute([$identifiant, $utilisateur_id]);
     if ($req->fetch()) {
-        $erreurs[] = 'Cet identifiant est déjà utilisé.';
+        $erreurs['identifiant'] = 'Cet identifiant est déjà utilisé.';
     }
     return $erreurs;
+}
+
+/* ---------------------------------------------------------------------
+   Erreurs rattachées à leur champ (formulaires envoyés en POST classique)
+
+   $erreurs est rangé par champ : ['email' => 'message', …], dans l'ordre
+   du formulaire. Un message s'affiche sous SON champ, qui le désigne
+   (aria-describedby) et se déclare invalide (aria-invalid) ; le premier
+   champ fautif reçoit le focus. Une liste en haut de la page ne disait
+   ni quel champ corriger, ni où il se trouvait.
+
+   Un champ peut porter plusieurs messages (les règles du mot de passe) :
+   la valeur est alors une liste.
+   --------------------------------------------------------------------- */
+
+/**
+ * Attributs à poser sur le champ $id, pour la clé $champ de $erreurs.
+ * $aide : id d'un texte d'aide déjà présent, que le champ garde.
+ */
+function champ_aria(array $erreurs, string $champ, string $id, string $aide = ''): string
+{
+    $en_erreur = isset($erreurs[$champ]);
+    $decrit    = array_filter([$en_erreur ? $id . '-erreur' : '', $aide]);
+
+    $attributs = $decrit ? ' aria-describedby="' . e(implode(' ', $decrit)) . '"' : '';
+    if ($en_erreur) {
+        $attributs .= ' aria-invalid="true"';
+        // Le premier champ fautif seulement : deux « autofocus » dans une
+        // page, et c'est le navigateur qui choisit.
+        if (array_key_first($erreurs) === $champ) {
+            $attributs .= ' autofocus';
+        }
+    }
+    return $attributs;
+}
+
+/** Le message à poser juste sous le champ $id, ou rien. */
+function champ_erreur(array $erreurs, string $champ, string $id): string
+{
+    if (!isset($erreurs[$champ])) {
+        return '';
+    }
+    $lignes = array_map('e', array_map('strval', (array) $erreurs[$champ]));
+    return '<p class="erreur-champ" id="' . e($id) . '-erreur">' . implode('<br>', $lignes) . '</p>';
+}
+
+/**
+ * Une adresse d'image a-t-elle été saisie… puis refusée ?
+ *
+ * url_image_sure() rend une chaîne vide dans les deux cas, et c'est ce
+ * qui faisait disparaître une adresse en http:// sans un mot : la série
+ * s'enregistrait « ✅ », sans l'image. Les appelants répondent désormais
+ * par une erreur sur le champ.
+ */
+function url_image_refusee(mixed $saisie): bool
+{
+    $saisie = is_string($saisie) ? trim($saisie) : '';
+    return $saisie !== '' && url_image_sure($saisie) === '';
+}
+
+/* ---------------------------------------------------------------------
+   Import d'une sauvegarde : la part qui ne touche ni à la base ni au
+   disque. L'import lui-même (requêtes, images recréées) est dans api.php.
+   --------------------------------------------------------------------- */
+
+/**
+ * Une série d'une sauvegarde, remise en forme — ou null si ce n'est pas
+ * une série, ou si elle n'a pas de titre.
+ *
+ * Les clés de l'ancien format (title, subtitle, volume, status,
+ * cover.value) sont comprises. Une image envoyée comme fichier voyage en
+ * base64 (« donnees ») ; sinon seule une adresse https est gardée : un
+ * chemin « uploads/… » venu d'un autre serveur ne pointerait vers rien
+ * ici, et afficherait une image cassée.
+ */
+function import_serie(mixed $s): ?array
+{
+    if (!is_array($s)) {
+        return null;
+    }
+    $titre = texte($s['titre'] ?? ($s['title'] ?? ''), 190);
+    if ($titre === '') {
+        return null;
+    }
+    $statut = $s['statut'] ?? ($s['status'] ?? 'cours');
+    $brute  = is_array($s['cover'] ?? null) ? ($s['cover']['value'] ?? '') : ($s['couverture'] ?? '');
+    $url    = url_image_sure(is_string($brute) ? $brute : '');
+    $tome   = $s['tome_actuel'] ?? ($s['volume'] ?? 0);
+
+    return [
+        'titre'      => $titre,
+        'auteur'     => texte($s['auteur'] ?? ($s['subtitle'] ?? ''), 190),
+        'tome'       => max(0, min(TOME_MAX, is_numeric($tome) ? (int) $tome : 0)),
+        'statut'     => is_string($statut) && isset(STATUTS[$statut]) ? $statut : 'cours',
+        'favori'     => !empty($s['favori']) ? 1 : 0,
+        'couverture' => preg_match('#^https://#i', $url) ? $url : '',
+        'donnees'    => is_string($s['couverture_donnees'] ?? null) ? $s['couverture_donnees'] : '',
+    ];
+}
+
+/**
+ * Ce que l'import rend à une série DÉJÀ dans la bibliothèque : seulement
+ * ce qui lui manque — son image si elle n'en a pas, l'étoile si la
+ * sauvegarde la portait. Rien n'est écrasé : la série en place est
+ * peut-être plus avancée que la sauvegarde. null s'il n'y a rien à faire.
+ *
+ * $couverture_importee ne sert que si la série n'a pas d'image : l'appelant
+ * ne la calcule qu'alors (la recréer depuis la sauvegarde écrit un
+ * fichier), et passe '' sinon.
+ */
+function import_complement(string $couverture, int $favori, string $couverture_importee, int $favori_importe): ?array
+{
+    $nouvelle = $couverture !== '' ? $couverture : $couverture_importee;
+    $etoile   = max($favori, $favori_importe);
+    if ($nouvelle === $couverture && $etoile === $favori) {
+        return null;
+    }
+    return ['couverture' => $nouvelle, 'favori' => $etoile];
 }
 
 /** L'adresse est-elle libre pour ce compte ? */
@@ -600,6 +772,33 @@ function email_disponible(string $email, int $utilisateur_id): bool
     $req = $pdo->prepare('SELECT id FROM utilisateur WHERE email = ? AND id <> ?');
     $req->execute([$email, $utilisateur_id]);
     return !$req->fetch();
+}
+
+/**
+ * Le changement d'adresse qui attend sa confirmation, s'il y en a un :
+ * ['adresse' => …, 'expire' => « 27/09/2026 à 14 h 05 »], sinon null.
+ *
+ * Sans lui, les Paramètres réaffichaient l'ancienne adresse sans rien
+ * dire de la demande en cours : on ne savait plus laquelle comptait, et
+ * l'on redemandait — mot de passe et e-mails à la clé.
+ */
+function changement_email_en_attente(int $utilisateur_id): ?array
+{
+    global $pdo;
+    $req = $pdo->prepare(
+        "SELECT donnee, expire FROM jeton_action
+          WHERE utilisateur_id = ? AND type = 'changement_email' AND expire > NOW()
+          ORDER BY id DESC LIMIT 1"
+    );
+    $req->execute([$utilisateur_id]);
+    $j = $req->fetch();
+    if (!$j || (string) $j['donnee'] === '') {
+        return null;
+    }
+    return [
+        'adresse' => (string) $j['donnee'],
+        'expire'  => date('d/m/Y à H \h i', (int) strtotime((string) $j['expire'])),
+    ];
 }
 
 /**
@@ -663,13 +862,27 @@ function connecter(int $id): void
     }
 }
 
-/** Invalide toutes les sessions du compte (y compris celles des autres appareils). */
+/**
+ * Invalide toutes les sessions du compte (y compris celles des autres
+ * appareils), et annule un changement d'adresse en attente.
+ *
+ * Appelée quand le mot de passe change ou est réinitialisé : c'est la
+ * réponse de qui reprend la main sur son compte. Un changement d'adresse
+ * demandé par l'attaquant y survivait — il n'avait plus qu'à le
+ * confirmer depuis sa propre boîte pour tout reprendre.
+ *
+ * Les liens « blocage_email » ne sont PAS touchés : l'attaquant, qui a le
+ * mot de passe, pourrait sinon effacer celui de sa victime en changeant
+ * simplement le mot de passe.
+ */
 function invalider_sessions(int $utilisateur_id): void
 {
     global $pdo;
     $pdo->prepare('UPDATE utilisateur SET session_version = session_version + 1 WHERE id = ?')
         ->execute([$utilisateur_id]);
     $pdo->prepare('DELETE FROM session_persistante WHERE utilisateur_id = ?')
+        ->execute([$utilisateur_id]);
+    $pdo->prepare("DELETE FROM jeton_action WHERE utilisateur_id = ? AND type = 'changement_email'")
         ->execute([$utilisateur_id]);
 }
 
@@ -823,6 +1036,48 @@ function initiales(array $u): string
         return mb_strtoupper(mb_substr($p, 0, 1, 'UTF-8') . mb_substr($n, 0, 1, 'UTF-8'), 'UTF-8');
     }
     return mb_strtoupper(mb_substr((string) ($u['identifiant'] ?? ''), 0, 2, 'UTF-8'), 'UTF-8');
+}
+
+/**
+ * Un message pour la PROCHAINE page affichée, et pour elle seule.
+ *
+ * Porté par l'URL (« ?mdp=1 »), il revenait à chaque rechargement :
+ * « Mot de passe modifié ✅ » s'affichait encore après avoir vidé la
+ * bibliothèque. Rangé dans la session, il disparaît dès qu'il est lu.
+ */
+function flash(string $message): void
+{
+    $_SESSION['flash'] = $message;
+}
+
+/** Le message laissé par flash(), retiré de la session au passage. */
+function flash_prendre(): string
+{
+    $message = (string) ($_SESSION['flash'] ?? '');
+    unset($_SESSION['flash']);
+    return $message;
+}
+
+/**
+ * Une durée en secondes, dite dans la plus grande unité qui la divise
+ * exactement : 31536000 → « 1 an », 2592000 → « 30 jours ».
+ * Sert aux mentions légales, qui lisent la durée des cookies dans le
+ * .env au lieu de l'écrire en dur.
+ */
+function duree_cookie_lisible(int $secondes): string
+{
+    $unites = [
+        [31536000, 'an', 'ans'], [86400, 'jour', 'jours'], [3600, 'heure', 'heures'],
+        [60, 'minute', 'minutes'], [1, 'seconde', 'secondes'],
+    ];
+    $secondes = max(0, $secondes);
+    foreach ($unites as [$taille, $un, $plusieurs]) {
+        if ($secondes >= $taille && $secondes % $taille === 0) {
+            $n = intdiv($secondes, $taille);
+            return $n . ' ' . ($n > 1 ? $plusieurs : $un);
+        }
+    }
+    return '0 seconde';
 }
 
 /* ---------------------------------------------------------------------

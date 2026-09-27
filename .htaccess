@@ -1,39 +1,79 @@
 # =====================================================================
 # Fichiers qui ne doivent JAMAIS être servis tels quels au navigateur :
 # ils contiennent des secrets (.env) ou n'ont aucune utilité une fois le
-# site en ligne (documentation, schéma SQL). Les pages PHP, elles, gèrent
-# leur propre protection (voir exiger_connexion() dans fonctions.php).
+# site en ligne (documentation, schéma SQL, tests). Les pages PHP, elles,
+# gèrent leur propre protection (voir exiger_connexion() dans
+# fonctions.php).
+#
+# Ce fichier couvre TOUT ce que contient le dossier local, pas seulement
+# ce qui est censé monter : le plus rapide est d'envoyer le dossier
+# entier, puis de supprimer sur le serveur ce qui n'y sert à rien.
+# Entre les deux, rien de ce qui est arrivé en trop ne doit être lisible.
+#
+#   Élément du dossier local       Sur le serveur   Règle
+#   -----------------------------  ---------------  ---------------------
+#   *.php à la racine, css/, js/   servi            (pages et ressources)
+#   uploads/                       servi            uploads/.htaccess
+#   includes/                      gardé, bloqué    « includes » + son .htaccess
+#   .htaccess, .user.ini,          gardé, bloqué    fichiers cachés
+#     .ovhconfig
+#   .env                           NE PAS ENVOYER   fichiers cachés (voir *)
+#   .env.example, .gitignore       à supprimer      fichiers cachés
+#   .git/, .claude/, .vscode/…     à supprimer      dossiers cachés
+#   README.md, CLAUDE.md, *.md     à supprimer      « .md »
+#   livre.sql, *.sql               à supprimer      « .sql »
+#   tests/                         à supprimer      « tests » + son .htaccess
+#
+# (*) Aucune règle d'ici ne protège le .env du SERVEUR contre un envoi :
+#     le .env local (base « localhost ») l'écraserait, et le site perdrait
+#     sa base à l'instant même. C'est un écrasement de fichier, pas un
+#     accès web : à exclure du transfert, pas à supprimer après.
 # =====================================================================
 
 # Tout fichier « point » : .env, .env.example, .gitignore, .user.ini…
+# C'est elle qui répond (403) pour ces fichiers, même en présence de la
+# règle suivante : dans un .htaccess, Apache applique « Require » AVANT
+# les RedirectMatch. Elle tient aussi sans mod_alias.
 <FilesMatch "^\.">
     Require all denied
 </FilesMatch>
 
-# Les DOSSIERS cachés, que la règle ci-dessus ne couvre pas : FilesMatch
-# ne compare que le nom final, donc « /.git/config » lui échappait — tout
-# l'historique du dépôt (y compris un .env commité par erreur) devenait
-# téléchargeable dès qu'on déploie par « git pull » au lieu du FTP.
-# .well-known en est volontairement absent : c'est par là que passe la
-# validation du certificat SSL (Let's Encrypt).
+# Tout élément caché, fichier OU dossier, à n'importe quelle profondeur.
+# FilesMatch ne compare que le nom final : « /.git/config » lui échappait.
+# Or tout l'historique du dépôt (y compris un .env commité par erreur)
+# devient alors téléchargeable, et un envoi du dossier entier emporte
+# .git/ avec lui.
+# Une liste de noms (.git, .svn, .vscode…) finissait toujours par en
+# oublier un (.claude/ en était absent). On bloque donc tout ce qui
+# commence par un point, sauf .well-known, par où passe la validation du
+# certificat SSL (Let's Encrypt).
 <IfModule mod_alias.c>
-    RedirectMatch 404 (?i)/\.(git|svn|hg|bzr|env|idea|vscode)(/|$)
+    RedirectMatch 404 "(?i)/\.(?!well-known(?:/|$))[^/]+(?:/|$)"
 </IfModule>
 
 # Documentation et schéma de base de données.
 #
-# Ces fichiers restent volontairement présents sur le serveur (c'est
-# pratique pour réinstaller), et c'est cette règle qui les protège :
 # livre.sql décrit tout le schéma, README.md explique en détail comment
-# le site est sécurisé. Ni l'un ni l'autre ne doit être téléchargeable.
+# le site est sécurisé, CLAUDE.md en décrit les rouages internes et
+# tests/LISEZMOI.md l'architecture. Aucun ne doit être téléchargeable.
 #
-# « \.sql$ » couvre tout fichier SQL, présent ou futur (une sauvegarde
-# déposée à la va-vite, un export oublié) : il vaut mieux une règle trop
-# large qu'un fichier nommé autrement qui passe au travers.
+# Des extensions plutôt que des noms : README.md était seul couvert, et
+# CLAUDE.md, arrivé après, passait au travers. « .md » et « .sql »
+# couvrent aussi les fichiers futurs (une sauvegarde déposée à la va-vite,
+# un export oublié). Mieux vaut une règle trop large qu'un fichier nommé
+# autrement qui passe au travers.
 # Un 404 plutôt qu'un 403 : « accès interdit » confirme que le fichier
 # existe, « introuvable » ne dit rien.
 <IfModule mod_alias.c>
-    RedirectMatch 404 (?i)/(readme\.md|[^/]+\.sql|\.ovhconfig)$
+    RedirectMatch 404 (?i)/[^/]+\.(md|sql)$
+</IfModule>
+
+# Les fichiers inclus par PHP (require_once), jamais demandés par un
+# navigateur. « includes/.htaccess » les bloque déjà. Cette règle double
+# la sienne pour le cas d'un dossier envoyé sans ses fichiers cachés,
+# comme pour tests/ ci-dessous.
+<IfModule mod_alias.c>
+    RedirectMatch 404 (?i)/includes(/|$)
 </IfModule>
 
 # Le dossier des tests unitaires.

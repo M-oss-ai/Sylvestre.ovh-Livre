@@ -19,6 +19,12 @@ Un seul fichier, directement (pratique pour déboguer) :
 php tests/cas/carte_test.php
 ```
 
+Le JavaScript seul (voir « Le JavaScript » plus bas) :
+
+```bash
+php tests/lancer.php javascript
+```
+
 Sous Windows, si `php` n'est pas dans le `PATH` :
 
 ```bash
@@ -156,6 +162,53 @@ découvert.
 La description n'est pas décorative : c'est elle qui s'affiche quand
 l'assertion cède, avec le fichier et la ligne.
 
+---
+
+## Le JavaScript
+
+Pas de Node, pas plus que de Composer : le JavaScript se teste là où il
+tourne, dans un navigateur. `tests/js/banc.html` charge le code du site
+tel qu'il est servi (`js/commun.js`, `js/app.js`), puis les fichiers de
+`tests/js/cas/`, et écrit son compte rendu dans la page.
+
+- **Avec le reste** : `php tests/lancer.php` ouvre la page dans Edge,
+  Chrome ou Chromium, sans fenêtre (`--headless --dump-dom`), avec un
+  profil jetable et une limite de temps, puis relit le compte rendu.
+  La variable `NAVIGATEUR` désigne un autre navigateur. Sans navigateur
+  trouvé, les tests JavaScript sont annoncés **non lancés** — en tête et
+  en fin de rapport — sans faire échouer la suite.
+- **À la main** : ouvrir `tests/js/banc.html` d'un double-clic. Pas par
+  le serveur web : `tests/` y est interdit, et c'est voulu.
+
+Les assertions ont les mêmes noms qu'en PHP (`egale`, `vrai`, `faux`,
+`contient`, `sans`, `estNul`, `differe`), et `terrain(html)` pose le HTML
+dont un test a besoin dans un conteneur vidé avant chaque test.
+
+```js
+groupe("Lib.urlImageAcceptee()");
+
+test("une adresse en http:// est refusée", () => {
+  faux(Lib.urlImageAcceptee("http://exemple.test/a.png"), "http");
+});
+```
+
+Un fichier de cas doit figurer dans `banc.html` : `lancer.php` refuse
+d'en oublier un (`[OUBLIÉ]`). Les mêmes filets qu'en PHP valent ici — un
+fichier chargé qui n'exécute aucun test (`[VIDE]` : introuvable, erreur
+de syntaxe), une erreur hors de tout test, y compris au chargement du
+code testé (`[ERREUR HORS TEST]`), un banc qui ne rend pas de compte
+rendu ou qui dépasse le temps imparti (`[INTERROMPU]`).
+
+Les fichiers de cas partagent la même page : deux constantes globales
+du même nom dans deux fichiers s'y heurteraient.
+
+**Ce qui se teste ainsi** : les fonctions qui ne dépendent que de leurs
+arguments, et celles qui travaillent sur un bout de DOM qu'on peut leur
+fabriquer. D'où `window.Bibliotheque` en tête d'`app.js` : la logique
+pure de la page (carte voisine au clavier, suivi du défilement, textes
+des quotas), séparée de son branchement. `app.js` ne branche rien hors
+de la bibliothèque, ce qui permet au banc de le charger.
+
 Une assertion qui échoue interrompt **son** test, et lui seul : les
 suivantes porteraient sur un état déjà faux. Les autres tests du fichier
 continuent.
@@ -181,17 +234,29 @@ de données ni le réseau.
 `ini_octets`, `plafond_pixels`, `taille_lisible`, `erreur_fatale`, `e`,
 `texte`, `valider_mot_de_passe`, `jeton_csrf`, `csrf_valide`,
 `exiger_csrf`, `post_trop_gros`, `message_post_trop_gros`,
-`journal_securite`, `url_image_sure`, `photo_depuis_formulaire`,
+`journal_securite`, `url_image_sure`, `type_image` (la provenance
+d'une couverture, pour le filtre avancé), `photo_depuis_formulaire`,
+`url_image_refusee` (une adresse saisie puis refusée, à distinguer de
+« rien de saisi »), `champ_aria` et `champ_erreur` (l'erreur d'un
+formulaire rattachée à son champ),
 `initiales`, `cookie_persistant_params`, `actif`, `reponse_json`,
 `cron_en_ligne_de_commande`, `cron_refus_navigateur`,
-`cron_appelant_authentifie`,
+`cron_appelant_authentifie`, `cron_reglages`, `rapport_du`,
+`rapport_fenetre_minutes` et `duree_lisible` (le rapport du cron : quand
+il part, sur quelle période, et comment il l'affiche),
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
-(câblage), `titre_normalise`, `mangadex_titre`,
-`couverture_quota`, `couverture_tranche_lisible`,
+(câblage), `composer_message`, `message_mime`, `corps_html` et
+`mots_encodes` (l'e-mail tel qu'il part : texte et HTML, liens vers le
+site seulement, en-têtes encodés), `import_serie` et `import_complement`
+(une ligne de sauvegarde, et ce que l'import rend à une série déjà
+présente), `flash` et `flash_prendre` (le message qui ne revient pas au rechargement), `duree_cookie_lisible` et les mentions légales rendues selon `SESSION_DUREE` / `REMEMBER_DUREE_VIP`, `titre_normalise`, `mangadex_titre`,
+`couverture_quota` (0 pour l illimité : aucun quota), `couverture_tranche_lisible`,
 `mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
-qu'il refuse), `couverture_tome_vise`,
+qu'il refuse), `couverture_tome_vise`, `mangadex_image_locale` (son
+garde-fou avant tout réseau, seul le téléchargement lui-même ne l'est
+pas — voir ci-dessous),
 `mangadex_attente_suggeree`, `mangadex_attendre_son_tour` (la file
 d'attente des appels sortants), `carte_html`, les
 planchers de toutes les constantes — y compris `COUVERTURE_*` et le
@@ -199,8 +264,9 @@ défaut restrictif de `COUVERTURE_CONTENU_ADULTE` —, et les contrôles de form
 précèdent une requête (`valider_profil`, `jeton_action_valide`,
 `verifier_session_persistante`, `supprimer_images_locales`).
 
-**Non couvert, faute de réseau** — `mangadex_get` et
-`chercher_couvertures`, qui interrogent MangaDex. Le classement des
+**Non couvert, faute de réseau** — `mangadex_get`,
+`chercher_couvertures` et le téléchargement fait par
+`mangadex_image_locale`, qui interrogent tous MangaDex. Le classement des
 résultats, lui, repose sur `titre_normalise`, qui est testé : c'est la
 partie qui décide quelle série remonte en tête.
 
@@ -210,14 +276,29 @@ fenêtre glissante), les sessions persistantes (`creer_session_persistante`,
 la rotation des jetons, le plafond d'appareils), les jetons d'action
 (`generer_jeton_action`, `consommer_jeton_action`), les comptes
 (`utilisateur_actuel`, `connecter`, `invalider_sessions`,
-`email_disponible`), la file d'e-mails (`empiler_mail`,
-`traiter_file_mail`), `couverture_consommer` et `couverture_rendre` (le
-quota de recherche par compte : le barème est testé, le comptage non), `compter_series`, le cloisonnement par
-`utilisateur_id` d'`api.php` et le rapport de `purger.php`.
+`email_disponible`, `changement_email_en_attente`), la file d'e-mails
+(`empiler_mail`, `traiter_file_mail`), `couverture_consommer`,
+`couverture_rendre` et `couverture_restantes` (le quota de recherche par
+compte : le barème est testé, le comptage non), `compter_series`,
+l'import d'une sauvegarde (ce qui distingue une série déjà présente), le cloisonnement par
+`utilisateur_id` d'`api.php` et le contenu chiffré du rapport de
+`purger.php` et la date de son dernier envoi (`rapport_etat`,
+`rapport_noter_envoi` : ses requêtes. Quand il part et sur quelle
+période, lui, est testé).
 
 Ces fonctions-là demandent une base de test dédiée, remise à zéro entre
 chaque test — c'est un autre chantier, et il vaut la peine : c'est là que
 se trouve le gros de la logique de sécurité.
 
-**Non couvert non plus** — le JavaScript (`js/*.js`), qui demanderait
-Node.js.
+**Couvert, côté navigateur** — `Lib.erreurChamp`, `effacerErreur`,
+`effacerErreurs` et `erreursSurChamps` (l'erreur sous son champ, et
+effacée dès qu'on le corrige), `Lib.urlImageAcceptee`, `Lib.dureeToast`,
+`Bibliotheque.voisine` (les flèches dans la grille),
+`Bibliotheque.suiviDefilement` (les filtres qui s'effacent et reviennent,
+rebonds et recalages du navigateur compris), `Bibliotheque.annonceQuota`
+et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`.
+
+**Non couvert, côté navigateur** — le branchement sur la page : les
+écouteurs d'`app.js` et de `settings.js`, les appels à l'API, les
+modales, le contrôle de session au retour arrière. Ils demandent une
+vraie bibliothèque et un compte connecté : ils se vérifient à la main.

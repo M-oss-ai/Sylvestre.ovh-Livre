@@ -97,12 +97,16 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
 --  utilisateur.email qu'au clic sur le lien : tant que la nouvelle adresse
 --  n'est pas confirmée, l'ancienne reste celle du compte. Une faute de
 --  frappe ne peut donc pas rendre un compte irrécupérable.
+--
+--  « blocage_email » est le lien envoyé à l'ANCIENNE adresse avec l'alerte
+--  de changement : il bloque ce changement (ou le défait) et fait choisir
+--  un nouveau mot de passe. `donnee` y porte l'adresse à rétablir.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `jeton_action` (
   `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `utilisateur_id` INT UNSIGNED NOT NULL,
   `jeton_hash`     CHAR(64) NOT NULL,
-  `type`           ENUM('verification','reinit','changement_email') NOT NULL,
+  `type`           ENUM('verification','reinit','changement_email','blocage_email') NOT NULL,
   `donnee`         VARCHAR(190) NULL,
   `expire`         DATETIME NOT NULL,
   `cree_le`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -137,6 +141,9 @@ CREATE TABLE IF NOT EXISTS `serie` (
   -- son choix prime, et un lien qui ecraserait son image serait un
   -- piege. Un identifiant MangaDex est un UUID, donc 36 caracteres.
   `mangadex_id`    CHAR(36)     NOT NULL DEFAULT '',
+  -- Serie mise en favori par son proprietaire. Un simple drapeau :
+  -- l'ordre d'affichage n'en depend pas, seul le filtre s'en sert.
+  `favori`         TINYINT(1)   NOT NULL DEFAULT 0,
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -319,6 +326,18 @@ SET @sql := IF(@c > 0, 'DO 0',
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
 
 -- ---------------------------------------------------------------------
+--  5. Favoris.
+--
+--     Voir la mise en garde ci-dessus : « ADD COLUMN IF NOT EXISTS »
+--     n'est pas utilisable, d'ou ce detour par information_schema.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'favori');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `favori` TINYINT(1) NOT NULL DEFAULT 0');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `recherche_couverture` (
   `utilisateur_id` INT UNSIGNED NOT NULL,
   `essais`         INT UNSIGNED NOT NULL DEFAULT 0,
@@ -330,3 +349,38 @@ CREATE TABLE IF NOT EXISTS `recherche_couverture` (
   CONSTRAINT `fk_recherche_utilisateur` FOREIGN KEY (`utilisateur_id`)
     REFERENCES `utilisateur` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+--  Date du dernier rapport d'activité (purger.php)
+--
+--  Le cron passe toutes les CRON_HEURES heures, le rapport ne part que
+--  toutes les RAPPORT_HEURES heures. Retenir la date du dernier envoi
+--  permet de décider sans calendrier (un cron que l'hébergeur décale de
+--  quelques minutes ne saute ni ne double aucun rapport) et d'afficher le
+--  temps réellement écoulé : « depuis 7 j et 5 heures ».
+--  Une seule ligne, id = 1.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `rapport_cron` (
+  `id`         TINYINT UNSIGNED NOT NULL,
+  `envoye_le`  DATETIME NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+--  6. Lien « bloquer ce changement », envoyé à l'ancienne adresse avec
+--     l'alerte de changement d'adresse (voir reinitialiser-mot-de-passe.php).
+--
+--     Un type de jeton à part, parce qu'aucune autre demande ne doit le
+--     remplacer : une réinitialisation ou un second changement d'adresse,
+--     que l'attaquant peut demander lui-même, effaceraient le lien de sa
+--     victime.
+--
+--     MODIFY réécrit la liste entière des valeurs : on ne l'exécute que
+--     si la nouvelle manque, sur le même modèle que les colonnes.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'jeton_action' AND COLUMN_NAME = 'type'
+              AND COLUMN_TYPE LIKE '%''blocage_email''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `jeton_action` MODIFY COLUMN `type` ENUM(''verification'',''reinit'',''changement_email'',''blocage_email'') NOT NULL');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

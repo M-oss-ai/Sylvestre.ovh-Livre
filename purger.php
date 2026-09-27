@@ -1,7 +1,9 @@
 <?php
 /* =====================================================================
-   Entretien périodique de la base. À lancer une fois par jour par le
-   cron de l'hébergeur (voir README).
+   Entretien périodique de la base, lancé par le cron de l'hébergeur
+   toutes les CRON_HEURES heures (.env ; 24 conseillé, voir README). Le
+   rapport détaillé, lui, ne part que toutes les RAPPORT_HEURES heures,
+   et couvre le temps écoulé depuis le précédent.
 
    Sans ça, trois tables grossissent indéfiniment : les compteurs de
    tentatives, les jetons expirés et les jetons d'appareil remplacés.
@@ -209,6 +211,12 @@ $resume[] = $temporaires . ' temporaire(s)';
    --------------------------------------------------------------------- */
 $anomalies = [];
 
+[$etat_lisible, $depuis_dernier] = rapport_etat($pdo);
+if (!$etat_lisible) {
+    $anomalies[] = 'table rapport_cron absente : rejouez livre.sql'
+                 . ' (en attendant, le rapport part à chaque passage)';
+}
+
 if ($mails_abandonnes > 0) {
     $anomalies[] = $mails_abandonnes . ' e-mail(s) définitivement perdu(s) après '
                  . MAIL_FILE_MAX_ESSAIS . ' tentatives';
@@ -240,20 +248,30 @@ $resume[] = $en_attente . ' e-mail(s) en attente';
    decalait sa colonne d'un cran vers la gauche.
    --------------------------------------------------------------------- */
 function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes,
-                       int $perdus, int $en_attente, float $demarre): string
+                       int $perdus, int $en_attente, float $demarre,
+                       int $fenetre_minutes): string
 {
+    /* La période couverte : depuis le dernier rapport (voir
+       rapport_fenetre_minutes() dans config.php). Un entier borné, donc
+       sans danger une fois écrit dans le SQL. */
+    $depuis = 'NOW() - INTERVAL ' . (int) $fenetre_minutes . ' MINUTE';
+    $duree  = 'depuis ' . duree_lisible((int) round($fenetre_minutes / 60));
+
     /* Alignement compte par CARACTERES et non par octets : sprintf()
        et str_pad() mesurent en octets, si bien que chaque « é » du
        libelle decalait sa colonne d'un cran. mb_str_pad() n'existe
-       qu'a partir de PHP 8.3, on le fait donc a la main. */
-    $lit = static function (string $cle, $valeur): string {
-        $remplissage = max(1, 34 - mb_strlen($cle, 'UTF-8'));
+       qu'a partir de PHP 8.3, on le fait donc a la main.
+       La colonne s'elargit pour le plus long libelle, celui qui porte
+       la duree (« Nouveaux comptes (depuis 7 j et 5 heures) »). */
+    $largeur = max(34, mb_strlen('Nouveaux comptes (' . $duree . ')', 'UTF-8') + 2);
+    $lit = static function (string $cle, $valeur) use ($largeur): string {
+        $remplissage = max(1, $largeur - mb_strlen($cle, 'UTF-8'));
         return '  ' . $cle . str_repeat(' ', $remplissage) . $valeur . "\n";
     };
     $un  = static fn (string $sql) => $pdo->query($sql)->fetch(PDO::FETCH_NUM);
 
     $u = $un("SELECT COUNT(*), SUM(email_verifie), SUM(forfait = 'illimite'),
-                     SUM(cree_le > NOW() - INTERVAL 1 DAY) FROM utilisateur");
+                     SUM(cree_le > {$depuis}) FROM utilisateur");
     /* « maj_le > cree_le » est ce qui distingue une modification d'une
        création. La colonne vaut CURRENT_TIMESTAMP à l'insertion, si bien
        qu'une série ajoutée et jamais retouchée a maj_le = cree_le : sans
@@ -266,15 +284,15 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
        seconde qui suit la saisie tient plus de la faute de frappe
        rattrapée que d'une modification. */
     $s = $un("SELECT COUNT(*), COUNT(DISTINCT utilisateur_id),
-                     SUM(cree_le > NOW() - INTERVAL 1 DAY),
-                     SUM(maj_le > NOW() - INTERVAL 1 DAY AND maj_le > cree_le)
+                     SUM(cree_le > {$depuis}),
+                     SUM(maj_le > {$depuis} AND maj_le > cree_le)
                 FROM serie");
     $appareils = $un('SELECT COUNT(*) FROM session_persistante
                        WHERE remplace_le IS NULL AND expire > NOW()');
     $bloques   = $un('SELECT COUNT(*) FROM tentative_ip WHERE bloque_jusqu > NOW()');
-    $echecs = $pdo->query('SELECT action, COUNT(*) n, SUM(blocages) b FROM tentative_ip
-                            WHERE maj_le > NOW() - INTERVAL 1 DAY
-                            GROUP BY action ORDER BY n DESC')->fetchAll();
+    $echecs = $pdo->query("SELECT action, COUNT(*) n, SUM(blocages) b FROM tentative_ip
+                            WHERE maj_le > {$depuis}
+                            GROUP BY action ORDER BY n DESC")->fetchAll();
     $base = $un('SELECT ROUND(SUM(data_length + index_length) / 1048576, 2)
                    FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
 
@@ -287,6 +305,7 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
 
     $t  = "============================================================\n";
     $t .= '  Ma Bibliothèque Manga — rapport du ' . date('d/m/Y') . ' à ' . date('H\hi') . "\n";
+    $t .= '  Période couverte : ' . $duree . "\n";
     $t .= "============================================================\n\n";
 
     $t .= "COMPTES\n";
@@ -295,16 +314,16 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
     $t .= $lit('Adresse confirmée', (int) $u[1]);
     $t .= $lit('En attente de confirmation', (int) $u[0] - (int) $u[1]);
     $t .= $lit('Forfait illimité', (int) $u[2]);
-    $t .= $lit('Nouveaux comptes (24 h)', (int) $u[3]);
+    $t .= $lit('Nouveaux comptes (' . $duree . ')', (int) $u[3]);
 
     $t .= "\nBIBLIOTHÈQUES\n";
     $t .= $lit('Séries au total', (int) $s[0]);
     $t .= $lit('Comptes ayant au moins 1 série', (int) $s[1]);
     $t .= $lit('Moyenne par compte actif', $s[1] > 0 ? round($s[0] / $s[1], 1) : 0);
-    $t .= $lit('Ajoutées (24 h)', (int) $s[2]);
-    $t .= $lit('Modifiées (24 h)', (int) $s[3]);
+    $t .= $lit('Ajoutées (' . $duree . ')', (int) $s[2]);
+    $t .= $lit('Modifiées (' . $duree . ')', (int) $s[3]);
 
-    $t .= "\nSÉCURITÉ (24 dernières heures)\n";
+    $t .= "\nSÉCURITÉ (" . $duree . ")\n";
     if ($echecs) {
         foreach ($echecs as $e) {
             $t .= $lit('Échecs « ' . $e['action'] . ' »',
@@ -349,18 +368,60 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
     return $t . sprintf("\nDurée : %.2f s\n", microtime(true) - $demarre);
 }
 
+/* ---------------------------------------------------------------------
+   Date du dernier rapport (table rapport_cron, une seule ligne)
+
+   Retourne [lisible, minutes depuis le dernier envoi | null]. Une table
+   absente (base pas encore migree) ne doit pas faire planter le cron :
+   c'est lui qui rejoue les e-mails. Elle devient une ANOMALIE, et le
+   rapport part a chaque passage jusqu'a la migration. Bruyant, mais pas
+   en panne.
+   --------------------------------------------------------------------- */
+function rapport_etat(PDO $pdo): array
+{
+    try {
+        $v = $pdo->query('SELECT TIMESTAMPDIFF(MINUTE, envoye_le, NOW())
+                            FROM rapport_cron WHERE id = 1')->fetchColumn();
+    } catch (PDOException $e) {
+        return [false, null];
+    }
+    return [true, ($v === false || $v === null) ? null : (int) $v];
+}
+
+function rapport_noter_envoi(PDO $pdo): void
+{
+    $pdo->exec('INSERT INTO rapport_cron (id, envoye_le) VALUES (1, NOW())
+                ON DUPLICATE KEY UPDATE envoye_le = NOW()');
+}
+
+$fenetre = rapport_fenetre_minutes($depuis_dernier, RAPPORT_HEURES);
 $rapport = rapport_texte($pdo, $resume, $anomalies, $mails_envoyes,
-                         $mails_abandonnes, $en_attente, $demarre);
+                         $mails_abandonnes, $en_attente, $demarre, $fenetre);
 
 /* Envoi DIRECT, sans passer par la file de rattrapage : un rapport est
    perissable, le suivant arrive au prochain passage. L'empiler ferait
    grossir la file d'un message par execution le jour ou le SMTP tombe,
    en noyant justement les e-mails d'utilisateurs qu'elle doit rejouer.
-   S'il echoue, le texte reste dans le journal de la tache planifiee. */
-if (ADMIN_EMAIL !== '') {
-    $sujet = ($anomalies ? '[ANOMALIE] ' : '') . 'Ma Bibliothèque — rapport du ' . date('d/m/Y');
+   S'il echoue, le texte reste dans le journal de la tache planifiee.
+
+   Il ne part que lorsqu'il est du (toutes les RAPPORT_HEURES heures),
+   SAUF anomalie : un e-mail perdu ou un SMTP en panne n'attend pas le
+   rapport de la semaine, il part tout de suite.
+
+   Seul un rapport DU et bien PARTI est note comme envoye :
+     - un rapport d'anomalie hors echeance ne decale pas le suivant,
+       qui couvre toujours la periode entiere ;
+     - un rapport du mais rate (SMTP) sera retente au passage suivant,
+       au lieu d'etre perdu jusqu'a la prochaine echeance. */
+$rapport_du = rapport_du($depuis_dernier, RAPPORT_HEURES, CRON_HEURES);
+
+if (ADMIN_EMAIL !== '' && ($rapport_du || $anomalies)) {
+    $sujet = ($anomalies ? '[ANOMALIE] ' : '') . 'Ma Bibliothèque — rapport du ' . date('d/m/Y')
+           . ' (depuis ' . duree_lisible((int) round($fenetre / 60)) . ')';
     if (!envoyer_email_smtp(ADMIN_EMAIL, $sujet, $rapport)) {
         error_log('purger.php: rapport non envoye a ' . ADMIN_EMAIL);
+    } elseif ($rapport_du && $etat_lisible) {
+        rapport_noter_envoi($pdo);
     }
 }
 

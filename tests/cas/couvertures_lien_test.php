@@ -129,3 +129,43 @@ test('un statut inconnu regarde en avant', function () {
     egale(3, couverture_tome_vise('', 2), 'statut vide');
     egale(3, couverture_tome_vise('inconnu', 2), 'statut inventé');
 });
+
+groupe('mangadex_image_locale() — le garde-fou, avant tout réseau');
+
+test('un hôte qui n est pas MangaDex est refusé sans requête', function () {
+    /* La fonction rapatrie une image et l enregistre sur le disque : la
+       laisser accepter une URL quelconque en ferait un relais de
+       téléchargement pour n importe quel site (SSRF). Le refus doit
+       arriver AVANT le moindre appel réseau — un hôte qui ne répond pas
+       ne doit donc jamais faire attendre ce test. */
+    $erreur = null;
+    $r = mangadex_image_locale('https://exemple.test/image.jpg', $erreur);
+    egale(null, $r, 'rien de rapatrié');
+    differe('', $erreur ?? '', 'un message explique le refus');
+});
+
+test('une chaîne vide est refusée', function () {
+    $erreur = null;
+    egale(null, mangadex_image_locale('', $erreur), 'aucune URL, rien à rapatrier');
+});
+
+test('un hôte qui ressemble à MangaDex est refusé aussi', function () {
+    /* Même piège que mangadex_id_depuis_url() : un sous-domaine suffixé
+       contient le nom attendu sans être le bon hôte. */
+    $erreur = null;
+    $r = mangadex_image_locale(
+        'https://uploads.mangadex.org.attaquant.test/covers/'
+        . '801513ba-a712-498c-8f57-cae55b38cc92/x.jpg',
+        $erreur
+    );
+    egale(null, $r, 'refusé malgré le nom contenu dans l hôte');
+});
+
+test('le http simple est refusé comme dans mangadex_id_depuis_url()', function () {
+    $erreur = null;
+    $r = mangadex_image_locale(
+        'http://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/x.jpg',
+        $erreur
+    );
+    egale(null, $r, 'http au lieu de https');
+});

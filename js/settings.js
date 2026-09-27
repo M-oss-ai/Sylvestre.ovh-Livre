@@ -7,10 +7,40 @@
    rien n'est cassé.
    ========================================================= */
 
+/* ---------------- Logique pure ----------------
+   Testée par tests/js, comme window.Bibliotheque dans app.js. */
+
+window.Parametres = (() => {
+  "use strict";
+
+  /**
+   * Ce que la suppression du compte emporte, dit AVANT de confirmer :
+   * le nombre de séries, et pour l'illimité, que le forfait ne revient
+   * pas avec un nouveau compte.
+   */
+  function texteSuppressionCompte(nbSeries, forfait) {
+    const series = nbSeries > 0
+      ? (nbSeries > 1 ? "vos " + nbSeries + " séries" : "votre série")
+      : "votre bibliothèque (vide)";
+    let texte = "Votre compte, votre profil et " + series + " seront définitivement effacés.";
+    if (forfait === "illimite") {
+      texte += " Le forfait illimité est attaché à ce compte : il ne reviendra pas si vous en créez un nouveau.";
+    }
+    return texte + " Cette action est irréversible.";
+  }
+
+  return { texteSuppressionCompte };
+})();
+
 (() => {
   "use strict";
 
   const L = window.Lib;
+  const P = window.Parametres;
+
+  // Hors de la page Paramètres — le banc de tests charge ce fichier pour
+  // sa logique pure : rien à brancher.
+  if (!document.getElementById("settings-dropzone")) return;
 
   L.brancherToggleMotDePasse();
 
@@ -28,7 +58,8 @@
   let photoEnAttente = photoInitiale ? { type: "url", value: photoInitiale, existante: true } : null;
 
   function majApercuPhoto() {
-    const src = photoEnAttente
+    // Une adresse refusée (http://…) n'a pas d'aperçu : il serait cassé.
+    const src = photoEnAttente && !photoEnAttente.refusee
       ? photoEnAttente.type === "file"
         ? photoEnAttente.apercu
         : photoEnAttente.value
@@ -61,6 +92,7 @@
   document.getElementById("remove-photo").addEventListener("click", () => {
     photoEnAttente = null;
     $urlInput.value = "";
+    L.effacerErreur($urlInput);
     $fileInput.value = "";
     $photoStatus.textContent = "Photo retirée (pensez à enregistrer).";
     majApercuPhoto();
@@ -77,13 +109,17 @@
   const $usernameInput = document.getElementById("a-username");
   const $emailPwdField = document.getElementById("email-password-field");
   const $emailPwd = document.getElementById("a-email-password");
-  const emailInitial = $emailInput.value;
-  const usernameInitial = $usernameInput.value;
+  const $profilErreur = document.getElementById("profil-erreur");
+  const $emailAttente = document.getElementById("email-attente");
 
+  /* La comparaison se fait avec les valeurs ENREGISTRÉES (data-compte),
+     pas avec celles du champ au chargement : après un envoi refusé, le
+     champ réaffiche la saisie, et le champ du mot de passe — où se
+     trouve peut-être justement l'erreur — se serait caché. */
   function majChampMotDePasse() {
-    const emailChange =
-      $emailInput.value.trim().toLowerCase() !== emailInitial.trim().toLowerCase();
-    const usernameChange = $usernameInput.value.trim() !== usernameInitial.trim();
+    const emailChange = $emailInput.value.trim().toLowerCase()
+      !== ($emailInput.dataset.compte || "").trim().toLowerCase();
+    const usernameChange = $usernameInput.value.trim() !== ($usernameInput.dataset.compte || "").trim();
     const change = emailChange || usernameChange;
     $emailPwdField.classList.toggle("hidden", !change);
     $emailPwd.required = change;
@@ -92,9 +128,30 @@
   $usernameInput.addEventListener("input", majChampMotDePasse);
   majChampMotDePasse();
 
+  function erreurProfil(message) {
+    $profilErreur.textContent = message;
+    $profilErreur.classList.remove("hidden");
+    $profilErreur.focus();
+  }
+
+  function effacerErreursProfil() {
+    $profilErreur.classList.add("hidden");
+    $profilErreur.textContent = "";
+    L.effacerErreurs($profilForm);
+    L.effacerErreur($urlInput); // rattaché au formulaire, mais placé hors de lui
+    $photoStatus.classList.remove("erreur");
+  }
+
   $profilForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const bouton = $profilForm.querySelector('button[type="submit"]');
+    effacerErreursProfil();
+
+    if (photoEnAttente && photoEnAttente.refusee) {
+      L.erreurChamp($urlInput, L.MESSAGE_URL_REFUSEE);
+      $urlInput.focus();
+      return;
+    }
 
     // FormData(form) reprend tous les champs nommés, y compris ceux
     // rattachés par l'attribut « form » (l'URL et le fichier de la photo).
@@ -117,9 +174,36 @@
       majApercuPhoto();
       $photoStatus.textContent = "";
       $emailPwd.value = "";
+
+      /* Le champ reprend l'adresse ACTIVE : il gardait la nouvelle, pas
+         encore confirmée, et l'on ne savait plus laquelle comptait. La
+         demande en cours s'affiche juste dessous, à part. */
+      $emailInput.value = r.email;
+      $emailInput.dataset.compte = r.email;
+      $usernameInput.dataset.compte = $usernameInput.value.trim();
+      majChampMotDePasse();
+      if (r.email_attente) {
+        document.getElementById("email-attente-adresse").textContent = r.email_attente.adresse;
+        document.getElementById("email-attente-expire").textContent = r.email_attente.expire;
+        $emailAttente.classList.remove("hidden");
+      }
       L.toast(r.message);
     } catch (err) {
-      L.toast(err.message);
+      // Sous le champ concerné : une notification de deux secondes disait
+      // l'erreur sans dire où.
+      const champ = L.erreursSurChamps(err, {
+        identifiant: $usernameInput, email: $emailInput, mot_de_passe: $emailPwd, photo_url: $urlInput,
+      });
+      if (champ) {
+        if (champ === $emailPwd) $emailPwdField.classList.remove("hidden");
+        champ.focus();
+      } else if (err.champ === "photo") {
+        $photoStatus.textContent = err.message;
+        $photoStatus.classList.add("erreur");
+        $dropzone.focus();
+      } else {
+        erreurProfil(err.message);
+      }
     } finally {
       bouton.disabled = false;
     }
@@ -143,11 +227,52 @@
   }
 
   /* ---------------- Mot de passe ----------------
-     On laisse volontairement le formulaire partir en POST classique :
-     c'est la navigation qui suit la soumission qui déclenche la
-     proposition « Enregistrer ce mot de passe ? » des gestionnaires.
-     Intercepter en AJAX ferait perdre cette proposition — l'utilisateur
-     changerait son mot de passe sans que son coffre soit mis à jour. */
+     Le formulaire part en POST classique, volontairement : c'est la
+     navigation qui suit la soumission qui déclenche la proposition
+     « Enregistrer ce mot de passe ? » des gestionnaires. L'intercepter
+     en AJAX la ferait perdre — le coffre ne serait pas mis à jour.
+
+     Mais un POST refusé revenait avec les trois champs VIDES, et
+     l'erreur loin au-dessus. On vérifie donc d'abord, sans rien changer
+     (« verifier » dans api.php) : une erreur s'affiche sous son champ et
+     la saisie reste en place ; tout est bon, le vrai POST part — et le
+     serveur revérifie tout. */
+
+  const $mdpForm = document.getElementById("mdp-form");
+  const $mdpActuel = document.getElementById("a-current");
+  const $mdpNouveau = document.getElementById("a-new");
+  const $mdpConfirmation = document.getElementById("a-new2");
+  let mdpVerifie = false;
+
+  $mdpForm.addEventListener("submit", async (e) => {
+    if (mdpVerifie) return; // la vérification est passée : le POST part
+    e.preventDefault();
+    const bouton = $mdpForm.querySelector('button[type="submit"]');
+    L.effacerErreurs($mdpForm);
+
+    bouton.disabled = true;
+    try {
+      await L.api("compte.motdepasse", {
+        actuel: $mdpActuel.value,
+        nouveau: $mdpNouveau.value,
+        confirmation: $mdpConfirmation.value,
+        verifier: "1",
+      });
+      mdpVerifie = true;
+      bouton.disabled = false;
+      // requestSubmit() rejoue une soumission complète (évènement compris),
+      // la plus proche d'un clic réel ; submit() sert de repli.
+      if (typeof $mdpForm.requestSubmit === "function") $mdpForm.requestSubmit(bouton);
+      else $mdpForm.submit();
+    } catch (err) {
+      bouton.disabled = false;
+      const champ = L.erreursSurChamps(err, {
+        actuel: $mdpActuel, nouveau: $mdpNouveau, confirmation: $mdpConfirmation,
+      });
+      if (champ) champ.focus();
+      else L.erreurChamp($mdpActuel, err.message);
+    }
+  });
 
   /* ---------------- Filtre des images sensibles ----------------
      Présent seulement si l'administrateur a ouvert la possibilité dans le
@@ -215,31 +340,48 @@
   /* ---------------- Import d'une sauvegarde ---------------- */
 
   const $importInput = document.getElementById("btn-import-all");
+  const $importStatut = document.getElementById("import-statut");
+
+  /* Le résultat reste affiché dans la carte, lisible aussi longtemps
+     qu'il faut : il partait dans une notification, et la page filait
+     vers la bibliothèque au bout d'une seconde — personne n'avait le
+     temps de lire « 150 ignorée(s) car la limite… ». */
+  function statutImport(message, erreur = false, lien = false) {
+    $importStatut.replaceChildren(document.createTextNode(message));
+    if (lien) {
+      const a = document.createElement("a");
+      a.href = "index.php";
+      a.textContent = "Voir la bibliothèque";
+      $importStatut.append(" ", a);
+    }
+    $importStatut.classList.toggle("erreur", erreur);
+    $importStatut.classList.remove("hidden");
+  }
 
   $importInput.addEventListener("change", async () => {
     const file = $importInput.files && $importInput.files[0];
     if (!file) return;
 
     if (!/\.json$/i.test(file.name || "") && file.type !== "application/json") {
-      L.toast("Choisissez un fichier .json exporté depuis cette application.");
+      statutImport("Choisissez un fichier .json exporté depuis cette application.", true);
       $importInput.value = "";
       return;
     }
     const maxImport = L.limite("importMax", 5 * 1024 * 1024);
     if (file.size > maxImport) {
-      L.toast("Fichier trop volumineux (" + L.tailleLisible(maxImport) + " maximum).");
+      statutImport("Fichier trop volumineux (" + L.tailleLisible(maxImport) + " maximum).", true);
       $importInput.value = "";
       return;
     }
 
+    statutImport("Import de « " + file.name + " » en cours…");
     const fd = new FormData();
     fd.set("sauvegarde", file);
     try {
       const r = await L.api("donnees.importer", fd);
-      L.toast(r.message);
-      setTimeout(() => (window.location.href = "index.php"), 1200);
+      statutImport(r.message, false, r.importees > 0 || r.presentes > 0);
     } catch (err) {
-      L.toast(err.message);
+      statutImport(err.message, true);
     } finally {
       $importInput.value = "";
     }
@@ -254,6 +396,8 @@
   const $confirmText = document.getElementById("confirm-text");
   const $confirmOk = document.getElementById("confirm-ok");
   const $confirmPwd = document.getElementById("confirm-password");
+  const $confirmExport = document.getElementById("confirm-export");
+  const NB_SERIES = parseInt(document.body.dataset.series || "0", 10) || 0;
   let actionEnAttente = null;
   let elementDeclencheur = null;
 
@@ -261,7 +405,10 @@
     $confirmTitle.textContent = titre;
     $confirmText.textContent = texte;
     $confirmOk.textContent = libelle;
+    // Rien à sauvegarder dans une bibliothèque vide.
+    $confirmExport.classList.toggle("hidden", NB_SERIES === 0);
     $confirmPwd.value = "";
+    L.effacerErreur($confirmPwd);
     actionEnAttente = action;
     elementDeclencheur = document.activeElement;
     $confirmOverlay.classList.remove("hidden");
@@ -293,7 +440,7 @@
     const action = actionEnAttente;
     const motDePasse = $confirmPwd.value;
     if (!motDePasse) {
-      L.toast("Saisissez votre mot de passe pour confirmer.");
+      L.erreurChamp($confirmPwd, "Saisissez votre mot de passe pour confirmer.");
       $confirmPwd.focus();
       return;
     }
@@ -302,8 +449,13 @@
       const r = await L.api(action, { mot_de_passe: motDePasse });
       L.toast(r.message);
       fermerConfirmation();
+      // Les filtres mémorisés de ce compte ne serviront plus à personne.
+      if (action === "compte.supprimer") L.oublierFiltres(document.body.dataset.compte);
       if (r.redirection) {
-        setTimeout(() => (window.location.href = r.redirection), 900);
+        /* replace() et non une navigation ordinaire : la page du compte
+           supprimé quitte l'historique, « Précédent » ne peut plus y
+           ramener. */
+        setTimeout(() => window.location.replace(r.redirection), 900);
       } else {
         setTimeout(() => window.location.reload(), 900);
       }
@@ -323,10 +475,16 @@
         window.Delai.lancer(compteur, err.attente);
         return;
       }
-      L.toast(err.message);
+      // Sous le champ du mot de passe, là où l'on corrige.
+      if (err.champ === "mot_de_passe") L.erreurChamp($confirmPwd, err.message);
+      else L.toast(err.message);
       $confirmPwd.select();
-    } finally {
-      if (!$confirmOk.disabled) $confirmOk.disabled = false;
+      /* Réactivé ici, et seulement ici. L'ancien « finally » testait
+         « s'il n'est pas désactivé » — il l'était toujours à ce stade :
+         après un mot de passe refusé, le bouton restait grisé et seule
+         la touche Entrée permettait de réessayer. Pendant un compte à
+         rebours (plus haut), c'est la fin du délai qui le rend. */
+      $confirmOk.disabled = false;
     }
   }
 
@@ -341,7 +499,7 @@
   document.getElementById("btn-clear-library").addEventListener("click", () => {
     demanderConfirmation(
       "Vider la bibliothèque ?",
-      "Toutes vos séries seront supprimées. Votre compte et votre profil sont conservés. Pensez à exporter une sauvegarde avant.",
+      "Toutes vos séries seront supprimées. Votre compte et votre profil sont conservés.",
       "Tout vider",
       "donnees.vider"
     );
@@ -350,7 +508,7 @@
   document.getElementById("btn-delete-account").addEventListener("click", () => {
     demanderConfirmation(
       "Supprimer le compte ?",
-      "Votre compte, votre profil et l'intégralité de votre bibliothèque seront définitivement supprimés. Cette action est irréversible.",
+      P.texteSuppressionCompte(NB_SERIES, document.body.dataset.forfait),
       "Supprimer définitivement",
       "compte.supprimer"
     );

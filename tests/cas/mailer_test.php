@@ -78,6 +78,17 @@ test('les trois avis existent et acceptent leurs arguments', function () {
     vider_journal_test();
     avertir_mot_de_passe_change('titulaire@exemple.test', 'lecteur92');
     avertir_compte_supprime('titulaire@exemple.test', 'lecteur92');
-    avertir_changement_email_demande('ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test');
+    avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test');
     vrai(true, 'les trois se composent sans lever d erreur');
+});
+
+test('l avis de changement d adresse part même sans son lien de blocage', function () {
+    /* Ici la table jeton_action est hors de portée (la base de test est
+       information_schema) : c est exactement la situation d un serveur
+       dont livre.sql n a pas encore été rejoué. L avis doit partir quand
+       même, avec l ancien conseil, et l échec doit être consigné. */
+    vider_journal_test();
+    avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test');
+    contient('avertir_changement_email_demande', journal_test(), 'l échec du jeton est consigné');
+    contient('SMTP non configuré', journal_test(), 'et l envoi a tout de même été tenté');
 });
