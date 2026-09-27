@@ -56,7 +56,7 @@ function exiger_mot_de_passe(int $mon_id): void
         return;
     }
     // Compte créé par Google : c'est Google qui confirme, pas un mot de passe.
-    if (compte_sans_mot_de_passe($mon_id)) {
+    if (compte_google($mon_id)) {
         reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'google' => true, 'erreur' =>
             "Confirmez d'abord votre identité avec Google (bouton « Confirmer avec Google »)."], 403);
     }
@@ -461,7 +461,7 @@ switch ($action) {
         if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente)) {
             $erreurs['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : ((int) $moi['sans_mot_de_passe'] === 1
+                : ((string) $moi['google_sub'] !== ''
                     ? "Confirmez d'abord votre identité avec Google (moins de "
                       . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . ' minutes).'
                     : 'Mot de passe actuel incorrect.');
@@ -500,7 +500,9 @@ switch ($action) {
         reponse_json([
             'ok'      => true,
             'csrf'    => jeton_csrf(),
-            'message' => 'Mot de passe modifié ✅ — les autres appareils ont été déconnectés.',
+            'message' => (int) $moi['sans_mot_de_passe'] === 1
+                ? 'Mot de passe défini ✅ — il vous sera demandé après Google, à chaque connexion.'
+                : 'Mot de passe modifié ✅ — les autres appareils ont été déconnectés.',
         ]);
     }
 

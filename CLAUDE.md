@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (584 tests : 519 PHP en 42 fichiers, 65 JavaScript)
+php tests/lancer.php              # toute la suite (586 tests : 521 PHP en 42 fichiers, 65 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -58,7 +58,8 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 `deconnexion.php`, `mentions-legales.php`, `google.php` (départ vers
 Google et retour : ouvre le compte, ou mène à la création),
 `google-inscription.php` (création d'un compte Google : identifiant,
-mot de passe facultatif).
+mot de passe facultatif), `google-mot-de-passe.php` (seconde étape
+d'une connexion Google, quand le compte a un mot de passe).
 
 `api.php` est le **point d'entrée AJAX unique** : un `switch` sur
 `$_POST['action']`. Chaque branche vérifie le CSRF et cloisonne par
@@ -172,13 +173,23 @@ La suppression du compte s'en sert aussi : `api.php` vide la session et
 la renouvelle (`session_regenerate_id`) au lieu de la détruire, pour que
 `connexion.php` puisse dire que c'est fait.
 
-**Un compte créé par Google n'a pas de mot de passe** : `mot_de_passe`
-y vaut `''`, que `password_verify()` refuse toujours (aucune connexion
-par mot de passe n'y mène). Là où les autres retapent leur mot de passe,
-il repasse par Google : `verifier_mot_de_passe_limite()` le sait et
-demande `google_confirmation_recente()`, attachée à l'id du compte. Toute
-nouvelle action sensible passe donc par cette fonction, jamais par
+**Un compte créé par Google repasse par Google, mot de passe ou non.**
+Là où les autres retapent leur mot de passe, `verifier_mot_de_passe_limite()`
+voit `google_sub` (`compte_google()`) et demande
+`google_confirmation_recente()`, attachée à l'id du compte — y compris
+pour définir, changer ou supprimer son mot de passe. Toute nouvelle
+action sensible passe donc par cette fonction, jamais par
 `password_verify()` directement.
+
+**Le mot de passe d'un compte Google est une seconde clé, jamais une
+porte.** Facultatif (`mot_de_passe` vaut `''` sans lui), il est demandé
+APRÈS Google à chaque connexion : `google_decision()` rend alors
+« mot_de_passe », google.php range le compte dans
+`$_SESSION['google_mdp']` (sans rien ouvrir) et `google-mot-de-passe.php`
+le demande, avec les mêmes freins que `connexion.php`. Le formulaire
+« adresse e-mail » refuse un compte Google même au bon mot de passe (il
+le renvoie vers Google) : sinon le mot de passe seul contournerait Google.
+Il se supprime dans Paramètres › Sécurité (`avertir_mot_de_passe_supprime()`).
 
 **Comptes e-mail et comptes Google ne se relient pas** (choix de
 l'utilisateur) : `google_decision()` refuse l'adresse d'un compte e-mail

@@ -482,10 +482,11 @@ function limiteur_echec(string $action, int $max_essais, int $duree_base, ?strin
  */
 function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$attente = null): bool
 {
-    /* Un compte créé par Google n'a pas de mot de passe à retaper : il
-       confirme en repassant par Google (voir google.php), et cette
-       confirmation vaut GOOGLE_CONFIRMATION_DUREE secondes. */
-    if (compte_sans_mot_de_passe($utilisateur_id)) {
+    /* Un compte créé par Google confirme en repassant par Google (voir
+       google.php), qu'il ait un mot de passe ou non : cette confirmation
+       vaut GOOGLE_CONFIRMATION_DUREE secondes. Son mot de passe, s'il en a
+       un, ne sert qu'à la connexion, en seconde étape après Google. */
+    if (compte_google($utilisateur_id)) {
         $attente = 0;
         return google_confirmation_recente($utilisateur_id);
     }
@@ -883,23 +884,23 @@ function mot_de_passe_correct(int $utilisateur_id, string $mot_de_passe): bool
 }
 
 /**
- * Le compte a-t-il été créé par Google, sans mot de passe ? Son
- * `mot_de_passe` vaut alors '' — que password_verify() refuse toujours,
- * si bien qu'aucune connexion par mot de passe n'y mène.
+ * Le compte a-t-il été créé par Google ? Il se connecte alors par Google
+ * (puis par son mot de passe, s'il en a défini un), et c'est Google qui
+ * confirme les actions sensibles. Sans mot de passe, `mot_de_passe` vaut
+ * '' — que password_verify() refuse toujours.
  */
-function compte_sans_mot_de_passe(int $utilisateur_id): bool
+function compte_google(int $utilisateur_id): bool
 {
     global $pdo;
-    $req = $pdo->prepare('SELECT mot_de_passe FROM utilisateur WHERE id = ?');
+    $req = $pdo->prepare('SELECT google_sub FROM utilisateur WHERE id = ?');
     $req->execute([$utilisateur_id]);
-    $hash = $req->fetchColumn();
-    return $hash !== false && (string) $hash === '';
+    return (string) $req->fetchColumn() !== '';
 }
 
 /**
  * La personne vient-elle de prouver son identité en passant par Google ?
  * Posé par google.php, valable GOOGLE_CONFIRMATION_DUREE secondes : c'est
- * le mot de passe retapé des comptes qui n'en ont pas.
+ * le mot de passe retapé des comptes créés avec Google.
  *
  * Attachée au COMPTE, pas seulement à la session : une confirmation
  * obtenue pour un compte ne doit rien valoir pour un autre qui ouvrirait

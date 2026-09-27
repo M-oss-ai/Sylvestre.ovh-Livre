@@ -399,8 +399,8 @@ window.Parametres = (() => {
   const $confirmPwd = document.getElementById("confirm-password");
   const $confirmExport = document.getElementById("confirm-export");
   const NB_SERIES = parseInt(document.body.dataset.series || "0", 10) || 0;
-  // Compte créé par Google : pas de mot de passe, Google confirme à sa place.
-  const SANS_MDP = document.body.dataset.sansMdp === "1";
+  // Compte créé par Google : pas de mot de passe à retaper, Google confirme à sa place.
+  const PAR_GOOGLE = document.body.dataset.parGoogle === "1";
   let actionEnAttente = null;
   let elementDeclencheur = null;
 
@@ -415,7 +415,7 @@ window.Parametres = (() => {
     actionEnAttente = action;
     elementDeclencheur = document.activeElement;
     $confirmOverlay.classList.remove("hidden");
-    if (!SANS_MDP) $confirmPwd.focus();
+    if (!PAR_GOOGLE) $confirmPwd.focus();
     else ($confirmOk.disabled ? document.getElementById("confirm-cancel") : $confirmOk).focus();
   }
 
@@ -443,7 +443,7 @@ window.Parametres = (() => {
     if (!actionEnAttente) return;
     const action = actionEnAttente;
     const motDePasse = $confirmPwd.value;
-    if (!motDePasse && !SANS_MDP) {
+    if (!motDePasse && !PAR_GOOGLE) {
       L.erreurChamp($confirmPwd, "Saisissez votre mot de passe pour confirmer.");
       $confirmPwd.focus();
       return;

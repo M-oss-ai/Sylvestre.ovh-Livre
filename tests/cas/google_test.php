@@ -140,6 +140,15 @@ test('sans session : ouvrir, refuser ou créer', function () {
     egale('creer', google_decision(null, null, null), 'personne : on propose de créer');
 });
 
+test('un compte Google avec mot de passe : le mot de passe d abord', function () {
+    egale('mot_de_passe', google_decision(null, ['id' => 7, 'google_sub' => 's', 'a_mdp' => 1], null),
+        'Google ne suffit pas : la seconde étape attend');
+    egale('connecter', google_decision(null, ['id' => 7, 'google_sub' => 's', 'a_mdp' => 0], null),
+        'sans mot de passe, Google seul ouvre le compte');
+    egale('confirmer', google_decision(['id' => 7, 'google_sub' => 's'], ['id' => 7, 'a_mdp' => 1], null),
+        'déjà connecté : confirmer son identité ne redemande pas le mot de passe');
+});
+
 test('un compte e-mail jamais confirmé ne bloque pas l adresse', function () {
     /* N importe qui a pu le créer avec l adresse d un autre ; Google vient
        de prouver à qui elle est. Ce compte jamais activé cède la place. */
@@ -153,6 +162,16 @@ test('connecté : seulement confirmer son identité, jamais relier', function ()
     egale('refus_autre', google_decision($moi, ['id' => 7], null), 'le compte Google d un autre');
     egale('refus_autre', google_decision(['id' => 5, 'google_sub' => null], null, null),
         'un compte e-mail ne se relie pas à Google');
+});
+
+groupe('google_etape_mdp() — le compte qui attend son mot de passe');
+
+test('valable le temps du parcours, puis il faut repasser par Google', function () {
+    egale(7, google_etape_mdp(['id' => 7, 'le' => 1000], 1000 + GOOGLE_PARCOURS_MAX), 'à la limite : encore valable');
+    egale(0, google_etape_mdp(['id' => 7, 'le' => 1000], 1001 + GOOGLE_PARCOURS_MAX), 'au-delà : expiré');
+    egale(0, google_etape_mdp(null, 1000), 'aucune étape en cours');
+    egale(0, google_etape_mdp('7', 1000), 'pas un tableau');
+    egale(0, google_etape_mdp(['id' => -3, 'le' => 1000], 1000), 'jamais un id négatif');
 });
 
 groupe('identifiant_depuis_google() — le nom d un compte créé');

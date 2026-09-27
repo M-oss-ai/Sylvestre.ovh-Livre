@@ -7,13 +7,14 @@
    Google nous renvoie la personne, et l'on décide quoi faire de son
    compte (google_decision) :
 
-     - compte créé avec ce compte Google  → on l'ouvre ;
+     - compte créé avec ce compte Google  → on l'ouvre ; s'il a un mot de
+       passe, google-mot-de-passe.php le demande d'abord ;
      - adresse d'un compte e-mail         → refus : les deux sortes de
        comptes ne se relient pas ;
      - adresse inconnue                    → google-inscription.php, où
        l'on choisit son identifiant ;
      - déjà connecté (depuis Paramètres)   → la personne vient de
-       confirmer son identité (compte sans mot de passe).
+       confirmer son identité (actions sensibles d'un compte Google).
 
    Toute erreur ramène à la page d'où l'on venait, avec un message ; le
    détail technique va au journal, jamais à l'écran.
@@ -101,7 +102,7 @@ $destination  = GOOGLE_RETOURS[$attendu['retour']] ?? 'index.php';
 /* ---------------------------------------------------------------------
    3. Qui est-ce, pour le site ?
    --------------------------------------------------------------------- */
-$colonnes = 'SELECT id, identifiant, email, email_verifie, google_sub FROM utilisateur WHERE ';
+$colonnes = 'SELECT id, identifiant, email, email_verifie, google_sub, (mot_de_passe <> \'\') AS a_mdp FROM utilisateur WHERE ';
 $req = $pdo->prepare($colonnes . 'google_sub = ?');
 $req->execute([$sub]);
 $par_sub = $req->fetch() ?: null;
@@ -129,6 +130,15 @@ switch ($decision) {
             ? 'Cette adresse est déjà utilisée par un autre compte.'
             : 'Un compte existe déjà avec cette adresse e-mail : connectez-vous avec votre '
               . 'identifiant et votre mot de passe.', $moi);
+
+    case 'mot_de_passe':
+        /* Google a confirmé l'identité ; le mot de passe défini dans les
+           Paramètres est la seconde clé. Rien n'est ouvert avant lui : le
+           compte attend dans la session, le temps de le taper. */
+        session_regenerate_id(true);
+        $_SESSION['google_mdp'] = ['id' => (int) $par_sub['id'], 'le' => time(), 'destination' => $destination];
+        header('Location: google-mot-de-passe.php');
+        exit;
 
     case 'connecter':
         $id = (int) $par_sub['id'];

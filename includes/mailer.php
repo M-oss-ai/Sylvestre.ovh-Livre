@@ -450,6 +450,27 @@ function avertir_mot_de_passe_change(string $email, string $identifiant): void
 }
 
 /**
+ * Prévient qu'un compte créé avec Google vient de supprimer son mot de
+ * passe : la connexion ne passe plus que par Google. Il faut pour cela
+ * avoir repassé par Google à l'instant — si ce n'est pas le titulaire,
+ * c'est son compte Google qui est entre d'autres mains.
+ */
+function avertir_mot_de_passe_supprime(string $email, string $identifiant): void
+{
+    envoyer_email(
+        $email,
+        'Votre mot de passe a été supprimé',
+        "Bonjour {$identifiant},\n\n"
+        . "Le mot de passe de votre compte Ma Bibliothèque Manga vient d'être supprimé : "
+        . "vous vous connectez désormais avec Google seul.\n\n"
+        . "Si vous êtes à l'origine de ce changement, vous n'avez rien à faire.\n\n"
+        . "SINON, quelqu'un a accès à votre compte Google : sécurisez-le d'abord (changez son "
+        . "mot de passe chez Google), puis redéfinissez un mot de passe dans les Paramètres du site :\n"
+        . url_publique('parametres.php#securite')
+    );
+}
+
+/**
  * Prévient qu'un compte vient d'être supprimé.
  *
  * C'est l'action la plus irréversible du site, et c'était la seule

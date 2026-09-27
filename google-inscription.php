@@ -4,7 +4,8 @@
 
    Google a confirmé l'adresse (google.php l'a rangée dans la session) :
    il ne reste qu'à choisir un identifiant, et, si on le souhaite, un mot
-   de passe pour se connecter aussi sans Google.
+   de passe : il sera alors demandé après Google, à chaque connexion
+   (google-mot-de-passe.php).
 
    L'adresse est celle du compte Google, et elle n'est pas modifiable
    ici : Google l'a vérifiée, aucun e-mail de confirmation n'est donc à
@@ -171,8 +172,8 @@ $csrf = jeton_csrf();
         <?= champ_erreur($erreurs, 'identifiant', 'identifiant') ?>
       </div>
 
-      <!-- Facultatif : sans mot de passe, on se connecte avec Google. Avec,
-           on peut aussi se connecter avec son identifiant. -->
+      <!-- Facultatif : sans mot de passe, on se connecte avec Google seul.
+           Avec, il est demandé en seconde étape, après Google. -->
       <div class="field">
         <label for="mot_de_passe">Mot de passe</label>
         <div class="password-wrap">
@@ -183,7 +184,7 @@ $csrf = jeton_csrf();
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
-        <p class="hint" id="mdp-facultatif">Facultatif : pour vous connecter aussi sans Google.</p>
+        <p class="hint" id="mdp-facultatif">Facultatif : il vous sera demandé après Google, à chaque connexion.</p>
       </div>
 
       <div class="field">

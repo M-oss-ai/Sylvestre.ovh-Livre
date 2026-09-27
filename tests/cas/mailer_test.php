@@ -70,16 +70,17 @@ test('sans configuration SMTP, rien ne part et c est consigné', function () {
 
 groupe('avertir_*() — les avis de sécurité');
 
-test('les trois avis existent et acceptent leurs arguments', function () {
+test('les quatre avis existent et acceptent leurs arguments', function () {
     /* Ils n envoient rien ici (SMTP vide), mais on vérifie qu ils se
        composent sans erreur : ce sont les seuls signaux qu a le titulaire
        légitime quand quelqu un d autre a son mot de passe, et une erreur
        PHP au moment de les composer les ferait disparaître en silence. */
     vider_journal_test();
     avertir_mot_de_passe_change('titulaire@exemple.test', 'lecteur92');
+    avertir_mot_de_passe_supprime('titulaire@exemple.test', 'lecteur92');
     avertir_compte_supprime('titulaire@exemple.test', 'lecteur92');
     avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test');
-    vrai(true, 'les trois se composent sans lever d erreur');
+    vrai(true, 'les quatre se composent sans lever d erreur');
 });
 
 test('l avis de changement d adresse part même sans son lien de blocage', function () {

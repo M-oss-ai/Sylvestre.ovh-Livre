@@ -176,7 +176,7 @@ importantes :
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
-| `GOOGLE_CONFIRMATION_DUREE` | Durée pendant laquelle Google tient lieu de mot de passe (compte sans mot de passe) |
+| `GOOGLE_CONFIRMATION_DUREE` | Durée pendant laquelle Google tient lieu de mot de passe (actions sensibles d'un compte Google) |
 
 ---
 
@@ -198,6 +198,7 @@ Google ne s'en délie jamais.
 | Situation | Ce qui se passe |
 |---|---|
 | Compte créé avec ce compte Google | Il s'ouvre |
+| Le même, avec un mot de passe | `google-mot-de-passe.php` le demande d'abord ; le compte s'ouvre ensuite |
 | Adresse d'un compte créé avec une adresse e-mail | Refus : « connectez-vous avec votre identifiant et votre mot de passe » |
 | Adresse inconnue | `google-inscription.php` : on choisit son identifiant (proposé d'après l'adresse), et si on veut un mot de passe |
 | Adresse d'un compte e-mail jamais confirmé | Comme une adresse inconnue : ce compte jamais activé cède la place, Google ayant prouvé à qui est l'adresse |
@@ -206,10 +207,16 @@ L'adresse du compte est celle de Google, déjà vérifiée : aucun e-mail de
 confirmation à attendre. Elle se change ensuite dans les Paramètres, avec
 le lien de confirmation habituel.
 
-Un compte sans mot de passe **repasse par Google** là où les autres
-retapent le leur (supprimer le compte, vider, changer d'adresse ou
-d'identifiant) : la confirmation vaut `GOOGLE_CONFIRMATION_DUREE`
-secondes. Il peut définir un mot de passe dans Paramètres › Sécurité.
+Un compte Google **repasse par Google** là où les autres retapent leur
+mot de passe (supprimer le compte, vider, changer d'adresse ou
+d'identifiant, définir, changer ou supprimer son mot de passe) : la
+confirmation vaut `GOOGLE_CONFIRMATION_DUREE` secondes.
+
+Son mot de passe est **facultatif**, et c'est une seconde clé : s'il en a
+un (choisi à la création ou dans Paramètres › Sécurité), il est demandé
+**après** Google, à chaque connexion. Il ne suffit jamais seul : le
+formulaire « adresse e-mail » renvoie un compte Google vers Google. On
+peut le supprimer (un avis part par e-mail) pour revenir à Google seul.
 « Mot de passe oublié » reste la porte de secours.
 
 **Mise en place** — dans la console Google Cloud : « API et services »
@@ -499,6 +506,7 @@ configuration.
 | `inscription.php` · `connexion.php` · `deconnexion.php` | Comptes |
 | `google.php` · `includes/google.php` | « Continuer avec Google » : départ, retour, décision |
 | `google-inscription.php` | Création d'un compte Google : choix de l'identifiant, mot de passe facultatif |
+| `google-mot-de-passe.php` | Seconde étape d'une connexion Google, pour un compte qui a un mot de passe |
 | `mot-de-passe-oublie.php` · `reinitialiser-mot-de-passe.php` · `verifier-email.php` | Récupération et confirmation |
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
 | `mentions-legales.php` | Mentions légales et confidentialité |

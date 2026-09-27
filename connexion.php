@@ -40,6 +40,9 @@ $identifiant = '';
 /* Vrai quand les identifiants sont bons mais l'adresse non confirmée :
    c'est ce qui autorise l'affichage du bouton « renvoyer le lien ». */
 $a_confirmer = false;
+/* Vrai quand un compte Google a tapé le bon mot de passe ici : on lui
+   montre le bouton Google, par où passe sa connexion. */
+$vers_google = false;
 
 /* On choisit d'abord COMMENT se connecter (Google ou adresse e-mail), puis
    on remplit le formulaire. Sans Google configuré, rien à choisir. Un
@@ -100,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // On accepte l'identifiant OU l'e-mail
             $req = $pdo->prepare(
-                'SELECT id, identifiant, email, mot_de_passe, email_verifie
+                'SELECT id, identifiant, email, mot_de_passe, email_verifie, google_sub
                    FROM utilisateur WHERE identifiant = ? OR email = ? LIMIT 1'
             );
             $req->execute([$identifiant, $identifiant]);
@@ -121,7 +124,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $maj->execute([password_hash($mdp, PASSWORD_DEFAULT), (int) $u['id']]);
                 }
 
-                if ((int) $u['email_verifie'] === 0) {
+                if ((string) $u['google_sub'] !== '') {
+                    /* Compte créé avec Google : son mot de passe est la
+                       seconde étape, APRÈS Google (google-mot-de-passe.php),
+                       jamais une porte à lui seul. Dit seulement quand le mot
+                       de passe est bon : rien n'est révélé à qui le devine. */
+                    $erreur = 'Ce compte a été créé avec Google : choisissez « Continuer avec Google », '
+                            . 'votre mot de passe vous sera demandé ensuite.';
+                    $vers_google = google_actif();
+                } elseif ((int) $u['email_verifie'] === 0) {
                     /* Mot de passe correct, adresse non confirmée. On ne
                        connecte pas, mais on mémorise de quel compte il
                        s'agit pour pouvoir lui renvoyer un lien. */
@@ -223,6 +234,11 @@ $csrf = jeton_csrf();
       <div class="alert alert-error" role="alert" id="connexion-erreur">
         <?= e($erreur) ?><?php if ($attente > 0): ?> <b class="delai" data-restant="<?= (int) $attente ?>"><?= (int) $attente ?> secondes</b>.<?php endif; ?>
       </div>
+    <?php endif; ?>
+
+    <?php if ($vers_google): ?>
+      <div class="choix-methode"><?= bouton_google('Continuer avec Google') ?></div>
+      <div class="settings-divider"></div>
     <?php endif; ?>
 
     <?php if ($a_confirmer): ?>

@@ -164,6 +164,8 @@ function google_verifier_revendications(array $c, string $client_id, string $non
  *                     compte : la personne vient de prouver son identité
  *   « refus_autre »   connecté, mais avec un autre compte Google
  *   « connecter »     compte créé avec ce compte Google : on l'ouvre
+ *   « mot_de_passe »  le même, mais il a défini un mot de passe : on le
+ *                     demande d'abord (google-mot-de-passe.php)
  *   « refus_adresse » l'adresse appartient déjà à un compte (créé avec
  *                     une adresse e-mail et confirmé, ou avec un autre
  *                     compte Google) : on ne relie rien
@@ -180,13 +182,29 @@ function google_decision(?array $moi, ?array $par_sub, ?array $par_email): strin
         return $par_sub !== null && (int) $par_sub['id'] === (int) $moi['id'] ? 'confirmer' : 'refus_autre';
     }
     if ($par_sub !== null) {
-        return 'connecter';
+        return (int) ($par_sub['a_mdp'] ?? 0) === 1 ? 'mot_de_passe' : 'connecter';
     }
     if ($par_email !== null
         && ((int) ($par_email['email_verifie'] ?? 0) === 1 || (string) ($par_email['google_sub'] ?? '') !== '')) {
         return 'refus_adresse';
     }
     return 'creer';
+}
+
+/**
+ * Le compte qui attend son mot de passe après Google, ou 0.
+ *
+ * google.php range l'étape dans la session quand Google a confirmé un
+ * compte qui a aussi un mot de passe ; google-mot-de-passe.php la lit.
+ * Elle ne vaut que GOOGLE_PARCOURS_MAX secondes : au-delà, c'est une
+ * session oubliée ouverte, et il faut repasser par Google.
+ */
+function google_etape_mdp(mixed $etape, int $maintenant): int
+{
+    if (!is_array($etape) || (int) ($etape['le'] ?? 0) < $maintenant - GOOGLE_PARCOURS_MAX) {
+        return 0;
+    }
+    return max(0, (int) ($etape['id'] ?? 0));
 }
 
 /**
