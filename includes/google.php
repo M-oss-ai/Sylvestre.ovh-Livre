@@ -192,6 +192,19 @@ function google_decision(?array $moi, ?array $par_sub, ?array $par_email): strin
 }
 
 /**
+ * Où revenir après s'être reconnecté pour $action : la carte des
+ * Paramètres où elle se valide.
+ */
+function google_page_action(string $action): string
+{
+    return match ($action) {
+        'compte.profil'                           => 'parametres.php#profil',
+        'compte.motdepasse', 'compte.supprimer_mdp' => 'parametres.php#securite',
+        default                                   => 'parametres.php#donnees',
+    };
+}
+
+/**
  * Le compte qui attend son mot de passe après Google, ou 0.
  *
  * google.php range l'étape dans la session quand Google a confirmé un
@@ -270,12 +283,13 @@ function google_echanger_code(string $code, string $verificateur): ?array
 }
 
 /** Le bouton « Continuer avec Google », ou rien si Google n'est pas configuré. */
-function bouton_google(string $texte = 'Continuer avec Google', string $retour = ''): string
+function bouton_google(string $texte = 'Continuer avec Google', string $retour = '', string $action = ''): string
 {
     if (!google_actif()) {
         return '';
     }
-    $cible = 'google.php' . ($retour !== '' ? '?retour=' . rawurlencode($retour) : '');
+    $requete = http_build_query(array_filter(['retour' => $retour, 'action' => $action], 'strlen'));
+    $cible   = 'google.php' . ($requete !== '' ? '?' . $requete : '');
     // Le « G » aux couleurs de Google, dessiné (attributs de présentation,
     // que la CSP accepte — ce n'est pas un style en ligne).
     return '<a class="btn btn-google full" href="' . htmlspecialchars($cible, ENT_QUOTES) . '">'

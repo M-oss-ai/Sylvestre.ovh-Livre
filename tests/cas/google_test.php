@@ -185,21 +185,44 @@ test('le début de l adresse, dans les règles de l inscription', function () {
     egale('abc', identifiant_depuis_google('.abc.@exemple.test'), 'sans ponctuation aux bords');
 });
 
-groupe('google_confirmation_recente() — Google tient lieu de mot de passe');
+groupe('google_confirmation_recente() — se reconnecter pour UNE action');
 
-test('valable une minute, pour ce compte seulement', function () {
-    $session = ['google_confirme' => ['id' => 5, 'le' => 1000]];
-    vrai(google_confirmation_recente(5, $session, 1059), 'dans la minute');
-    faux(google_confirmation_recente(5, $session, 1061), 'passé le délai');
-    faux(google_confirmation_recente(6, $session, 1001), 'pour un autre compte');
-    faux(google_confirmation_recente(5, [], 1001), 'sans confirmation');
-    faux(google_confirmation_recente(0, ['google_confirme' => ['id' => 0, 'le' => 1000]], 1001), 'jamais pour « personne »');
+test('valable une minute, pour ce compte et cette action seulement', function () {
+    $session = ['google_confirme' => ['id' => 5, 'action' => 'compte.supprimer', 'le' => 1000]];
+    vrai(google_confirmation_recente(5, 'compte.supprimer', $session, 1059), 'dans la minute');
+    faux(google_confirmation_recente(5, 'compte.supprimer', $session, 1060), 'passé le délai');
+    faux(google_confirmation_recente(5, 'donnees.vider', $session, 1001),
+        'une autre action à risque demande de se reconnecter');
+    faux(google_confirmation_recente(6, 'compte.supprimer', $session, 1001), 'pour un autre compte');
+    faux(google_confirmation_recente(5, 'compte.supprimer', [], 1001), 'sans confirmation');
+    faux(google_confirmation_recente(0, 'compte.supprimer',
+        ['google_confirme' => ['id' => 0, 'action' => 'compte.supprimer', 'le' => 1000]], 1001), 'jamais pour « personne »');
 });
 
-test('google_noter_confirmation() la pose dans la session', function () {
-    google_noter_confirmation(9);
-    vrai(google_confirmation_recente(9), 'aussitôt valable');
-    unset($_SESSION['google_confirme']);
+test('une confirmation sans action (celle d une connexion) ne vaut rien', function () {
+    $session = ['google_confirme' => ['id' => 5, 'le' => 1000]];
+    estNul(google_confirmation_en_cours(5, $session, 1001), 'se connecter ne confirme aucune action');
+    estNul(google_confirmation_en_cours(5, ['google_confirme' => ['id' => 5, 'action' => 'inconnue', 'le' => 1000]], 1001),
+        'une action hors de la liste');
+});
+
+test('google_confirmation_en_cours() dit l action et le temps qui reste', function () {
+    $session = ['google_confirme' => ['id' => 5, 'action' => 'compte.motdepasse', 'le' => 1000]];
+    egale(['action' => 'compte.motdepasse', 'restant' => 45], google_confirmation_en_cours(5, $session, 1015), '45 s sur 60');
+});
+
+test('noter, puis oublier : elle ne sert qu une fois', function () {
+    google_noter_confirmation(9, 'donnees.vider');
+    vrai(google_confirmation_recente(9, 'donnees.vider'), 'aussitôt valable');
+    google_oublier_confirmation();
+    faux(google_confirmation_recente(9, 'donnees.vider'), 'l action faite, elle a disparu');
+});
+
+test('chaque action à risque a son message', function () {
+    contient('supprimer votre compte', message_reconnexion_google('compte.supprimer'), 'dit pour quoi se reconnecter');
+    egale('parametres.php#donnees', google_page_action('compte.supprimer'), 'retour sur la bonne carte');
+    egale('parametres.php#securite', google_page_action('compte.motdepasse'), 'le mot de passe : Sécurité');
+    egale('parametres.php#profil', google_page_action('compte.profil'), 'identifiant et adresse : Profil');
 });
 
 groupe('bouton_google() — le bouton');
@@ -210,6 +233,11 @@ test('un lien vers google.php, sans style en ligne', function () {
     contient('Continuer avec Google', $html, 'le libellé');
     sans('style=', $html, 'la CSP interdit le style en ligne');
     sans('<script', $html, 'ni script');
+});
+
+test('le bouton de reconnexion porte son action', function () {
+    contient('href="google.php?retour=parametres&amp;action=compte.supprimer"',
+        bouton_google('Se reconnecter', 'parametres', 'compte.supprimer'), 'l action part avec la demande');
 });
 
 test('le libellé est échappé', function () {

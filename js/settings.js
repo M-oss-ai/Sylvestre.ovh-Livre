@@ -244,7 +244,7 @@ window.Parametres = (() => {
   const $mdpConfirmation = document.getElementById("a-new2");
   let mdpVerifie = false;
 
-  // Absent pour un compte sans mot de passe tant que Google n'a pas confirmé.
+  // Absent pour un compte Google tant qu'il ne s'est pas reconnecté pour cette action.
   if ($mdpForm) $mdpForm.addEventListener("submit", async (e) => {
     if (mdpVerifie) return; // la vérification est passée : le POST part
     e.preventDefault();
@@ -254,7 +254,7 @@ window.Parametres = (() => {
     bouton.disabled = true;
     try {
       await L.api("compte.motdepasse", {
-        actuel: $mdpActuel ? $mdpActuel.value : "", // pas de champ : compte sans mot de passe
+        actuel: $mdpActuel ? $mdpActuel.value : "", // pas de champ : compte Google
         nouveau: $mdpNouveau.value,
         confirmation: $mdpConfirmation.value,
         verifier: "1",
@@ -399,18 +399,37 @@ window.Parametres = (() => {
   const $confirmPwd = document.getElementById("confirm-password");
   const $confirmExport = document.getElementById("confirm-export");
   const NB_SERIES = parseInt(document.body.dataset.series || "0", 10) || 0;
-  // Compte Google sans mot de passe : rien à retaper, Google confirme à sa place.
-  const SANS_MDP = document.body.dataset.sansMdp === "1";
-  /* À la place, il retape son identifiant (absent tant que Google n'a pas
-     confirmé l'identité) : le bouton reste grisé jusque-là. */
-  const $confirmId = document.getElementById("confirm-identifiant");
-  const identifiantRetape = () => !!$confirmId
-    && $confirmId.value.trim().toLocaleLowerCase() === $confirmId.dataset.attendu.toLocaleLowerCase();
-  if ($confirmId) {
-    $confirmId.addEventListener("input", () => { $confirmOk.disabled = !identifiantRetape(); });
-    $confirmId.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); if (identifiantRetape()) lancerAction(); }
-    });
+  /* Compte Google : rien à taper. Il se reconnecte pour UNE action (le lien
+     du bouton Google la porte), revient ici, et a le temps restant pour
+     cliquer « Confirmer ». Le serveur pose l'action confirmée et les
+     secondes restantes sur <body>, et revérifie tout à l'envoi. */
+  const PAR_GOOGLE = document.body.dataset.parGoogle === "1";
+  const CONFIRME = {
+    action: document.body.dataset.confirmeAction || "",
+    echeance: Date.now() + (parseInt(document.body.dataset.confirmeRestant || "0", 10) || 0) * 1000,
+  };
+  const $googleAller = document.getElementById("confirm-google-aller");
+  const $googleOk = document.getElementById("confirm-google-ok");
+  const $confirmDelai = document.getElementById("confirm-delai");
+  let arreterDelai = null;
+
+  /** Pour cette action : le bouton « Se reconnecter », ou le temps qui reste. */
+  function preparerGoogle(action) {
+    if (arreterDelai) { arreterDelai(); arreterDelai = null; }
+    const reste = Math.ceil((CONFIRME.echeance - Date.now()) / 1000);
+    const confirmee = CONFIRME.action === action && reste > 0;
+    $googleAller.classList.toggle("hidden", confirmee);
+    $googleOk.classList.toggle("hidden", !confirmee);
+    $confirmOk.disabled = !confirmee;
+    const lien = $googleAller.querySelector("a.btn-google");
+    if (lien) lien.href = "google.php?retour=parametres&action=" + encodeURIComponent(action);
+    if (confirmee) {
+      // Délai écoulé : il faut se reconnecter, le bouton se grise.
+      arreterDelai = window.Delai.lancer($confirmDelai, reste, () => {
+        CONFIRME.action = "";
+        preparerGoogle(action);
+      }) || null;
+    }
   }
   let actionEnAttente = null;
   let elementDeclencheur = null;
@@ -423,15 +442,14 @@ window.Parametres = (() => {
     $confirmExport.classList.toggle("hidden", NB_SERIES === 0);
     $confirmPwd.value = "";
     L.effacerErreur($confirmPwd);
-    if ($confirmId) { $confirmId.value = ""; L.effacerErreur($confirmId); }
-    if (SANS_MDP) $confirmOk.disabled = true;
+    if (PAR_GOOGLE) preparerGoogle(action);
     actionEnAttente = action;
     elementDeclencheur = document.activeElement;
     $confirmOverlay.classList.remove("hidden");
     /* Jamais sur le bouton qui efface : une touche Entrée ou un second
        appui suffisait alors à tout supprimer. */
-    if (!SANS_MDP) $confirmPwd.focus();
-    else ($confirmId || document.getElementById("confirm-cancel")).focus();
+    if (!PAR_GOOGLE) $confirmPwd.focus();
+    else document.getElementById("confirm-cancel").focus();
   }
 
   function fermerConfirmation() {
@@ -458,18 +476,14 @@ window.Parametres = (() => {
     if (!actionEnAttente) return;
     const action = actionEnAttente;
     const motDePasse = $confirmPwd.value;
-    if (SANS_MDP && !identifiantRetape()) {
-      if ($confirmId) { L.erreurChamp($confirmId, "Tapez votre identifiant exactement pour confirmer."); $confirmId.focus(); }
-      return;
-    }
-    if (!motDePasse && !SANS_MDP) {
+    if (!motDePasse && !PAR_GOOGLE) {
       L.erreurChamp($confirmPwd, "Saisissez votre mot de passe pour confirmer.");
       $confirmPwd.focus();
       return;
     }
     $confirmOk.disabled = true;
     try {
-      const r = await L.api(action, { mot_de_passe: motDePasse, confirmation: $confirmId ? $confirmId.value : "" });
+      const r = await L.api(action, { mot_de_passe: motDePasse });
       L.toast(r.message);
       fermerConfirmation();
       // Les filtres mémorisés de ce compte ne serviront plus à personne.
@@ -499,8 +513,14 @@ window.Parametres = (() => {
         return;
       }
       // Sous le champ du mot de passe, là où l'on corrige.
-      if (err.champ === "confirmation" && $confirmId) L.erreurChamp($confirmId, err.message);
-      else if (err.champ === "mot_de_passe" && !SANS_MDP) L.erreurChamp($confirmPwd, err.message);
+      if (PAR_GOOGLE) {
+        // Confirmation expirée ou déjà servie : il faut se reconnecter.
+        L.toast(err.message);
+        CONFIRME.action = "";
+        preparerGoogle(action);
+        return;
+      }
+      if (err.champ === "mot_de_passe") L.erreurChamp($confirmPwd, err.message);
       else L.toast(err.message);
       $confirmPwd.select();
       /* Réactivé ici, et seulement ici. L'ancien « finally » testait
@@ -536,5 +556,16 @@ window.Parametres = (() => {
       "Supprimer définitivement",
       "compte.supprimer"
     );
+  });
+
+  /* Retour de Google pour vider ou supprimer : la fenêtre se rouvre
+     d'elle-même, avec le temps qui reste pour cliquer « Confirmer ». */
+  const BOUTON_ACTION = { "donnees.vider": "btn-clear-library", "compte.supprimer": "btn-delete-account" };
+  if (PAR_GOOGLE && BOUTON_ACTION[CONFIRME.action]) document.getElementById(BOUTON_ACTION[CONFIRME.action]).click();
+
+  /* Délai écoulé sur un bloc « Identité confirmée » de la page : on
+     recharge, et le bouton « Se reconnecter » revient à sa place. */
+  document.addEventListener("delai-termine", (e) => {
+    if (e.target.closest("[data-fin-confirmation]")) window.location.reload();
   });
 })();

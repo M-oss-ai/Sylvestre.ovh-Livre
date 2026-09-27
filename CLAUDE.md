@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (586 tests : 521 PHP en 42 fichiers, 65 JavaScript)
+php tests/lancer.php              # toute la suite (590 tests : 525 PHP en 42 fichiers, 65 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -173,20 +173,25 @@ La suppression du compte s'en sert aussi : `api.php` vide la session et
 la renouvelle (`session_regenerate_id`) au lieu de la détruire, pour que
 `connexion.php` puisse dire que c'est fait.
 
-**Une action sensible demande le mot de passe, s'il existe.** Un compte
-Google qui en a un le retape comme tout le monde (changer ou supprimer
-ce mot de passe compris). Sans mot de passe, `verifier_mot_de_passe_limite()`
-le voit (`compte_sans_mot_de_passe()`) et demande
-`google_confirmation_recente()`, attachée à l'id du compte : c'est aussi
-ce qui permet d'en définir un. Toute nouvelle action sensible passe donc
-par cette fonction, jamais par `password_verify()` directement.
+**Un compte Google se reconnecte pour CHAQUE action à risque** (choix de
+l'utilisateur) : changer d'identifiant ou d'adresse, définir, changer ou
+supprimer son mot de passe, vider, supprimer le compte — la liste fermée
+`GOOGLE_ACTIONS`. Le bouton part chez Google avec l'action
+(`google.php?action=…`), son mot de passe suit s'il en a un
+(`google-mot-de-passe.php`), puis il a `GOOGLE_CONFIRMATION_DUREE`
+secondes pour cliquer « Confirmer ». La confirmation vaut pour UN compte,
+UNE action et UNE fois (`google_confirmation_en_cours()`,
+`google_oublier_confirmation()` dès l'action faite) ; se connecter n'en
+donne aucune. `verifier_mot_de_passe_limite($id, $mdp, $attente, $action)`
+le sait : toute nouvelle action sensible passe par elle avec sa clé de
+`GOOGLE_ACTIONS`, jamais par `password_verify()` directement — et doit
+consommer la confirmation une fois faite. Un compte e-mail, lui, retape
+son mot de passe.
 
-**Vider ou supprimer n'est jamais un seul clic.** Le compte sans mot de
-passe n'a rien à retaper, et sa confirmation Google peut dater de
-quelques minutes : il retape donc son identifiant, casse ignorée
-(`exiger_identifiant_retape()` dans `api.php`, et `#confirm-identifiant`
-dans la fenêtre). Le focus de cette fenêtre ne va jamais sur le bouton
-qui efface — une touche Entrée suffisait à tout supprimer.
+**La fenêtre qui efface ne donne jamais le focus à son bouton** : une
+touche Entrée suffisait à tout supprimer. Pour un compte Google, ce
+bouton reste grisé tant que la reconnexion n'a pas eu lieu, et la
+fenêtre se rouvre d'elle-même au retour de Google.
 
 **Le mot de passe d'un compte Google est une seconde clé, jamais une
 porte.** Facultatif (`mot_de_passe` vaut `''` sans lui), il est demandé

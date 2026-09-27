@@ -48,17 +48,19 @@ if (!csrf_valide($_POST['csrf'] ?? null)) {
  * mot de passe par essais illimités, et chaque essai coûtait au serveur
  * un password_verify() volontairement lent : de quoi saturer le
  * processeur d'un hébergement mutualisé avec quelques requêtes.
+ *
+ * Un compte Google, lui, doit s'être reconnecté (Google, puis son mot de
+ * passe s'il en a un) pour CETTE action : voir verifier_mot_de_passe_limite.
  */
-function exiger_mot_de_passe(int $mon_id): void
+function exiger_mot_de_passe(int $mon_id, string $action): void
 {
     $attente = null;
-    if (verifier_mot_de_passe_limite($mon_id, (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
+    if (verifier_mot_de_passe_limite($mon_id, (string) ($_POST['mot_de_passe'] ?? ''), $attente, $action)) {
         return;
     }
-    // Compte Google sans mot de passe : c'est Google qui confirme.
-    if (compte_sans_mot_de_passe($mon_id)) {
-        reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'google' => true, 'erreur' =>
-            "Confirmez d'abord votre identité avec Google (bouton « Confirmer avec Google »)."], 403);
+    if (compte_google($mon_id)) {
+        reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'google' => true,
+            'erreur' => message_reconnexion_google($action)], 403);
     }
     if ($attente > 0) {
         /* « attente » accompagne le message : le navigateur en fait un
@@ -68,24 +70,6 @@ function exiger_mot_de_passe(int $mon_id): void
     }
     // « champ » : le navigateur affiche le message sous le champ concerné.
     reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'erreur' => 'Mot de passe incorrect.'], 403);
-}
-
-/**
- * Actions destructrices d'un compte Google sans mot de passe (vider,
- * supprimer) : il n'a rien à retaper, et la confirmation Google peut dater de
- * quelques minutes. Sans rien à taper, un seul clic effaçait tout. Il
- * retape donc son identifiant — le geste délibéré, vérifié ici et pas
- * seulement dans le navigateur.
- */
-function exiger_identifiant_retape(array $moi): void
-{
-    if ((int) ($moi['sans_mot_de_passe'] ?? 0) !== 1) {
-        return;   // les autres comptes ont retapé leur mot de passe
-    }
-    if (mb_strtolower(trim((string) ($_POST['confirmation'] ?? ''))) !== mb_strtolower((string) $moi['identifiant'])) {
-        reponse_json(['ok' => false, 'champ' => 'confirmation', 'erreur' =>
-            'Tapez votre identifiant exactement pour confirmer.'], 422);
-    }
 }
 
 /* --------- Export : seule action qui ne répond pas en JSON ---------
@@ -394,7 +378,7 @@ switch ($action) {
            connecter) ou à détourner l'adresse de récupération.
            La photo ne demande rien. */
         if ($email_change || $identifiant_change) {
-            exiger_mot_de_passe($mon_id);
+            exiger_mot_de_passe($mon_id, 'compte.profil');
         }
         if ($email_change && !email_disponible($email, $mon_id)) {
             reponse_json(['ok' => false, 'champ' => 'email', 'erreur' => 'Cette adresse e-mail est déjà utilisée.'], 422);
@@ -420,6 +404,9 @@ switch ($action) {
             'UPDATE utilisateur SET identifiant = ?, photo = ? WHERE id = ?'
         );
         $req->execute([$identifiant, $photo, $mon_id]);
+        if ($email_change || $identifiant_change) {
+            google_oublier_confirmation();   // elle ne sert qu'une fois
+        }
 
         if ($ancienne !== '' && $ancienne !== $photo) {
             supprimer_image_locale($ancienne);
@@ -476,12 +463,11 @@ switch ($action) {
 
         $erreurs = [];
         $attente = null;
-        if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente)) {
+        if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente, 'compte.motdepasse')) {
             $erreurs['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : ((int) $moi['sans_mot_de_passe'] === 1
-                    ? "Confirmez d'abord votre identité avec Google (moins de "
-                      . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . ' minutes).'
+                : ((string) $moi['google_sub'] !== ''
+                    ? message_reconnexion_google('compte.motdepasse')
                     : 'Mot de passe actuel incorrect.');
         }
         if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
@@ -512,6 +498,7 @@ switch ($action) {
            soi-même de la page en cours. */
         invalider_sessions($mon_id);
         connecter($mon_id);
+        google_oublier_confirmation();   // elle ne sert qu'une fois
         journal_securite('mot_de_passe_change', ['utilisateur' => $mon_id]);
         avertir_mot_de_passe_change((string) $moi['email'], (string) $moi['identifiant']);
 
@@ -719,8 +706,8 @@ switch ($action) {
 
     /* ---------------- Vider la bibliothèque ---------------- */
     case 'donnees.vider': {
-        exiger_mot_de_passe($mon_id);
-        exiger_identifiant_retape($moi);
+        exiger_mot_de_passe($mon_id, 'donnees.vider');
+        google_oublier_confirmation();   // elle ne sert qu'une fois
 
         $req = $pdo->prepare('SELECT couverture FROM serie WHERE utilisateur_id = ?');
         $req->execute([$mon_id]);
@@ -742,8 +729,7 @@ switch ($action) {
 
     /* ---------------- Suppression complète du compte ---------------- */
     case 'compte.supprimer': {
-        exiger_mot_de_passe($mon_id);
-        exiger_identifiant_retape($moi);
+        exiger_mot_de_passe($mon_id, 'compte.supprimer');
 
         $req = $pdo->prepare('SELECT couverture FROM serie WHERE utilisateur_id = ?');
         $req->execute([$mon_id]);

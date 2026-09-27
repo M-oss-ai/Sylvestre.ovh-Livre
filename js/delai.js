@@ -15,7 +15,10 @@
 window.Delai = (() => {
   "use strict";
 
+  /* « 9 min 58 s » plutôt que « 598 secondes » : au-delà d'une minute,
+     un nombre de secondes ne se lit plus d'un coup d'œil. */
   function accorder(n) {
+    if (n >= 60) return Math.floor(n / 60) + " min " + String(n % 60).padStart(2, "0") + " s";
     return n + (n > 1 ? " secondes" : " seconde");
   }
 

@@ -144,10 +144,10 @@ define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
 define('GOOGLE_CLIENT_ID', trim(env('GOOGLE_CLIENT_ID', '')));
 define('GOOGLE_CLIENT_SECRET', trim(env('GOOGLE_CLIENT_SECRET', '')));
 
-/* Un compte créé par Google n'a pas de mot de passe. Là où les autres
-   le retapent (suppression du compte, changement d'adresse…), il repasse
-   par Google, et cette confirmation vaut pendant GOOGLE_CONFIRMATION_DUREE
-   secondes. Entre 1 minute et 1 heure : au-delà, une session volée
+/* Un compte créé par Google confirme chaque action à risque en se
+   reconnectant avec Google (et son mot de passe, s'il en a un). Il a
+   ensuite GOOGLE_CONFIRMATION_DUREE secondes pour valider CETTE action,
+   une seule fois. Entre 1 minute et 1 heure : au-delà, une session volée
    suffirait de nouveau. */
 define('GOOGLE_CONFIRMATION_DUREE', min(3600, max(60, (int) env('GOOGLE_CONFIRMATION_DUREE', '600'))));
 

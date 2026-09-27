@@ -176,7 +176,7 @@ importantes :
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
-| `GOOGLE_CONFIRMATION_DUREE` | Durée pendant laquelle Google tient lieu de mot de passe (actions sensibles d'un compte Google) |
+| `GOOGLE_CONFIRMATION_DUREE` | Temps laissé, après s'être reconnecté avec Google, pour valider l'action à risque choisie (une seule) |
 
 ---
 
@@ -207,12 +207,13 @@ L'adresse du compte est celle de Google, déjà vérifiée : aucun e-mail de
 confirmation à attendre. Elle se change ensuite dans les Paramètres, avec
 le lien de confirmation habituel.
 
-Un compte Google qui a un mot de passe le retape pour les actions
-sensibles, comme tout le monde. Sans mot de passe, il **repasse par
-Google** à la place (supprimer le compte, vider, changer d'adresse ou
-d'identifiant, définir un mot de passe) : la confirmation vaut
-`GOOGLE_CONFIRMATION_DUREE` secondes. Pour vider ou supprimer, il
-retape en plus son identifiant : ce n'est jamais un seul clic.
+Pour **chaque action à risque** (supprimer le compte, vider, changer
+d'adresse ou d'identifiant, définir, changer ou supprimer son mot de
+passe), un compte Google **se reconnecte** : Google, puis son mot de passe
+s'il en a un. Il a ensuite `GOOGLE_CONFIRMATION_DUREE` secondes pour
+cliquer « Confirmer », pour cette action-là et une seule fois : une autre
+action demande de se reconnecter. Se connecter au site ne dispense de
+rien.
 
 Son mot de passe est **facultatif**, et c'est une seconde clé : s'il en a
 un (choisi à la création ou dans Paramètres › Sécurité), il est demandé

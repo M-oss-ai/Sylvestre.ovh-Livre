@@ -2,6 +2,11 @@
 /* =====================================================================
    Seconde étape d'une connexion avec Google : le mot de passe.
 
+   Sert aussi à CONFIRMER une action à risque (« action » dans l'étape,
+   voir GOOGLE_ACTIONS) : la personne, déjà connectée, vient de se
+   reconnecter avec Google ; son mot de passe suit, puis elle a
+   GOOGLE_CONFIRMATION_DUREE secondes pour valider cette action-là.
+
    Un compte créé avec Google peut définir un mot de passe dans les
    Paramètres. Il lui est alors demandé ICI, après Google, à chaque
    connexion : Google prouve l'identité, le mot de passe est la seconde
@@ -21,19 +26,29 @@ if (!google_actif()) {
     http_response_code(404);
     exit('Not found');
 }
-if (utilisateur_actuel()) {
+header('Cache-Control: no-store, private');
+
+$moi    = utilisateur_actuel();
+$action = (string) ($_SESSION['google_mdp']['action'] ?? '');
+$action = isset(GOOGLE_ACTIONS[$action]) ? $action : '';
+$id     = google_etape_mdp($_SESSION['google_mdp'] ?? null, time());
+
+/* Connecté : seulement pour confirmer une action de CE compte. Pas
+   connecté : seulement pour se connecter. */
+if ($moi && ($action === '' || $id !== (int) $moi['id'])) {
     header('Location: index.php');
     exit;
 }
-header('Cache-Control: no-store, private');
+if (!$moi && $action !== '') {
+    $id = 0;
+}
 
 if (isset($_GET['annuler'])) {
     unset($_SESSION['google_mdp']);
-    header('Location: connexion.php');
+    header('Location: ' . ($moi ? 'parametres.php' : 'connexion.php'));
     exit;
 }
 
-$id = google_etape_mdp($_SESSION['google_mdp'] ?? null, time());
 $u  = null;
 if ($id > 0) {
     $req = $pdo->prepare('SELECT id, identifiant, mot_de_passe FROM utilisateur WHERE id = ? AND google_sub IS NOT NULL');
@@ -43,26 +58,32 @@ if ($id > 0) {
 if (!$u) {
     unset($_SESSION['google_mdp']);
     flash('La connexion avec Google a expiré. Recommencez.', 'erreur');
-    header('Location: connexion.php');
+    header('Location: ' . ($moi ? 'parametres.php' : 'connexion.php'));
     exit;
 }
 
-/** Ouvre le compte et quitte la page : l'étape est franchie. */
-function google_mdp_ouvrir(int $id): never
+/** L'étape est franchie : ouvre le compte, ou note la confirmation. */
+function google_mdp_ouvrir(int $id, string $action): never
 {
     $destination = (string) ($_SESSION['google_mdp']['destination'] ?? 'index.php');
     unset($_SESSION['google_mdp']);
-    connecter($id);
-    google_noter_confirmation($id);
-    journal_securite('connexion_google', ['utilisateur' => $id]);
-    header('Location: ' . $destination);   // valeur de la liste fermée de google.php
+    if ($action !== '') {
+        google_noter_confirmation($id, $action);
+        journal_securite('google_confirmation', ['utilisateur' => $id, 'action' => $action]);
+        flash('Identité confirmée ✅ — vous avez ' . intdiv(GOOGLE_CONFIRMATION_DUREE, 60)
+            . ' minutes pour ' . GOOGLE_ACTIONS[$action] . '.');
+    } else {
+        connecter($id);   // sans confirmation : chaque action à risque demande de se reconnecter
+        journal_securite('connexion_google', ['utilisateur' => $id]);
+    }
+    header('Location: ' . $destination);   // valeur fixée par google.php
     exit;
 }
 
 /* Le mot de passe a pu être supprimé entre-temps (depuis un autre
    appareil) : il n'y a alors plus rien à demander. */
 if ((string) $u['mot_de_passe'] === '') {
-    google_mdp_ouvrir($id);
+    google_mdp_ouvrir($id, $action);
 }
 
 $erreurs = [];
@@ -83,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare('UPDATE utilisateur SET mot_de_passe = ? WHERE id = ?')
                 ->execute([password_hash($mdp, PASSWORD_DEFAULT), $id]);
         }
-        google_mdp_ouvrir($id);
+        google_mdp_ouvrir($id, $action);
     } else {
         limiteur_echec('connexion', CONNEXION_MAX_ESSAIS, CONNEXION_BLOCAGE);
         limiteur_echec('connexion_compte', CONNEXION_MAX_ESSAIS_COMPTE, CONNEXION_BLOCAGE_COMPTE, $cle);
@@ -111,8 +132,8 @@ $csrf = jeton_csrf();
   <section class="auth-card">
     <div class="auth-head">
       <p class="auth-logo" aria-hidden="true">📚</p>
-      <h1>Bonjour <?= e($u['identifiant']) ?></h1>
-      <p class="hint">Google a confirmé votre identité. Saisissez maintenant votre mot de passe.</p>
+      <h1><?= $action !== '' ? 'Confirmez votre identité' : 'Bonjour ' . e($u['identifiant']) ?></h1>
+      <p class="hint">Google a confirmé votre identité. Saisissez maintenant votre mot de passe<?= $action !== '' ? ' pour ' . e(GOOGLE_ACTIONS[$action]) : '' ?>.</p>
     </div>
 
     <form method="post" action="google-mot-de-passe.php" autocomplete="on" novalidate>
@@ -138,10 +159,12 @@ $csrf = jeton_csrf();
         <?php endif; ?>
       </div>
 
-      <button type="submit" class="btn btn-primary full">Se connecter</button>
+      <button type="submit" class="btn btn-primary full"><?= $action !== '' ? 'Confirmer' : 'Se connecter' ?></button>
     </form>
 
-    <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié ?</a></p>
+    <?php if (!$moi): ?>
+      <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié ?</a></p>
+    <?php endif; ?>
     <p class="auth-switch"><a href="google-mot-de-passe.php?annuler=1">Annuler</a></p>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
   </section>

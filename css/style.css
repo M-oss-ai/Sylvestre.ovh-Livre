@@ -669,10 +669,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .google-g { width: 18px; height: 18px; flex: none; }
 
 /* Paramètres › Sécurité : revenir à Google seul, sous le formulaire du mot de passe. */
-.form-supprimer-mdp { margin-top: 14px; }
+.form-supprimer-mdp { margin-top: 18px; }
+.settings-sous-titre { font-size: 14px; margin: 0 0 6px; color: var(--text); }
+.form-supprimer-mdp form { margin-top: 8px; }
 .intro-securite { margin-bottom: 12px; }
-/* L'identifiant à retaper, tel quel : l'étiquette est en capitales. */
-.identifiant-attendu { text-transform: none; color: var(--text); }
 .confirmation-google { color: var(--termine); }
 .settings-card .btn-google { margin-top: 8px; }
 .modal .btn-google { margin: 8px 0 4px; }

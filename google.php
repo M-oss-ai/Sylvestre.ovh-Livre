@@ -13,8 +13,9 @@
        comptes ne se relient pas ;
      - adresse inconnue                    → google-inscription.php, où
        l'on choisit son identifiant ;
-     - déjà connecté (depuis Paramètres)   → la personne vient de
-       confirmer son identité (actions sensibles d'un compte Google).
+     - déjà connecté (depuis Paramètres)   → la personne se reconnecte
+       pour UNE action à risque (« action », voir GOOGLE_ACTIONS) ; son
+       mot de passe, si elle en a un, est demandé ensuite.
 
    Toute erreur ramène à la page d'où l'on venait, avec un message ; le
    détail technique va au journal, jamais à l'écran.
@@ -55,6 +56,8 @@ if (!isset($_GET['code']) && !isset($_GET['error']) && !isset($_GET['state'])) {
         'nonce'        => base64url(random_bytes(24)),
         'verificateur' => $verificateur,
         'retour'       => isset(GOOGLE_RETOURS[$retour]) ? $retour : ($moi ? 'parametres' : 'index'),
+        // L'action à risque pour laquelle on se reconnecte (liste fermée).
+        'action'       => $moi && isset(GOOGLE_ACTIONS[(string) ($_GET['action'] ?? '')]) ? (string) $_GET['action'] : '',
         'le'           => time(),
     ];
     header('Location: ' . google_url_autorisation(
@@ -114,10 +117,24 @@ $decision = google_decision($moi, $par_sub, $par_email);
 
 switch ($decision) {
     case 'confirmer':
-        google_noter_confirmation((int) $moi['id']);
-        journal_securite('google_confirmation', ['utilisateur' => (int) $moi['id']]);
-        flash('Identité confirmée avec Google ✅ — vous pouvez poursuivre.');
-        header('Location: ' . $destination);
+        /* Une reconnexion vaut pour UNE action, choisie avant de partir.
+           Le mot de passe du compte, s'il en a un, vient ensuite. */
+        $action = (string) ($attendu['action'] ?? '');
+        if (!isset(GOOGLE_ACTIONS[$action])) {
+            google_echec("Choisissez d'abord, dans les Paramètres, l'action à confirmer.", $moi);
+        }
+        if ((int) $par_sub['a_mdp'] === 1) {
+            session_regenerate_id(true);
+            $_SESSION['google_mdp'] = ['id' => (int) $moi['id'], 'le' => time(),
+                'destination' => google_page_action($action), 'action' => $action];
+            header('Location: google-mot-de-passe.php');
+            exit;
+        }
+        google_noter_confirmation((int) $moi['id'], $action);
+        journal_securite('google_confirmation', ['utilisateur' => (int) $moi['id'], 'action' => $action]);
+        flash('Identité confirmée ✅ — vous avez ' . intdiv(GOOGLE_CONFIRMATION_DUREE, 60)
+            . ' minutes pour ' . GOOGLE_ACTIONS[$action] . '.');
+        header('Location: ' . google_page_action($action));
         exit;
 
     case 'refus_autre':
@@ -142,8 +159,7 @@ switch ($decision) {
 
     case 'connecter':
         $id = (int) $par_sub['id'];
-        connecter($id);
-        google_noter_confirmation($id);
+        connecter($id);   // sans confirmation : chaque action à risque demande de se reconnecter
         journal_securite('connexion_google', ['utilisateur' => $id]);
         header('Location: ' . $destination);
         exit;

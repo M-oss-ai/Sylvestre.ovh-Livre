@@ -128,7 +128,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int) $pdo->lastInsertId();
             unset($_SESSION['google_inscription']);
             connecter($id);
-            google_noter_confirmation($id);
             journal_securite('google_compte_cree', ['utilisateur' => $id]);
             flash('Bienvenue ' . $identifiant . ' ! Votre compte a été créé avec Google ✅');
             header('Location: index.php');

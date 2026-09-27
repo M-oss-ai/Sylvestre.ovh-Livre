@@ -479,16 +479,19 @@ function limiteur_echec(string $action, int $max_essais, int $duree_base, ?strin
  *
  * $attente reçoit le nombre de secondes restantes quand c'est un blocage
  * qui fait échouer la vérification, pour pouvoir le dire à l'utilisateur.
+ *
+ * $action (une clé de GOOGLE_ACTIONS) : ce que l'on s'apprête à faire.
+ * Un compte créé par Google ne retape rien ici : il s'est reconnecté avec
+ * Google (puis son mot de passe, s'il en a un) POUR CETTE ACTION-LÀ, il y
+ * a moins de GOOGLE_CONFIRMATION_DUREE secondes. Une fois l'action faite,
+ * l'appelant appelle google_oublier_confirmation() : elle ne sert qu'une
+ * fois, et jamais pour une autre action.
  */
-function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$attente = null): bool
+function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$attente, string $action): bool
 {
-    /* Un compte créé par Google SANS mot de passe n'a rien à retaper : il
-       confirme en repassant par Google (voir google.php), et cette
-       confirmation vaut GOOGLE_CONFIRMATION_DUREE secondes. Avec un mot
-       de passe, il le retape comme tout le monde. */
-    if (compte_sans_mot_de_passe($utilisateur_id)) {
+    if (compte_google($utilisateur_id)) {
         $attente = 0;
-        return google_confirmation_recente($utilisateur_id);
+        return google_confirmation_recente($utilisateur_id, $action);
     }
 
     $attente = limiteur_bloque_depuis('mdp_confirmation');
@@ -884,41 +887,73 @@ function mot_de_passe_correct(int $utilisateur_id, string $mot_de_passe): bool
 }
 
 /**
- * Le compte a-t-il été créé par Google, sans mot de passe ? Son
- * `mot_de_passe` vaut alors '' — que password_verify() refuse toujours.
- * C'est alors Google qui confirme les actions sensibles.
+ * Le compte a-t-il été créé par Google ? Ses actions sensibles se
+ * confirment alors en se reconnectant avec Google (et son mot de passe,
+ * s'il en a un), jamais dans un simple champ.
  */
-function compte_sans_mot_de_passe(int $utilisateur_id): bool
+function compte_google(int $utilisateur_id): bool
 {
     global $pdo;
-    $req = $pdo->prepare('SELECT mot_de_passe FROM utilisateur WHERE id = ?');
+    $req = $pdo->prepare('SELECT google_sub FROM utilisateur WHERE id = ?');
     $req->execute([$utilisateur_id]);
-    $hash = $req->fetchColumn();
-    return $hash !== false && (string) $hash === '';
+    return (string) $req->fetchColumn() !== '';
 }
 
+/* Les actions à risque d'un compte Google, et ce qu'on en dit (« … pour
+   supprimer votre compte »). La clé est le nom de l'action d'api.php :
+   une liste fermée, que google.php vérifie avant de partir chez Google. */
+const GOOGLE_ACTIONS = [
+    'compte.profil'        => "changer d'identifiant ou d'adresse e-mail",
+    'compte.motdepasse'    => 'définir ou changer votre mot de passe',
+    'compte.supprimer_mdp' => 'supprimer votre mot de passe',
+    'donnees.vider'        => 'vider votre bibliothèque',
+    'compte.supprimer'     => 'supprimer votre compte',
+];
+
 /**
- * La personne vient-elle de prouver son identité en passant par Google ?
- * Posé par google.php, valable GOOGLE_CONFIRMATION_DUREE secondes : c'est
- * le mot de passe retapé des comptes Google qui n'en ont pas.
+ * La confirmation Google en cours : ['action' => …, 'restant' => secondes],
+ * ou null.
  *
- * Attachée au COMPTE, pas seulement à la session : une confirmation
- * obtenue pour un compte ne doit rien valoir pour un autre qui ouvrirait
- * une session dans le même navigateur.
+ * Une confirmation vaut pour UN compte (une autre session ouverte dans le
+ * même navigateur n'en profite pas), pour UNE action (celle choisie avant
+ * de partir chez Google) et UNE fois (google_oublier_confirmation, dès
+ * l'action faite). Se connecter n'en donne aucune : chaque action à risque
+ * demande de se reconnecter.
  */
-function google_confirmation_recente(int $utilisateur_id, ?array $session = null, ?int $maintenant = null): bool
+function google_confirmation_en_cours(int $utilisateur_id, ?array $session = null, ?int $maintenant = null): ?array
 {
     $session ??= $_SESSION ?? [];
     $c = $session['google_confirme'] ?? null;
-    return is_array($c)
-        && (int) ($c['id'] ?? 0) === $utilisateur_id && $utilisateur_id > 0
-        && (int) ($c['le'] ?? 0) >= ($maintenant ?? time()) - GOOGLE_CONFIRMATION_DUREE;
+    if (!is_array($c) || $utilisateur_id <= 0 || (int) ($c['id'] ?? 0) !== $utilisateur_id
+        || !isset(GOOGLE_ACTIONS[(string) ($c['action'] ?? '')])) {
+        return null;
+    }
+    $restant = (int) ($c['le'] ?? 0) + GOOGLE_CONFIRMATION_DUREE - ($maintenant ?? time());
+    return $restant > 0 ? ['action' => (string) $c['action'], 'restant' => $restant] : null;
 }
 
-/** Note que ce compte vient de prouver son identité avec Google. */
-function google_noter_confirmation(int $utilisateur_id): void
+/** Ce compte vient-il de se reconnecter avec Google pour CETTE action ? */
+function google_confirmation_recente(int $utilisateur_id, string $action, ?array $session = null, ?int $maintenant = null): bool
 {
-    $_SESSION['google_confirme'] = ['id' => $utilisateur_id, 'le' => time()];
+    return (google_confirmation_en_cours($utilisateur_id, $session, $maintenant)['action'] ?? null) === $action;
+}
+
+/** Note que ce compte vient de se reconnecter avec Google pour $action. */
+function google_noter_confirmation(int $utilisateur_id, string $action): void
+{
+    $_SESSION['google_confirme'] = ['id' => $utilisateur_id, 'action' => $action, 'le' => time()];
+}
+
+/** L'action est faite : la confirmation ne resservira pas. */
+function google_oublier_confirmation(): void
+{
+    unset($_SESSION['google_confirme']);
+}
+
+/** « Reconnectez-vous avec Google pour supprimer votre compte. » */
+function message_reconnexion_google(string $action): string
+{
+    return 'Reconnectez-vous d\'abord avec Google pour ' . (GOOGLE_ACTIONS[$action] ?? 'continuer') . '.';
 }
 
 function connecter(int $id): void
