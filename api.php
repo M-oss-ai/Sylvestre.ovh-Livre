@@ -55,8 +55,8 @@ function exiger_mot_de_passe(int $mon_id): void
     if (verifier_mot_de_passe_limite($mon_id, (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
         return;
     }
-    // Compte créé par Google : c'est Google qui confirme, pas un mot de passe.
-    if (compte_google($mon_id)) {
+    // Compte Google sans mot de passe : c'est Google qui confirme.
+    if (compte_sans_mot_de_passe($mon_id)) {
         reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'google' => true, 'erreur' =>
             "Confirmez d'abord votre identité avec Google (bouton « Confirmer avec Google »)."], 403);
     }
@@ -68,6 +68,24 @@ function exiger_mot_de_passe(int $mon_id): void
     }
     // « champ » : le navigateur affiche le message sous le champ concerné.
     reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'erreur' => 'Mot de passe incorrect.'], 403);
+}
+
+/**
+ * Actions destructrices d'un compte Google sans mot de passe (vider,
+ * supprimer) : il n'a rien à retaper, et la confirmation Google peut dater de
+ * quelques minutes. Sans rien à taper, un seul clic effaçait tout. Il
+ * retape donc son identifiant — le geste délibéré, vérifié ici et pas
+ * seulement dans le navigateur.
+ */
+function exiger_identifiant_retape(array $moi): void
+{
+    if ((int) ($moi['sans_mot_de_passe'] ?? 0) !== 1) {
+        return;   // les autres comptes ont retapé leur mot de passe
+    }
+    if (mb_strtolower(trim((string) ($_POST['confirmation'] ?? ''))) !== mb_strtolower((string) $moi['identifiant'])) {
+        reponse_json(['ok' => false, 'champ' => 'confirmation', 'erreur' =>
+            'Tapez votre identifiant exactement pour confirmer.'], 422);
+    }
 }
 
 /* --------- Export : seule action qui ne répond pas en JSON ---------
@@ -461,7 +479,7 @@ switch ($action) {
         if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente)) {
             $erreurs['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : ((string) $moi['google_sub'] !== ''
+                : ((int) $moi['sans_mot_de_passe'] === 1
                     ? "Confirmez d'abord votre identité avec Google (moins de "
                       . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . ' minutes).'
                     : 'Mot de passe actuel incorrect.');
@@ -702,6 +720,7 @@ switch ($action) {
     /* ---------------- Vider la bibliothèque ---------------- */
     case 'donnees.vider': {
         exiger_mot_de_passe($mon_id);
+        exiger_identifiant_retape($moi);
 
         $req = $pdo->prepare('SELECT couverture FROM serie WHERE utilisateur_id = ?');
         $req->execute([$mon_id]);
@@ -724,6 +743,7 @@ switch ($action) {
     /* ---------------- Suppression complète du compte ---------------- */
     case 'compte.supprimer': {
         exiger_mot_de_passe($mon_id);
+        exiger_identifiant_retape($moi);
 
         $req = $pdo->prepare('SELECT couverture FROM serie WHERE utilisateur_id = ?');
         $req->execute([$mon_id]);

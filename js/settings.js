@@ -399,24 +399,39 @@ window.Parametres = (() => {
   const $confirmPwd = document.getElementById("confirm-password");
   const $confirmExport = document.getElementById("confirm-export");
   const NB_SERIES = parseInt(document.body.dataset.series || "0", 10) || 0;
-  // Compte créé par Google : pas de mot de passe à retaper, Google confirme à sa place.
-  const PAR_GOOGLE = document.body.dataset.parGoogle === "1";
+  // Compte Google sans mot de passe : rien à retaper, Google confirme à sa place.
+  const SANS_MDP = document.body.dataset.sansMdp === "1";
+  /* À la place, il retape son identifiant (absent tant que Google n'a pas
+     confirmé l'identité) : le bouton reste grisé jusque-là. */
+  const $confirmId = document.getElementById("confirm-identifiant");
+  const identifiantRetape = () => !!$confirmId
+    && $confirmId.value.trim().toLocaleLowerCase() === $confirmId.dataset.attendu.toLocaleLowerCase();
+  if ($confirmId) {
+    $confirmId.addEventListener("input", () => { $confirmOk.disabled = !identifiantRetape(); });
+    $confirmId.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); if (identifiantRetape()) lancerAction(); }
+    });
+  }
   let actionEnAttente = null;
   let elementDeclencheur = null;
 
   function demanderConfirmation(titre, texte, libelle, action) {
     $confirmTitle.textContent = titre;
-    $confirmText.textContent = texte;
+    $confirmText.textContent = "⚠️ " + texte;
     $confirmOk.textContent = libelle;
     // Rien à sauvegarder dans une bibliothèque vide.
     $confirmExport.classList.toggle("hidden", NB_SERIES === 0);
     $confirmPwd.value = "";
     L.effacerErreur($confirmPwd);
+    if ($confirmId) { $confirmId.value = ""; L.effacerErreur($confirmId); }
+    if (SANS_MDP) $confirmOk.disabled = true;
     actionEnAttente = action;
     elementDeclencheur = document.activeElement;
     $confirmOverlay.classList.remove("hidden");
-    if (!PAR_GOOGLE) $confirmPwd.focus();
-    else ($confirmOk.disabled ? document.getElementById("confirm-cancel") : $confirmOk).focus();
+    /* Jamais sur le bouton qui efface : une touche Entrée ou un second
+       appui suffisait alors à tout supprimer. */
+    if (!SANS_MDP) $confirmPwd.focus();
+    else ($confirmId || document.getElementById("confirm-cancel")).focus();
   }
 
   function fermerConfirmation() {
@@ -443,14 +458,18 @@ window.Parametres = (() => {
     if (!actionEnAttente) return;
     const action = actionEnAttente;
     const motDePasse = $confirmPwd.value;
-    if (!motDePasse && !PAR_GOOGLE) {
+    if (SANS_MDP && !identifiantRetape()) {
+      if ($confirmId) { L.erreurChamp($confirmId, "Tapez votre identifiant exactement pour confirmer."); $confirmId.focus(); }
+      return;
+    }
+    if (!motDePasse && !SANS_MDP) {
       L.erreurChamp($confirmPwd, "Saisissez votre mot de passe pour confirmer.");
       $confirmPwd.focus();
       return;
     }
     $confirmOk.disabled = true;
     try {
-      const r = await L.api(action, { mot_de_passe: motDePasse });
+      const r = await L.api(action, { mot_de_passe: motDePasse, confirmation: $confirmId ? $confirmId.value : "" });
       L.toast(r.message);
       fermerConfirmation();
       // Les filtres mémorisés de ce compte ne serviront plus à personne.
@@ -480,7 +499,8 @@ window.Parametres = (() => {
         return;
       }
       // Sous le champ du mot de passe, là où l'on corrige.
-      if (err.champ === "mot_de_passe") L.erreurChamp($confirmPwd, err.message);
+      if (err.champ === "confirmation" && $confirmId) L.erreurChamp($confirmId, err.message);
+      else if (err.champ === "mot_de_passe" && !SANS_MDP) L.erreurChamp($confirmPwd, err.message);
       else L.toast(err.message);
       $confirmPwd.select();
       /* Réactivé ici, et seulement ici. L'ancien « finally » testait

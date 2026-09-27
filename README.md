@@ -207,10 +207,12 @@ L'adresse du compte est celle de Google, déjà vérifiée : aucun e-mail de
 confirmation à attendre. Elle se change ensuite dans les Paramètres, avec
 le lien de confirmation habituel.
 
-Un compte Google **repasse par Google** là où les autres retapent leur
-mot de passe (supprimer le compte, vider, changer d'adresse ou
-d'identifiant, définir, changer ou supprimer son mot de passe) : la
-confirmation vaut `GOOGLE_CONFIRMATION_DUREE` secondes.
+Un compte Google qui a un mot de passe le retape pour les actions
+sensibles, comme tout le monde. Sans mot de passe, il **repasse par
+Google** à la place (supprimer le compte, vider, changer d'adresse ou
+d'identifiant, définir un mot de passe) : la confirmation vaut
+`GOOGLE_CONFIRMATION_DUREE` secondes. Pour vider ou supprimer, il
+retape en plus son identifiant : ce n'est jamais un seul clic.
 
 Son mot de passe est **facultatif**, et c'est une seconde clé : s'il en a
 un (choisi à la création ou dans Paramètres › Sécurité), il est demandé

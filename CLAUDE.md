@@ -173,13 +173,20 @@ La suppression du compte s'en sert aussi : `api.php` vide la session et
 la renouvelle (`session_regenerate_id`) au lieu de la détruire, pour que
 `connexion.php` puisse dire que c'est fait.
 
-**Un compte créé par Google repasse par Google, mot de passe ou non.**
-Là où les autres retapent leur mot de passe, `verifier_mot_de_passe_limite()`
-voit `google_sub` (`compte_google()`) et demande
-`google_confirmation_recente()`, attachée à l'id du compte — y compris
-pour définir, changer ou supprimer son mot de passe. Toute nouvelle
-action sensible passe donc par cette fonction, jamais par
-`password_verify()` directement.
+**Une action sensible demande le mot de passe, s'il existe.** Un compte
+Google qui en a un le retape comme tout le monde (changer ou supprimer
+ce mot de passe compris). Sans mot de passe, `verifier_mot_de_passe_limite()`
+le voit (`compte_sans_mot_de_passe()`) et demande
+`google_confirmation_recente()`, attachée à l'id du compte : c'est aussi
+ce qui permet d'en définir un. Toute nouvelle action sensible passe donc
+par cette fonction, jamais par `password_verify()` directement.
+
+**Vider ou supprimer n'est jamais un seul clic.** Le compte sans mot de
+passe n'a rien à retaper, et sa confirmation Google peut dater de
+quelques minutes : il retape donc son identifiant, casse ignorée
+(`exiger_identifiant_retape()` dans `api.php`, et `#confirm-identifiant`
+dans la fenêtre). Le focus de cette fenêtre ne va jamais sur le bouton
+qui efface — une touche Entrée suffisait à tout supprimer.
 
 **Le mot de passe d'un compte Google est une seconde clé, jamais une
 porte.** Facultatif (`mot_de_passe` vaut `''` sans lui), il est demandé

@@ -25,6 +25,7 @@ $moi = exiger_connexion();
    formulaire qu'elle concernait. */
 $erreurs_profil = [];
 $erreurs_mdp    = [];
+$erreurs_suppr  = [];   // « Supprimer le mot de passe » (compte Google)
 $saisie_profil  = null;
 $info    = '';
 
@@ -48,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!verifier_mot_de_passe_limite((int) $moi['id'], $actuel, $attente)) {
             $erreurs_mdp['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : ((string) $moi['google_sub'] !== ''
+                : ((int) $moi['sans_mot_de_passe'] === 1
                     ? "Confirmez d'abord votre identité avec Google (moins de " . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . " minutes)."
                     : 'Mot de passe actuel incorrect.');
         }
@@ -110,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!verifier_mot_de_passe_limite((int) $moi['id'], (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
                 $erreurs_profil['mot_de_passe'] = $attente > 0
                     ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                    : ((string) $moi['google_sub'] !== ''
+                    : ((int) $moi['sans_mot_de_passe'] === 1
                         ? "Pour changer votre identifiant ou votre adresse e-mail, confirmez d'abord votre identité avec Google."
                         : "Pour changer votre identifiant ou votre adresse e-mail, saisissez votre mot de passe actuel.");
             }
@@ -169,23 +170,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     /* Supprimer son mot de passe : un compte créé avec Google revient à
-       Google seul. Comme toute action sensible d'un compte Google, cela
-       demande d'avoir confirmé son identité avec Google à l'instant
-       (verifier_mot_de_passe_limite). Un compte e-mail, lui, ne peut pas
-       se passer de son mot de passe : c'est sa seule clé. */
+       Google seul. Comme toute action sensible, cela demande le mot de
+       passe actuel (verifier_mot_de_passe_limite, qui compte les échecs).
+       Un compte e-mail, lui, ne peut pas se passer de son mot de passe :
+       c'est sa seule clé. */
     if ($formulaire === 'supprimer_mdp' && (string) $moi['google_sub'] !== '' && (int) $moi['sans_mot_de_passe'] === 0) {
         $attente = null;
-        if (!verifier_mot_de_passe_limite((int) $moi['id'], '', $attente)) {
-            flash("Confirmez d'abord votre identité avec Google, puis recommencez.", 'erreur');
+        if (!verifier_mot_de_passe_limite((int) $moi['id'], (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
+            $erreurs_suppr['mot_de_passe'] = $attente > 0
+                ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
+                : ((string) ($_POST['mot_de_passe'] ?? '') === '' ? MESSAGE_CHAMP_OBLIGATOIRE : 'Mot de passe incorrect.');
         } else {
             $pdo->prepare("UPDATE utilisateur SET mot_de_passe = '' WHERE id = ? AND google_sub IS NOT NULL")
                 ->execute([(int) $moi['id']]);
             journal_securite('mot_de_passe_supprime', ['utilisateur' => (int) $moi['id']]);
             avertir_mot_de_passe_supprime((string) $moi['email'], (string) $moi['identifiant']);
             flash('Mot de passe supprimé ✅ — vous vous connectez désormais avec Google seul.');
+            header('Location: parametres.php#securite');
+            exit;
         }
-        header('Location: parametres.php#securite');
-        exit;
     }
 
     /* Renoncer au changement d'adresse demandé : le lien envoyé à la
@@ -208,9 +211,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Laissé par la redirection qui suit un enregistrement : affiché une fois.
 $info = flash_prendre($genre_info);
 
-/* Un compte créé par Google repasse par Google là où les autres retapent
-   leur mot de passe (voir google.php) — qu'il en ait un ou non : le sien
-   ne sert qu'à la connexion, après Google. */
+/* Les actions sensibles demandent le mot de passe. Un compte créé par
+   Google SANS mot de passe repasse par Google à la place (voir google.php). */
 $par_google = (string) $moi['google_sub'] !== '';
 $sans_mdp   = (int) $moi['sans_mot_de_passe'] === 1;
 $google_ok = google_confirmation_recente((int) $moi['id']);
@@ -248,7 +250,7 @@ $nb_series = (int) $req->fetchColumn();
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
       data-import-max="<?= IMPORT_TAILLE_MAX ?>" data-prive="1"
       data-compte="<?= (int) $moi['id'] ?>" data-series="<?= $nb_series ?>"
-      data-forfait="<?= e((string) $moi['forfait']) ?>" data-par-google="<?= $par_google ? '1' : '0' ?>">
+      data-forfait="<?= e((string) $moi['forfait']) ?>" data-sans-mdp="<?= $sans_mdp ? '1' : '0' ?>">
 
 <header class="topbar settings-topbar">
   <div class="topbar-row settings-topbar-row">
@@ -315,7 +317,7 @@ $nb_series = (int) $req->fetchColumn();
         <input id="a-username" name="identifiant" type="text" autocomplete="username" maxlength="30" required
                data-compte="<?= e($moi['identifiant']) ?>" value="<?= e($v['identifiant']) ?>"<?= champ_aria($erreurs_profil, 'identifiant', 'a-username', 'a-username-aide') ?>>
         <?= champ_erreur($erreurs_profil, 'identifiant', 'a-username') ?>
-        <p class="hint" id="a-username-aide">Il sert à vous connecter : le changer demande <?= $par_google ? 'de confirmer avec Google' : 'votre mot de passe' ?>.</p>
+        <p class="hint" id="a-username-aide">Il sert à vous connecter : le changer demande <?= $sans_mdp ? 'de confirmer avec Google' : 'votre mot de passe' ?>.</p>
       </div>
 
       <div class="field">
@@ -324,7 +326,7 @@ $nb_series = (int) $req->fetchColumn();
                data-compte="<?= e($moi['email']) ?>" value="<?= e($v['email']) ?>"<?= champ_aria($erreurs_profil, 'email', 'a-email', 'a-email-aide') ?>>
         <?= champ_erreur($erreurs_profil, 'email', 'a-email') ?>
         <p class="hint" id="a-email-aide">
-          Changer d'adresse demande <?= $par_google ? 'de confirmer avec Google' : 'votre mot de passe' ?>, et la nouvelle adresse doit être
+          Changer d'adresse demande <?= $sans_mdp ? 'de confirmer avec Google' : 'votre mot de passe' ?>, et la nouvelle adresse doit être
           confirmée par e-mail. L'adresse actuelle reste active jusque-là — une faute de
           frappe ne peut donc pas vous enfermer dehors.
         </p>
@@ -344,8 +346,8 @@ $nb_series = (int) $req->fetchColumn();
       <!-- Affiché par le JS quand l'identifiant ou l'adresse change ;
            toujours présent dans le HTML pour que la page fonctionne sans JS. -->
       <div class="field" id="email-password-field">
-        <?php if ($par_google): ?>
-          <!-- Compte Google : pas de mot de passe à retaper, la confirmation
+        <?php if ($sans_mdp): ?>
+          <!-- Compte Google sans mot de passe : rien à retaper, la confirmation
                passe par Google. Le champ reste (vide, caché) pour que le script et
                l'affichage des erreurs n'aient qu'un seul cas à connaître. -->
           <input id="a-email-password" name="mot_de_passe" type="hidden" value="">
@@ -402,23 +404,23 @@ $nb_series = (int) $req->fetchColumn();
       <!-- Compte créé avec Google : il le reste (il ne se délie pas, et un
            compte e-mail ne s'y relie pas, voir google_decision). Son mot de
            passe, s'il en a un, est demandé APRÈS Google, à chaque connexion
-           (google-mot-de-passe.php). Le définir, le changer ou le supprimer
-           demande de repasser par Google, jamais l'ancien mot de passe. -->
+           (google-mot-de-passe.php). Le changer ou le supprimer demande le
+           mot de passe actuel ; en définir un, de repasser par Google. -->
       <p class="hint intro-securite"><?= $sans_mdp
           ? 'Vous vous connectez avec Google. Vous pouvez ajouter un mot de passe : il vous sera alors demandé après Google, à chaque connexion.'
           : 'Vous vous connectez avec Google, puis avec votre mot de passe.' ?></p>
-      <?php if (!$google_ok): ?>
+      <?php if ($sans_mdp && !$google_ok): ?>
         <?php if (isset($erreurs_mdp['actuel'])): ?>
           <!-- La confirmation a expiré pendant la saisie : le formulaire
                n'est plus affiché, l'erreur se dit donc ici. -->
           <p class="erreur-form" role="alert"><?= e($erreurs_mdp['actuel']) ?></p>
         <?php endif; ?>
-        <p class="hint">Pour <?= $sans_mdp ? 'en définir un' : 'le changer ou le supprimer' ?>, confirmez d'abord votre identité avec Google.</p>
+        <p class="hint">Pour en définir un, confirmez d'abord votre identité avec Google.</p>
         <?= bouton_google('Confirmer avec Google', 'parametres') ?>
       <?php endif; ?>
     <?php endif; ?>
 
-    <?php if (!$par_google || $google_ok): ?>
+    <?php if (!$sans_mdp || $google_ok): ?>
     <form id="mdp-form" method="post" action="parametres.php#securite" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="formulaire" value="motdepasse">
@@ -432,7 +434,7 @@ $nb_series = (int) $req->fetchColumn();
       <input class="visually-hidden" type="text" name="identifiant_lecture" autocomplete="username"
              value="<?= e($moi['identifiant']) ?>" readonly tabindex="-1" aria-hidden="true">
 
-      <?php if ($par_google): ?>
+      <?php if ($sans_mdp): ?>
         <?php if (isset($erreurs_mdp['actuel'])): ?>
           <p class="erreur-form" role="alert"><?= e($erreurs_mdp['actuel']) ?></p>
         <?php endif; ?>
@@ -477,12 +479,21 @@ $nb_series = (int) $req->fetchColumn();
     </form>
     <?php endif; ?>
 
-    <?php if ($par_google && !$sans_mdp && $google_ok): ?>
-      <!-- Revenir à Google seul. Pas de fenêtre de confirmation : rien ne
-           se perd, un mot de passe se redéfinit juste au-dessus. -->
-      <form method="post" action="parametres.php#securite" class="form-supprimer-mdp">
+    <?php if ($par_google && !$sans_mdp): ?>
+      <!-- Revenir à Google seul, avec le mot de passe actuel. Pas de fenêtre
+           de confirmation : rien ne se perd, un mot de passe se redéfinit
+           juste au-dessus. -->
+      <form method="post" action="parametres.php#securite" class="form-supprimer-mdp" novalidate>
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
         <input type="hidden" name="formulaire" value="supprimer_mdp">
+        <div class="field">
+          <label for="s-mdp">Mot de passe actuel</label>
+          <div class="password-wrap">
+            <input id="s-mdp" name="mot_de_passe" type="password" autocomplete="current-password"<?= champ_aria($erreurs_suppr, 'mot_de_passe', 's-mdp') ?>>
+            <button type="button" class="icon-btn toggle-password" data-cible="s-mdp" aria-label="Afficher le mot de passe">👁️</button>
+          </div>
+          <?= champ_erreur($erreurs_suppr, 'mot_de_passe', 's-mdp') ?>
+        </div>
         <button type="submit" class="btn btn-ghost full danger-text">Supprimer le mot de passe</button>
         <p class="hint">Vous vous connecterez alors avec Google seul.</p>
       </form>
@@ -626,7 +637,9 @@ $nb_series = (int) $req->fetchColumn();
 <div id="confirm-overlay" class="overlay hidden">
   <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
     <h2 id="confirm-title">Confirmer ?</h2>
-    <p id="confirm-text" class="hint">Cette action est définitive.</p>
+    <!-- En alerte, pas en simple indication : c'est ce que la personne doit
+         lire avant tout le reste. -->
+    <p id="confirm-text" class="alert alert-error" role="alert">Cette action est définitive.</p>
     <!-- Dernière occasion de sauvegarder, dans la fenêtre même qui efface :
          un « pensez à exporter » ne servait à rien sans le bouton à côté.
          Le fichier se télécharge sans quitter la page. -->
@@ -635,13 +648,22 @@ $nb_series = (int) $req->fetchColumn();
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <button type="submit" class="btn btn-ghost full">⬇️ Exporter d'abord mes <?= $nb_series ?> série(s)</button>
     </form>
-    <?php if ($par_google): ?>
-      <!-- Compte Google : pas de mot de passe à retaper, Google en tient lieu, s'il vient
+    <?php if ($sans_mdp): ?>
+      <!-- Compte Google sans mot de passe : Google en tient lieu, s'il vient
            de confirmer l'identité. Le champ reste, vide et caché, pour
            que le script n'ait qu'un seul cas à connaître. -->
       <input id="confirm-password" type="hidden" value="">
       <?php if ($google_ok): ?>
         <p class="hint confirmation-google">✅ Identité confirmée avec Google.</p>
+        <!-- Rien à taper, sinon : un seul clic effaçait tout, et le focus
+             était même posé sur le bouton. L'identifiant retapé est le
+             geste délibéré que le mot de passe assure aux autres comptes ;
+             api.php le revérifie. -->
+        <div class="field">
+          <label for="confirm-identifiant">Pour confirmer, tapez votre identifiant : <b class="identifiant-attendu"><?= e($moi['identifiant']) ?></b></label>
+          <input id="confirm-identifiant" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                 data-attendu="<?= e($moi['identifiant']) ?>">
+        </div>
       <?php else: ?>
         <p class="hint">Pour confirmer, reconnectez-vous d'abord avec Google, puis recommencez.</p>
         <?= bouton_google('Confirmer avec Google', 'parametres') ?>
@@ -658,7 +680,7 @@ $nb_series = (int) $req->fetchColumn();
     <div class="modal-actions">
       <div class="grow"></div>
       <button type="button" id="confirm-cancel" class="btn btn-ghost">Annuler</button>
-      <button type="button" id="confirm-ok" class="btn btn-danger"<?= $par_google && !$google_ok ? ' disabled' : '' ?>>Confirmer</button>
+      <button type="button" id="confirm-ok" class="btn btn-danger"<?= $sans_mdp ? ' disabled' : '' ?>>Confirmer</button>
     </div>
   </div>
 </div>
