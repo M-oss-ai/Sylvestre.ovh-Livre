@@ -20,10 +20,12 @@ putenv('COUVERTURE_MAX_SERIES=0');       // zéro série : la recherche n aurait
 putenv('COUVERTURE_CANDIDATS=0');        // examiner zéro série pour en retenir une
 putenv('COUVERTURE_ESPACEMENT=0');       // aucun espacement : la file ne freine plus rien
 putenv('COUVERTURE_FILE_MAX=0');         // aucune attente tolérée : la file refuse tout
-putenv('COUVERTURE_QUOTA=0');            // zéro recherche : fonctionnalité morte
+putenv('COUVERTURE_QUOTA=0');            // 0 = pas de quota (voulu, voir config.php)
+putenv('COUVERTURE_QUOTA_ILLIMITE=50');   // un plafond pour l illimité… sans objet si le standard n en a pas
 putenv('COUVERTURE_FENETRE=0');          // tranche nulle : la règle n aurait plus de durée
 
 require __DIR__ . '/../lanceur.php';
+require_once CHEMIN_PROJET . '/includes/couvertures.php';
 
 groupe('Recherche de couverture — les planchers');
 
@@ -59,11 +61,13 @@ test('la cadence des appels sortants ne peut pas être supprimée', function () 
     egale(200, COUVERTURE_FILE_MAX, 'le .env ne tolérait aucune attente');
 });
 
-test('le quota par compte reste praticable', function () {
-    /* Un quota de zéro ne protégerait rien : il supprimerait la
-       fonctionnalité pour tout le monde, ce qui n est jamais l intention
-       derrière un chiffre mal saisi. */
-    egale(1, COUVERTURE_QUOTA, 'le .env demandait 0 recherche autorisée');
+test('un quota à 0 veut dire « sans limite », pas « aucune recherche »', function () {
+    /* L exception voulue à la règle des planchers : ce quota répartit
+       l usage entre comptes, il ne protège pas le serveur — la file
+       d attente, testée plus haut, s en charge et garde son plancher. */
+    egale(0, COUVERTURE_QUOTA, 'le standard n a plus de quota');
+    egale(0, couverture_quota(['forfait' => 'standard']), 'rien n est décompté');
+    egale(0, COUVERTURE_QUOTA_ILLIMITE, 'et l illimité n est jamais plus bridé que le standard');
     egale(10, COUVERTURE_FENETRE, 'le .env demandait une tranche de 0 seconde');
 });
 

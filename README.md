@@ -409,8 +409,9 @@ font pas le même travail :
   N secondes » plutôt que de retenir un processus PHP.
 - **Un quota par compte**, annoncé et sans escalade :
   `COUVERTURE_QUOTA` recherches par tranche de `COUVERTURE_FENETRE`
-  secondes. Le forfait illimité n'a **pas** de quota : seule la file
-  d'attente ci-dessus l'espace, comme tout le monde. Dépasser n'entraîne
+  secondes (`COUVERTURE_QUOTA_ILLIMITE` pour le forfait illimité). **0 ou
+  une ligne absente = sans limite** : seule la file d'attente ci-dessus
+  espace alors les recherches. Dépasser n'entraîne
   aucune sanction — seulement l'attente de la tranche suivante, et une
   recherche qui n'est pas partie est rendue. La règle est dite **avant**
   la première recherche (sous le bouton, et dans Paramètres › Forfait),

@@ -543,16 +543,19 @@ function mangadex_image_locale(string $url, ?string &$erreur = null): ?string
  * la mécanique précédente — celle des mots de passe, qui double la peine
  * à chaque récidive — punissait l'usage normal d'une fonctionnalité.
  *
- * 0 pour le forfait illimité : aucun quota, rien n'est décompté. Seule
- * la file d'attente vers MangaDex (mangadex_attendre_son_tour) espace
- * ses recherches, comme celles de tout le monde.
+ * 0 = aucun quota : rien n'est décompté, rien n'est annoncé. C'est ce
+ * que donne un réglage à 0 ou absent du .env (voir config.php). Seule la
+ * file d'attente vers MangaDex (mangadex_attendre_son_tour) espace alors
+ * les recherches, comme celles de tout le monde.
  *
  * Fonction pure, donc testable sans base : c'est le comptage qui exige
  * une base, pas le barème.
  */
 function couverture_quota(array $utilisateur): int
 {
-    return ($utilisateur['forfait'] ?? '') === 'illimite' ? 0 : COUVERTURE_QUOTA;
+    return ($utilisateur['forfait'] ?? '') === 'illimite'
+        ? COUVERTURE_QUOTA_ILLIMITE
+        : COUVERTURE_QUOTA;
 }
 
 /**

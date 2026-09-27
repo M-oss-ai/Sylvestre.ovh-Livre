@@ -437,7 +437,12 @@ $nb_series = (int) $req->fetchColumn();
       <p class="hint">
         Recherche automatique de couverture : <b><?= $quota_recherche ?> recherches toutes les <?= e($tranche) ?></b>.
         Au-delà, il suffit d'attendre la fin des <?= e($tranche) ?> : le compteur repart de zéro.
-        Le forfait illimité n'a pas cette limite.
+        <?php if ($moi['forfait'] !== 'illimite'): ?>
+          <?= COUVERTURE_QUOTA_ILLIMITE === 0
+              ? "Le forfait illimité n'a pas cette limite."
+              : (COUVERTURE_QUOTA_ILLIMITE > $quota_recherche
+                  ? 'Le forfait illimité en permet ' . COUVERTURE_QUOTA_ILLIMITE . '.' : '') ?>
+        <?php endif; ?>
       </p>
     <?php else: ?>
       <p class="hint">Recherche automatique de couverture : <b>sans limite</b>.</p>

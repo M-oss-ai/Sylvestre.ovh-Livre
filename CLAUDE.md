@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (550 tests : 495 PHP en 39 fichiers, 55 JavaScript)
+php tests/lancer.php              # toute la suite (555 tests : 500 PHP en 40 fichiers, 55 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -81,6 +81,11 @@ constante de `config.php` est bornée par un plancher ou un plafond : un
 `.env` mal rempli ne doit jamais pouvoir *supprimer* une protection.
 `tests/cas/config_planchers_test.php` et `couvertures_reglages_test.php`
 imposent des valeurs absurdes et vérifient qu'elles sont relevées.
+**Seule exception : les quotas de recherche** (`COUVERTURE_QUOTA`,
+`COUVERTURE_QUOTA_ILLIMITE`), où 0 ou une ligne absente veut dire « sans
+limite ». Ils répartissent l'usage entre comptes, ils ne protègent pas le
+serveur — la file d'attente vers MangaDex s'en charge, et elle garde son
+plancher.
 
 **La CSP interdit le JavaScript et le CSS en ligne.** Pas de `onclick=`,
 pas de `<style>`, pas de `style="…"` posé depuis PHP. Les données
@@ -165,7 +170,7 @@ Les confondre a déjà coûté cher. Ils ne protègent pas les mêmes choses.
 |---|---|---|
 | `limiteur_echec` / `tentative_ip` | les **comptes**, contre la force brute | Compte des **échecs**, double la peine à chaque récidive |
 | `mangadex_attendre_son_tour()` | l'**adresse IP du serveur**, face à MangaDex | File d'attente (`flock`, 250 ms). Ne compte personne, ne sanctionne personne |
-| `couverture_quota()` / `couverture_consommer()` | l'**équité entre comptes** | Règle fixe et annoncée : 30 recherches / 2 min en forfait standard. **Aucun quota en `illimite`** (`couverture_quota()` rend 0) : illimité veut dire illimité, seule la file d'attente l'espace. Aucune escalade |
+| `couverture_quota()` / `couverture_consommer()` | l'**équité entre comptes** | Règle fixe et annoncée : `COUVERTURE_QUOTA` recherches / 2 min (30), `COUVERTURE_QUOTA_ILLIMITE` en forfait `illimite` (120). **0 ou ligne absente = sans limite** : rien n'est décompté ni annoncé. Aucune escalade |
 
 Le limiteur à peine doublante convient à des mots de passe essayés au
 hasard. L'appliquer à l'usage normal d'une fonctionnalité revient à
