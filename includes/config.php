@@ -135,6 +135,22 @@ define('REMEMBER_DUREE_VIP', max(0, (int) env('REMEMBER_DUREE_VIP', '31536000'))
    téléphone revendu ne garde pas un accès valide un an. */
 define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
 
+/* Connexion avec Google (voir google.php et includes/google.php).
+   L'identifiant et le secret se créent dans la console Google Cloud
+   (« Identifiants » › « ID client OAuth », type « Application Web »),
+   avec pour URI de redirection APP_URL . '/google.php'. Laissés vides :
+   le bouton « Continuer avec Google » n'apparaît nulle part et
+   google.php répond 404. */
+define('GOOGLE_CLIENT_ID', trim(env('GOOGLE_CLIENT_ID', '')));
+define('GOOGLE_CLIENT_SECRET', trim(env('GOOGLE_CLIENT_SECRET', '')));
+
+/* Un compte créé par Google n'a pas de mot de passe. Là où les autres
+   le retapent (suppression du compte, changement d'adresse…), il repasse
+   par Google, et cette confirmation vaut pendant GOOGLE_CONFIRMATION_DUREE
+   secondes. Entre 1 minute et 1 heure : au-delà, une session volée
+   suffirait de nouveau. */
+define('GOOGLE_CONFIRMATION_DUREE', min(3600, max(60, (int) env('GOOGLE_CONFIRMATION_DUREE', '600'))));
+
 /* ---------------------------------------------------------------------
    Identification du client — limiteurs et journal de sécurité
 

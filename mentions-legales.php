@@ -17,6 +17,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
+require_once __DIR__ . '/includes/google.php';     // « Continuer avec Google »
 
 /* Un champ non renseigné est signalé à l'écran plutôt qu'affiché vide :
    une mention légale incomplète ne remplit pas son rôle, autant que ça
@@ -107,6 +108,11 @@ $connecte = utilisateur_actuel() !== null;
       <li><b>Votre compte</b> — identifiant, adresse e-mail, prénom et nom (facultatifs),
           photo de profil (facultative), mot de passe (jamais en clair : seule une
           empreinte bcrypt est conservée).</li>
+      <?php if (google_actif()): ?>
+      <li><b>Connexion avec Google</b> (si vous l'utilisez) — l'identifiant technique de
+          votre compte Google, votre adresse e-mail, et votre prénom et nom à la création
+          du compte.</li>
+      <?php endif; ?>
       <li><b>Votre bibliothèque</b> — titres, auteurs, tomes, statuts de lecture et
           couvertures que vous enregistrez.</li>
       <li><b>Journaux techniques</b> — adresse IP et horodatage des connexions, des
@@ -208,6 +214,13 @@ $connecte = utilisateur_actuel() !== null;
       <li><b>Couvertures liées par URL</b> — si vous enregistrez une couverture pointant
           vers un autre site, votre navigateur la télécharge chez lui à chaque
           affichage. Les images envoyées en fichier, elles, restent sur ce serveur.</li>
+      <?php if (google_actif()): ?>
+      <li><b>Google</b> — seulement si vous choisissez « Continuer avec Google ». Vous vous
+          identifiez alors <b>chez Google</b> : ce site ne voit jamais votre mot de passe
+          Google. Google nous transmet l'identifiant de votre compte Google, votre adresse
+          e-mail (vérifiée par lui) et votre nom ; il sait, de son côté, que vous vous êtes
+          connecté ici. Vous pouvez dissocier votre compte Google dans les Paramètres.</li>
+      <?php endif; ?>
     </ul>
   </section>
 

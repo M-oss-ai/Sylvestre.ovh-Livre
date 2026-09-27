@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (555 tests : 500 PHP en 40 fichiers, 55 JavaScript)
+php tests/lancer.php              # toute la suite (573 tests : 518 PHP en 42 fichiers, 55 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -47,6 +47,7 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 | `includes/mailer.php` | Envoi SMTP direct + file de rattrapage (`mail_file`). Chaque e-mail part en texte ET en HTML (`composer_message()`) |
 | `includes/images.php` | Chaîne GD : type déduit du contenu, ré-encodage WebP, nom = empreinte salée |
 | `includes/carte.php` | Le HTML d'une carte de série |
+| `includes/google.php` | « Continuer avec Google » (OpenID Connect) : l'adresse de départ, la lecture et la vérification du jeton, `google_decision()`. Pur, sauf `google_echanger_code()` |
 | `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
 
 ### Les points d'entrée
@@ -54,7 +55,8 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 `index.php` (la bibliothèque), `connexion.php`, `inscription.php`,
 `parametres.php`, `mot-de-passe-oublie.php`,
 `reinitialiser-mot-de-passe.php`, `verifier-email.php`,
-`deconnexion.php`, `mentions-legales.php`.
+`deconnexion.php`, `mentions-legales.php`, `google.php` (départ vers
+Google et retour : ouvre, relie ou crée le compte).
 
 `api.php` est le **point d'entrée AJAX unique** : un `switch` sur
 `$_POST['action']`. Chaque branche vérifie le CSRF et cloisonne par
@@ -153,6 +155,21 @@ La suppression du compte s'en sert aussi : `api.php` vide la session et
 la renouvelle (`session_regenerate_id`) au lieu de la détruire, pour que
 `connexion.php` puisse dire que c'est fait.
 
+**Un compte créé par Google n'a pas de mot de passe** : `mot_de_passe`
+y vaut `''`, que `password_verify()` refuse toujours (aucune connexion
+par mot de passe n'y mène). Là où les autres retapent leur mot de passe,
+il repasse par Google : `verifier_mot_de_passe_limite()` le sait et
+demande `google_confirmation_recente()`, attachée à l'id du compte. Toute
+nouvelle action sensible passe donc par cette fonction, jamais par
+`password_verify()` directement. Dissocier Google n'est permis qu'à un
+compte qui a un mot de passe (condition dans la requête elle-même).
+
+**La signature du jeton Google n'est pas vérifiée, et c'est voulu** : il
+arrive par un appel HTTPS direct du serveur à Google, jamais par le
+navigateur (OpenID Connect Core § 3.1.3.7). Ne jamais désactiver
+`CURLOPT_SSL_VERIFYPEER` dans `google_echanger_code()`, ni accepter un
+`id_token` venu d'ailleurs : ce serait alors une faille.
+
 **Les filtres mémorisés sont par compte** : `Lib.cleFiltres(id)`, avec
 l'id posé en `data-compte` sur `<body>`. Une clé commune faisait ouvrir
 à l'un sa bibliothèque sous le filtre laissé par l'autre.
@@ -179,7 +196,7 @@ recommencer.
 
 ## Base de données
 
-Huit tables : `utilisateur`, `serie`, `jeton_action`,
+Huit tables (`utilisateur.google_sub` relie un compte Google) : `utilisateur`, `serie`, `jeton_action`,
 `session_persistante`, `tentative_ip`, `mail_file`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
 dernier rapport du cron).

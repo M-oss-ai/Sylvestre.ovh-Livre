@@ -1343,6 +1343,8 @@ window.Bibliotheque = (() => {
 
   cartes().forEach(indexer);
   lireFiltres();
+  // Le message laissé par la page précédente (connexion avec Google…).
+  if (document.body.dataset.flash) L.toast(document.body.dataset.flash);
   refleterFiltres();
   appliquerVue();
   majQuota();

@@ -175,6 +175,44 @@ importantes :
 | `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `LEGAL_*` | Mentions légales |
+| `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
+| `GOOGLE_CONFIRMATION_DUREE` | Durée pendant laquelle Google tient lieu de mot de passe (compte sans mot de passe) |
+
+---
+
+## Connexion avec Google
+
+« Continuer avec Google » (connexion et inscription) ouvre, relie ou
+crée un compte, comme sur la plupart des sites. Le site ne voit jamais
+le mot de passe Google : la personne s'identifie **chez Google**, qui
+renvoie ensuite vers `google.php` avec un code à usage unique ; le
+serveur échange ce code contre un jeton qui dit qui elle est
+(OpenID Connect, flux par code avec PKCE — détails dans
+`includes/google.php`).
+
+| Situation | Ce qui se passe |
+|---|---|
+| Compte Google déjà relié | Le compte s'ouvre |
+| Même adresse qu'un compte, confirmée | Le compte est relié à Google, puis s'ouvre ; un e-mail prévient le titulaire |
+| Même adresse, jamais confirmée | Google prouve à qui est l'adresse : le compte lui revient, et le mot de passe choisi par l'inconnu qui l'a créé est effacé |
+| Adresse inconnue | Nouveau compte, **sans mot de passe**, identifiant tiré de l'adresse (modifiable) |
+| Déjà connecté (Paramètres) | « Associer mon compte Google », même d'une autre adresse |
+
+Un compte sans mot de passe **repasse par Google** là où les autres
+retapent le leur (supprimer le compte, vider, changer d'adresse ou
+d'identifiant) : la confirmation vaut `GOOGLE_CONFIRMATION_DUREE`
+secondes. Il peut définir un mot de passe dans Paramètres › Sécurité ;
+dissocier Google n'est possible qu'ensuite, pour ne jamais s'enfermer
+dehors. « Mot de passe oublié » reste la porte de secours.
+
+**Mise en place** — dans la console Google Cloud : « API et services »
+› « Écran de consentement OAuth » (nom de l'application, adresse de
+contact), puis « Identifiants » › « Créer des identifiants » › « ID
+client OAuth », type « Application Web », URI de redirection autorisé
+`https://livre.sylvestre.ovh/google.php` (et
+`http://localhost/Livre/google.php` pour l'essai en local). Recopier
+l'ID client et le secret dans `GOOGLE_CLIENT_ID` et
+`GOOGLE_CLIENT_SECRET`. Laissés vides, le bouton n'apparaît pas.
 
 ---
 
@@ -441,7 +479,7 @@ configuration.
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migration 4 : `serie.mangadex_id`) |
+| `livre.sql` | Schéma complet, rejouable (migration 7 : `utilisateur.google_sub`) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
@@ -452,6 +490,7 @@ configuration.
 | `index.php` | La bibliothèque : grille, recherche, filtres, modales |
 | `api.php` | Actions AJAX + export JSON |
 | `inscription.php` · `connexion.php` · `deconnexion.php` | Comptes |
+| `google.php` · `includes/google.php` | « Continuer avec Google » : départ, retour, décision |
 | `mot-de-passe-oublie.php` · `reinitialiser-mot-de-passe.php` · `verifier-email.php` | Récupération et confirmation |
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
 | `mentions-legales.php` | Mentions légales et confidentialité |

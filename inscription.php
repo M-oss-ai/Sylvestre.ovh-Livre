@@ -14,6 +14,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
+require_once __DIR__ . '/includes/google.php';     // « Continuer avec Google »
 
 if (utilisateur_actuel()) {
     header('Location: index.php');
@@ -238,6 +239,13 @@ $csrf = jeton_csrf();
         <?php endif; ?>
         <?= e($erreurs[''] ?? '') ?>
       </div>
+    <?php endif; ?>
+
+    <?php if (google_actif()): ?>
+      <!-- Google authentifie la personne chez lui ; google.php fait le reste
+           (ouvrir, relier ou créer le compte). -->
+      <?= bouton_google("S'inscrire avec Google") ?>
+      <p class="separateur-ou"><span>ou</span></p>
     <?php endif; ?>
 
     <form method="post" action="inscription.php" autocomplete="on" novalidate>

@@ -244,7 +244,8 @@ window.Parametres = (() => {
   const $mdpConfirmation = document.getElementById("a-new2");
   let mdpVerifie = false;
 
-  $mdpForm.addEventListener("submit", async (e) => {
+  // Absent pour un compte sans mot de passe tant que Google n'a pas confirmé.
+  if ($mdpForm) $mdpForm.addEventListener("submit", async (e) => {
     if (mdpVerifie) return; // la vérification est passée : le POST part
     e.preventDefault();
     const bouton = $mdpForm.querySelector('button[type="submit"]');
@@ -253,7 +254,7 @@ window.Parametres = (() => {
     bouton.disabled = true;
     try {
       await L.api("compte.motdepasse", {
-        actuel: $mdpActuel.value,
+        actuel: $mdpActuel ? $mdpActuel.value : "", // pas de champ : compte sans mot de passe
         nouveau: $mdpNouveau.value,
         confirmation: $mdpConfirmation.value,
         verifier: "1",
@@ -267,10 +268,10 @@ window.Parametres = (() => {
     } catch (err) {
       bouton.disabled = false;
       const champ = L.erreursSurChamps(err, {
-        actuel: $mdpActuel, nouveau: $mdpNouveau, confirmation: $mdpConfirmation,
+        actuel: $mdpActuel || $mdpNouveau, nouveau: $mdpNouveau, confirmation: $mdpConfirmation,
       });
       if (champ) champ.focus();
-      else L.erreurChamp($mdpActuel, err.message);
+      else L.erreurChamp($mdpActuel || $mdpNouveau, err.message);
     }
   });
 
@@ -398,6 +399,8 @@ window.Parametres = (() => {
   const $confirmPwd = document.getElementById("confirm-password");
   const $confirmExport = document.getElementById("confirm-export");
   const NB_SERIES = parseInt(document.body.dataset.series || "0", 10) || 0;
+  // Compte créé par Google : pas de mot de passe, Google confirme à sa place.
+  const SANS_MDP = document.body.dataset.sansMdp === "1";
   let actionEnAttente = null;
   let elementDeclencheur = null;
 
@@ -412,7 +415,8 @@ window.Parametres = (() => {
     actionEnAttente = action;
     elementDeclencheur = document.activeElement;
     $confirmOverlay.classList.remove("hidden");
-    $confirmPwd.focus();
+    if (!SANS_MDP) $confirmPwd.focus();
+    else ($confirmOk.disabled ? document.getElementById("confirm-cancel") : $confirmOk).focus();
   }
 
   function fermerConfirmation() {
@@ -439,7 +443,7 @@ window.Parametres = (() => {
     if (!actionEnAttente) return;
     const action = actionEnAttente;
     const motDePasse = $confirmPwd.value;
-    if (!motDePasse) {
+    if (!motDePasse && !SANS_MDP) {
       L.erreurChamp($confirmPwd, "Saisissez votre mot de passe pour confirmer.");
       $confirmPwd.focus();
       return;

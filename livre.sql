@@ -70,10 +70,17 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   -- que l'utilisateur reactive le filtre, ce qui n'aurait aucun sens.
   `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
   `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1,
+  -- Identifiant du compte Google relié (revendication « sub » d'OpenID
+  -- Connect), NULL sinon. C'est lui, et non l'adresse, qui reconnaît le
+  -- compte Google : une adresse peut changer, le « sub » jamais.
+  -- Un compte créé par Google n'a pas de mot de passe : `mot_de_passe`
+  -- y vaut '' (chaîne vide), que password_verify() refuse toujours.
+  `google_sub`   VARCHAR(255) NULL DEFAULT NULL,
   `cree_le`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_utilisateur_identifiant` (`identifiant`),
   UNIQUE KEY `uk_utilisateur_email` (`email`),
+  UNIQUE KEY `uk_utilisateur_google` (`google_sub`),
   -- supprimer_image_locale() cherche « qui référence encore ce fichier ? » :
   -- sans cet index, c'est un parcours complet de la table à chaque
   -- suppression d'image (et il y en a une par série supprimée).
@@ -383,4 +390,24 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
               AND COLUMN_TYPE LIKE '%''blocage_email''%');
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `jeton_action` MODIFY COLUMN `type` ENUM(''verification'',''reinit'',''changement_email'',''blocage_email'') NOT NULL');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  7. Connexion avec Google (voir google.php).
+--
+--     `google_sub` : l'identifiant du compte Google relié, NULL sinon.
+--     L'index UNIQUE empêche deux comptes du site de se partager le même
+--     compte Google ; les NULL, eux, ne se gênent pas entre eux.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'google_sub');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `google_sub` VARCHAR(255) NULL DEFAULT NULL AFTER `filtre_sensible`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND INDEX_NAME = 'uk_utilisateur_google');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD UNIQUE KEY `uk_utilisateur_google` (`google_sub`)');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

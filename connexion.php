@@ -11,6 +11,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
+require_once __DIR__ . '/includes/google.php';     // « Continuer avec Google »
 
 if (utilisateur_actuel()) {
     header('Location: index.php');
@@ -25,8 +26,11 @@ if (utilisateur_actuel()) {
    tiers à volonté — il ralentit, il n'interdit pas.
    Les seuils et les durées se règlent dans le .env (voir config.php). */
 
-$erreur      = '';
-$info        = flash_prendre();   // « Votre compte a été supprimé », laissé par api.php
+/* Un message laissé par la page précédente : « Votre compte a été
+   supprimé » (api.php), ou l'échec d'une connexion Google (google.php). */
+$info        = flash_prendre($genre_flash);
+$erreur      = $genre_flash === 'erreur' ? $info : '';
+$info        = $genre_flash === 'erreur' ? '' : $info;
 /* Secondes restantes avant de pouvoir réessayer. Séparé du message :
    le gabarit en fait un compte à rebours, et le serveur le recalcule à
    chaque affichage — un rechargement au milieu d'une attente reprend
@@ -223,6 +227,13 @@ $csrf = jeton_csrf();
         <button type="submit" class="btn btn-ghost full">📬 Renvoyer le lien de confirmation</button>
       </form>
       <div class="settings-divider"></div>
+    <?php endif; ?>
+
+    <?php if (google_actif()): ?>
+      <!-- Google authentifie la personne chez lui ; google.php fait le reste
+           (ouvrir, relier ou créer le compte). -->
+      <?= bouton_google('Continuer avec Google') ?>
+      <p class="separateur-ou"><span>ou</span></p>
     <?php endif; ?>
 
     <form method="post" action="connexion.php" autocomplete="on" novalidate>

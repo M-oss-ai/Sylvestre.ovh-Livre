@@ -251,7 +251,7 @@ il part, sur quelle période, et comment il l'affiche),
 `mots_encodes` (l'e-mail tel qu'il part : texte et HTML, liens vers le
 site seulement, en-têtes encodés), `import_serie` et `import_complement`
 (une ligne de sauvegarde, et ce que l'import rend à une série déjà
-présente), `flash` et `flash_prendre` (le message qui ne revient pas au rechargement), `duree_cookie_lisible` et les mentions légales rendues selon `SESSION_DUREE` / `REMEMBER_DUREE_VIP`, `titre_normalise`, `mangadex_titre`,
+présente), `google_url_autorisation`, `pkce_defi`, `base64url`, `google_lire_id_token`, `google_verifier_revendications`, `google_decision`, `identifiant_depuis_google`, `google_confirmation_recente`, `bouton_google` (la connexion avec Google, sauf l'échange du code qui appelle Google), `flash` et `flash_prendre` (le message qui ne revient pas au rechargement), `duree_cookie_lisible` et les mentions légales rendues selon `SESSION_DUREE` / `REMEMBER_DUREE_VIP`, `titre_normalise`, `mangadex_titre`,
 `couverture_quota` et `couverture_quota_illimite` (0 ou réglage absent : aucun quota), `couverture_tranche_lisible`,
 `mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
 qu'il refuse), `couverture_tome_vise`, `mangadex_image_locale` (son

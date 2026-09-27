@@ -55,6 +55,11 @@ function exiger_mot_de_passe(int $mon_id): void
     if (verifier_mot_de_passe_limite($mon_id, (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
         return;
     }
+    // Compte créé par Google : c'est Google qui confirme, pas un mot de passe.
+    if (compte_sans_mot_de_passe($mon_id)) {
+        reponse_json(['ok' => false, 'champ' => 'mot_de_passe', 'google' => true, 'erreur' =>
+            "Confirmez d'abord votre identité avec Google (bouton « Confirmer avec Google »)."], 403);
+    }
     if ($attente > 0) {
         /* « attente » accompagne le message : le navigateur en fait un
            compte à rebours, le message reste lisible sans JavaScript. */
@@ -460,7 +465,10 @@ switch ($action) {
         if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente)) {
             $erreurs['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : 'Mot de passe actuel incorrect.';
+                : ((int) $moi['sans_mot_de_passe'] === 1
+                    ? "Confirmez d'abord votre identité avec Google (moins de "
+                      . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . ' minutes).'
+                    : 'Mot de passe actuel incorrect.');
         }
         if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
             $erreurs['nouveau'] = $faiblesses;

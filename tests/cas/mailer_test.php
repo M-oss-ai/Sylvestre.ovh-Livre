@@ -79,7 +79,8 @@ test('les trois avis existent et acceptent leurs arguments', function () {
     avertir_mot_de_passe_change('titulaire@exemple.test', 'lecteur92');
     avertir_compte_supprime('titulaire@exemple.test', 'lecteur92');
     avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test');
-    vrai(true, 'les trois se composent sans lever d erreur');
+    avertir_google_associe('titulaire@exemple.test', 'lecteur92', 'compte.google@exemple.test');
+    vrai(true, 'les quatre se composent sans lever d erreur');
 });
 
 test('l avis de changement d adresse part même sans son lien de blocage', function () {

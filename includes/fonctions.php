@@ -475,6 +475,14 @@ function limiteur_echec(string $action, int $max_essais, int $duree_base, ?strin
  */
 function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$attente = null): bool
 {
+    /* Un compte créé par Google n'a pas de mot de passe à retaper : il
+       confirme en repassant par Google (voir google.php), et cette
+       confirmation vaut GOOGLE_CONFIRMATION_DUREE secondes. */
+    if (compte_sans_mot_de_passe($utilisateur_id)) {
+        $attente = 0;
+        return google_confirmation_recente($utilisateur_id);
+    }
+
     $attente = limiteur_bloque_depuis('mdp_confirmation');
     if ($attente > 0) {
         return false;   // bloqué : on n'appelle même pas password_verify
@@ -555,7 +563,8 @@ function utilisateur_actuel(): ?array
 
     $req = $pdo->prepare(
         'SELECT id, identifiant, email, email_verifie, prenom, nom, photo, forfait,
-                session_version, adulte_confirme, filtre_sensible, cree_le
+                session_version, adulte_confirme, filtre_sensible, cree_le, google_sub,
+                (mot_de_passe = \'\') AS sans_mot_de_passe
            FROM utilisateur WHERE id = ?'
     );
     $req->execute([(int) $id]);
@@ -842,6 +851,44 @@ function mot_de_passe_correct(int $utilisateur_id, string $mot_de_passe): bool
     return $hash !== '' && password_verify($mot_de_passe, $hash);
 }
 
+/**
+ * Le compte a-t-il été créé par Google, sans mot de passe ? Son
+ * `mot_de_passe` vaut alors '' — que password_verify() refuse toujours,
+ * si bien qu'aucune connexion par mot de passe n'y mène.
+ */
+function compte_sans_mot_de_passe(int $utilisateur_id): bool
+{
+    global $pdo;
+    $req = $pdo->prepare('SELECT mot_de_passe FROM utilisateur WHERE id = ?');
+    $req->execute([$utilisateur_id]);
+    $hash = $req->fetchColumn();
+    return $hash !== false && (string) $hash === '';
+}
+
+/**
+ * La personne vient-elle de prouver son identité en passant par Google ?
+ * Posé par google.php, valable GOOGLE_CONFIRMATION_DUREE secondes : c'est
+ * le mot de passe retapé des comptes qui n'en ont pas.
+ *
+ * Attachée au COMPTE, pas seulement à la session : une confirmation
+ * obtenue pour un compte ne doit rien valoir pour un autre qui ouvrirait
+ * une session dans le même navigateur.
+ */
+function google_confirmation_recente(int $utilisateur_id, ?array $session = null, ?int $maintenant = null): bool
+{
+    $session ??= $_SESSION ?? [];
+    $c = $session['google_confirme'] ?? null;
+    return is_array($c)
+        && (int) ($c['id'] ?? 0) === $utilisateur_id && $utilisateur_id > 0
+        && (int) ($c['le'] ?? 0) >= ($maintenant ?? time()) - GOOGLE_CONFIRMATION_DUREE;
+}
+
+/** Note que ce compte vient de prouver son identité avec Google. */
+function google_noter_confirmation(int $utilisateur_id): void
+{
+    $_SESSION['google_confirme'] = ['id' => $utilisateur_id, 'le' => time()];
+}
+
 function connecter(int $id): void
 {
     session_regenerate_id(true);     // empêche la fixation de session
@@ -1045,17 +1092,21 @@ function initiales(array $u): string
  * « Mot de passe modifié ✅ » s'affichait encore après avoir vidé la
  * bibliothèque. Rangé dans la session, il disparaît dès qu'il est lu.
  */
-function flash(string $message): void
+function flash(string $message, string $genre = 'info'): void
 {
-    $_SESSION['flash'] = $message;
+    $_SESSION['flash'] = ['message' => $message, 'genre' => $genre === 'erreur' ? 'erreur' : 'info'];
 }
 
-/** Le message laissé par flash(), retiré de la session au passage. */
-function flash_prendre(): string
+/**
+ * Le message laissé par flash(), retiré de la session au passage.
+ * $genre reçoit « info » ou « erreur » : la page choisit son encadré.
+ */
+function flash_prendre(?string &$genre = null): string
 {
-    $message = (string) ($_SESSION['flash'] ?? '');
+    $f = $_SESSION['flash'] ?? null;
     unset($_SESSION['flash']);
-    return $message;
+    $genre = is_array($f) && ($f['genre'] ?? '') === 'erreur' ? 'erreur' : 'info';
+    return is_array($f) ? (string) ($f['message'] ?? '') : '';
 }
 
 /**

@@ -657,6 +657,35 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .btn-ghost { background: transparent; color: var(--text); }
 
+/* « Continuer avec Google » : fond blanc et « G » en couleurs, l'aspect
+   que Google demande et que l'on reconnaît d'un site à l'autre. */
+.btn-google {
+  background: #fff;
+  color: #1f1f1f;
+  border-color: #dadce0;
+  gap: 10px;
+}
+.btn-google:hover { background: #f7f8f8; border-color: #c4c7c5; }
+.google-g { width: 18px; height: 18px; flex: none; }
+
+/* « ou » entre le bouton Google et le formulaire. */
+.separateur-ou {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+.separateur-ou::before,
+.separateur-ou::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+
+/* Paramètres › Sécurité : les sous-parties (Compte Google). */
+.settings-sous-titre { font-size: 14px; margin: 0 0 6px; color: var(--text); }
+.confirmation-google { color: var(--termine); }
+.settings-card .btn-google { margin-top: 8px; }
+.modal .btn-google { margin: 8px 0 4px; }
+
 .btn-danger {
   background: rgba(217, 128, 128, 0.15);
   border-color: var(--abandon);

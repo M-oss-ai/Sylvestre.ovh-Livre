@@ -14,6 +14,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
+require_once __DIR__ . '/includes/google.php';     // « Continuer avec Google »
 require_once __DIR__ . '/includes/couvertures.php';   // le quota de recherche, annoncé dans « Forfait »
 
 $moi = exiger_connexion();
@@ -47,7 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!verifier_mot_de_passe_limite((int) $moi['id'], $actuel, $attente)) {
             $erreurs_mdp['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : 'Mot de passe actuel incorrect.';
+                : ((int) $moi['sans_mot_de_passe'] === 1
+                    ? "Confirmez d'abord votre identité avec Google (moins de " . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . " minutes)."
+                    : 'Mot de passe actuel incorrect.');
         }
         if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
             $erreurs_mdp['nouveau'] = $faiblesses;
@@ -67,7 +70,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // redemande pas l'envoi du formulaire, et le gestionnaire de
             // mots de passe voit une navigation réussie — c'est ce qui
             // déclenche sa proposition d'enregistrement.
-            flash('Mot de passe modifié ✅ — les autres appareils ont été déconnectés.');
+            flash((int) $moi['sans_mot_de_passe'] === 1
+                ? 'Mot de passe défini ✅ — vous pouvez aussi vous connecter avec votre identifiant.'
+                : 'Mot de passe modifié ✅ — les autres appareils ont été déconnectés.');
             header('Location: parametres.php#securite');
             exit;
         }
@@ -105,7 +110,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!verifier_mot_de_passe_limite((int) $moi['id'], (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
                 $erreurs_profil['mot_de_passe'] = $attente > 0
                     ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                    : "Pour changer votre identifiant ou votre adresse e-mail, saisissez votre mot de passe actuel.";
+                    : ((int) $moi['sans_mot_de_passe'] === 1
+                        ? "Pour changer votre identifiant ou votre adresse e-mail, confirmez d'abord votre identité avec Google."
+                        : "Pour changer votre identifiant ou votre adresse e-mail, saisissez votre mot de passe actuel.");
             }
         }
         // Après le mot de passe, jamais avant : sans lui, dire qu'une
@@ -174,12 +181,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    /* Dissocier Google : seulement si le compte a un mot de passe, sinon
+       plus rien ne permettrait d'y entrer (la condition est dans la
+       requête elle-même, pas seulement dans la page). */
+    if ($formulaire === 'dissocier_google') {
+        $req = $pdo->prepare("UPDATE utilisateur SET google_sub = NULL WHERE id = ? AND mot_de_passe <> ''");
+        $req->execute([(int) $moi['id']]);
+        unset($_SESSION['google_confirme']);
+        if ($req->rowCount() > 0) {
+            journal_securite('google_dissocie', ['utilisateur' => (int) $moi['id']]);
+            flash('Compte Google dissocié. Connectez-vous désormais avec votre identifiant et votre mot de passe.');
+        } else {
+            flash("Définissez d'abord un mot de passe : sans lui, vous ne pourriez plus vous connecter.", 'erreur');
+        }
+        header('Location: parametres.php#securite');
+        exit;
+    }
+
     // Une erreur : on relit le compte pour réafficher des valeurs à jour.
     $moi = exiger_connexion();
 }
 
 // Laissé par la redirection qui suit un enregistrement : affiché une fois.
-$info = flash_prendre();
+$info = flash_prendre($genre_info);
+
+/* Un compte créé par Google n'a pas de mot de passe : là où les autres
+   le retapent, il repasse par Google (voir google.php). */
+$sans_mdp  = (int) $moi['sans_mot_de_passe'] === 1;
+$google_ok = google_confirmation_recente((int) $moi['id']);
 
 $photo   = url_image_sure($moi['photo']);
 $csrf    = jeton_csrf();
@@ -215,7 +244,7 @@ $nb_series = (int) $req->fetchColumn();
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
       data-import-max="<?= IMPORT_TAILLE_MAX ?>" data-prive="1"
       data-compte="<?= (int) $moi['id'] ?>" data-series="<?= $nb_series ?>"
-      data-forfait="<?= e((string) $moi['forfait']) ?>">
+      data-forfait="<?= e((string) $moi['forfait']) ?>" data-sans-mdp="<?= $sans_mdp ? '1' : '0' ?>">
 
 <header class="topbar settings-topbar">
   <div class="topbar-row settings-topbar-row">
@@ -228,7 +257,7 @@ $nb_series = (int) $req->fetchColumn();
 <main class="settings-main">
 
   <?php if ($info): ?>
-    <div class="alert alert-info" role="status"><?= e($info) ?></div>
+    <div class="alert <?= $genre_info === 'erreur' ? 'alert-error' : 'alert-info' ?>" role="<?= $genre_info === 'erreur' ? 'alert' : 'status' ?>"><?= e($info) ?></div>
   <?php endif; ?>
 
   <!-- ---------------- Profil ---------------- -->
@@ -322,12 +351,27 @@ $nb_series = (int) $req->fetchColumn();
       <!-- Affiché par le JS quand l'identifiant ou l'adresse change ;
            toujours présent dans le HTML pour que la page fonctionne sans JS. -->
       <div class="field" id="email-password-field">
+        <?php if ($sans_mdp): ?>
+          <!-- Pas de mot de passe à retaper : la confirmation passe par
+               Google. Le champ reste (vide, caché) pour que le script et
+               l'affichage des erreurs n'aient qu'un seul cas à connaître. -->
+          <input id="a-email-password" name="mot_de_passe" type="hidden" value="">
+          <?php if ($google_ok): ?>
+            <p class="hint confirmation-google">✅ Identité confirmée avec Google : vous pouvez changer
+              d'identifiant ou d'adresse.</p>
+          <?php else: ?>
+            <p class="hint">Changer d'identifiant ou d'adresse demande de confirmer votre identité
+              avec Google.</p>
+            <?= bouton_google('Confirmer avec Google', 'parametres') ?>
+          <?php endif; ?>
+        <?php else: ?>
         <label for="a-email-password">Mot de passe actuel
           <span class="hint">(requis si vous changez d'identifiant ou d'adresse)</span></label>
         <div class="password-wrap">
           <input id="a-email-password" name="mot_de_passe" type="password" autocomplete="current-password"<?= champ_aria($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="a-email-password" aria-label="Afficher le mot de passe">👁️</button>
         </div>
+        <?php endif; ?>
         <?= champ_erreur($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>
       </div>
 
@@ -361,6 +405,18 @@ $nb_series = (int) $req->fetchColumn();
   <section class="settings-card" id="securite">
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔒</span> Sécurité</h2>
 
+    <?php if ($sans_mdp): ?>
+      <!-- Compte créé par Google : pas de mot de passe. En définir un permet
+           aussi de se connecter avec l'identifiant, et de dissocier Google. -->
+      <p class="hint">Ce compte n'a pas de mot de passe : vous vous connectez avec Google.
+        Définissez-en un pour pouvoir aussi vous connecter avec votre identifiant.</p>
+      <?php if (!$google_ok): ?>
+        <p class="hint">Pour cela, confirmez d'abord votre identité avec Google.</p>
+        <?= bouton_google('Confirmer avec Google', 'parametres') ?>
+      <?php endif; ?>
+    <?php endif; ?>
+
+    <?php if (!$sans_mdp || $google_ok): ?>
     <form id="mdp-form" method="post" action="parametres.php#securite" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="formulaire" value="motdepasse">
@@ -374,6 +430,11 @@ $nb_series = (int) $req->fetchColumn();
       <input class="visually-hidden" type="text" name="identifiant_lecture" autocomplete="username"
              value="<?= e($moi['identifiant']) ?>" readonly tabindex="-1" aria-hidden="true">
 
+      <?php if ($sans_mdp): ?>
+        <?php if (isset($erreurs_mdp['actuel'])): ?>
+          <p class="erreur-form" role="alert"><?= e($erreurs_mdp['actuel']) ?></p>
+        <?php endif; ?>
+      <?php else: ?>
       <div class="field">
         <label for="a-current">Mot de passe actuel</label>
         <div class="password-wrap">
@@ -382,6 +443,7 @@ $nb_series = (int) $req->fetchColumn();
         </div>
         <?= champ_erreur($erreurs_mdp, 'actuel', 'a-current') ?>
       </div>
+      <?php endif; ?>
 
       <div class="field">
         <label for="a-new">Nouveau mot de passe</label>
@@ -404,12 +466,34 @@ $nb_series = (int) $req->fetchColumn();
         <p class="hint" id="mdp-regle"><?= e(MDP_REGLE) ?></p>
       </div>
 
-      <button type="submit" class="btn btn-primary full">Changer le mot de passe</button>
+      <button type="submit" class="btn btn-primary full"><?= $sans_mdp ? 'Définir le mot de passe' : 'Changer le mot de passe' ?></button>
       <p class="hint">
         Votre mot de passe est stocké haché (bcrypt) : même en ouvrant la base, il est illisible.
         Le changer déconnecte tous vos autres appareils.
       </p>
     </form>
+    <?php endif; ?>
+
+    <?php if (google_actif() || (string) $moi['google_sub'] !== ''): ?>
+      <div class="settings-divider"></div>
+      <h3 class="settings-sous-titre">Compte Google</h3>
+      <?php if ((string) $moi['google_sub'] !== ''): ?>
+        <p class="hint">✅ Associé : « Continuer avec Google » ouvre ce compte.</p>
+        <?php if ($sans_mdp): ?>
+          <p class="hint">Pour le dissocier, définissez d'abord un mot de passe : sans lui, vous ne
+            pourriez plus vous connecter.</p>
+        <?php else: ?>
+          <form method="post" action="parametres.php#securite">
+            <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+            <input type="hidden" name="formulaire" value="dissocier_google">
+            <button type="submit" class="btn btn-ghost full">Dissocier mon compte Google</button>
+          </form>
+        <?php endif; ?>
+      <?php else: ?>
+        <p class="hint">Associez votre compte Google pour vous connecter en un clic, sans mot de passe.</p>
+        <?= bouton_google('Associer mon compte Google', 'parametres') ?>
+      <?php endif; ?>
+    <?php endif; ?>
 
     <div class="settings-divider"></div>
 
@@ -558,6 +642,18 @@ $nb_series = (int) $req->fetchColumn();
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <button type="submit" class="btn btn-ghost full">⬇️ Exporter d'abord mes <?= $nb_series ?> série(s)</button>
     </form>
+    <?php if ($sans_mdp): ?>
+      <!-- Pas de mot de passe à retaper : Google en tient lieu, s'il vient
+           de confirmer l'identité. Le champ reste, vide et caché, pour
+           que le script n'ait qu'un seul cas à connaître. -->
+      <input id="confirm-password" type="hidden" value="">
+      <?php if ($google_ok): ?>
+        <p class="hint confirmation-google">✅ Identité confirmée avec Google.</p>
+      <?php else: ?>
+        <p class="hint">Pour confirmer, reconnectez-vous d'abord avec Google, puis recommencez.</p>
+        <?= bouton_google('Confirmer avec Google', 'parametres') ?>
+      <?php endif; ?>
+    <?php else: ?>
     <div class="field">
       <label for="confirm-password">Saisissez votre mot de passe pour confirmer</label>
       <div class="password-wrap">
@@ -565,10 +661,11 @@ $nb_series = (int) $req->fetchColumn();
         <button type="button" class="icon-btn toggle-password" data-cible="confirm-password" aria-label="Afficher le mot de passe">👁️</button>
       </div>
     </div>
+    <?php endif; ?>
     <div class="modal-actions">
       <div class="grow"></div>
       <button type="button" id="confirm-cancel" class="btn btn-ghost">Annuler</button>
-      <button type="button" id="confirm-ok" class="btn btn-danger">Confirmer</button>
+      <button type="button" id="confirm-ok" class="btn btn-danger"<?= $sans_mdp && !$google_ok ? ' disabled' : '' ?>>Confirmer</button>
     </div>
   </div>
 </div>

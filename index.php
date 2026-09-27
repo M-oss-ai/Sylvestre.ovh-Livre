@@ -30,6 +30,9 @@ $csrf    = jeton_csrf();
 $quota_series    = $moi['forfait'] === 'illimite' ? 0 : MAX_SERIES_PAR_UTILISATEUR;
 $quota_recherche = couverture_quota($moi);
 $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
+
+// Laissé par google.php (« Bienvenue ! », compte relié…) : dit en notification.
+$flash = flash_prendre();
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -45,7 +48,7 @@ $tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
       data-quota-series="<?= (int) $quota_series ?>"
       data-quota-recherche="<?= (int) $quota_recherche ?>" data-tranche-recherche="<?= e($tranche) ?>"
-      data-compte="<?= (int) $moi['id'] ?>" data-prive="1">
+      data-compte="<?= (int) $moi['id'] ?>" data-flash="<?= e($flash) ?>" data-prive="1">
 
 <!-- Premier arrêt au clavier : sans lui, atteindre la première série
      demandait de traverser tout l'en-tête et les filtres. -->
