@@ -41,8 +41,6 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   `email`        VARCHAR(190) NOT NULL,
   `email_verifie` TINYINT(1)  NOT NULL DEFAULT 0,
   `mot_de_passe` VARCHAR(255) NOT NULL,
-  `prenom`       VARCHAR(80)  NOT NULL DEFAULT '',
-  `nom`          VARCHAR(80)  NOT NULL DEFAULT '',
   `photo`        VARCHAR(500) NOT NULL DEFAULT '',
   -- Forfait du compte : « standard » = limité à MAX_SERIES_PAR_UTILISATEUR
   -- (voir .env), « illimite » = pas de limite de séries. Pas de paiement en
@@ -410,4 +408,22 @@ SET @c := (SELECT COUNT(*) FROM information_schema.STATISTICS
               AND TABLE_NAME = 'utilisateur' AND INDEX_NAME = 'uk_utilisateur_google');
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `utilisateur` ADD UNIQUE KEY `uk_utilisateur_google` (`google_sub`)');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  8. Prénom et nom retirés : le site ne les demande plus (l'avatar par
+--     défaut prend les deux premières lettres de l'identifiant).
+--
+--     ⚠️ Irréversible : rejouer ce fichier EFFACE les prénoms et noms
+--     déjà enregistrés. Exporter la table avant, si on veut les garder.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'prenom');
+SET @sql := IF(@c = 0, 'DO 0', 'ALTER TABLE `utilisateur` DROP COLUMN `prenom`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'nom');
+SET @sql := IF(@c = 0, 'DO 0', 'ALTER TABLE `utilisateur` DROP COLUMN `nom`');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

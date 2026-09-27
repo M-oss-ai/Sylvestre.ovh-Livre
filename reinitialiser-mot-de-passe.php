@@ -48,7 +48,9 @@ if ($compte && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($faiblesses = valider_mot_de_passe($mdp, (string) $compte['identifiant'])) {
         $erreurs['mot_de_passe'] = $faiblesses;
     }
-    if ($mdp !== $mdp2) {
+    if ($mdp2 === '') {
+        $erreurs['confirmation'] = MESSAGE_CHAMP_OBLIGATOIRE;
+    } elseif ($mdp !== $mdp2) {
         $erreurs['confirmation'] = 'Les deux mots de passe ne correspondent pas.';
     }
 
@@ -171,7 +173,9 @@ $csrf = jeton_csrf();
           <label for="mot_de_passe">Nouveau mot de passe</label>
           <div class="password-wrap">
             <input id="mot_de_passe" name="mot_de_passe" type="password" required
-                   autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="<?= MDP_MIN ?> caractères minimum"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe', 'mdp-regle') ?>>
+                   autocomplete="new-password" maxlength="<?= MDP_MAX ?>"
+                   data-regles-mdp data-mdp-min="<?= MDP_MIN ?>" data-mdp-max="<?= MDP_MAX ?>"
+                   data-identifiant-valeur="<?= e((string) $compte['identifiant']) ?>"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe') ?>>
             <button type="button" class="icon-btn toggle-password" data-cible="mot_de_passe"
                     aria-label="Afficher le mot de passe">👁️</button>
           </div>
@@ -182,12 +186,11 @@ $csrf = jeton_csrf();
           <label for="confirmation">Confirmer le mot de passe</label>
           <div class="password-wrap">
             <input id="confirmation" name="confirmation" type="password" required
-                   autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
+                   autocomplete="new-password" maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
             <button type="button" class="icon-btn toggle-password" data-cible="confirmation"
                     aria-label="Afficher le mot de passe">👁️</button>
           </div>
           <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
-          <p class="hint" id="mdp-regle"><?= e(MDP_REGLE) ?></p>
         </div>
 
         <button type="submit" class="btn btn-primary full"><?= $bloquer ? 'Bloquer et changer le mot de passe' : 'Changer le mot de passe' ?></button>
@@ -198,5 +201,6 @@ $csrf = jeton_csrf();
 
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/auth.js')) ?>" defer></script>
+<script src="<?= e(actif('js/mdp.js')) ?>" defer></script>
 </body>
 </html>

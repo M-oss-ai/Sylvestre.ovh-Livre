@@ -579,7 +579,7 @@ window.Lib = (() => {
 
      Sur téléphone, un champ focalisé garde le clavier ouvert tant qu'on
      ne touche pas explicitement autre chose — et l'étiquette du champ
-     (« Titre * », par exemple) NE compte PAS comme « autre chose » : le
+     (« Titre », par exemple) NE compte PAS comme « autre chose » : le
      navigateur la traite comme une extension du champ.
 
      Ce qui se passe RÉELLEMENT au tap est plus retors qu'il n'y paraît

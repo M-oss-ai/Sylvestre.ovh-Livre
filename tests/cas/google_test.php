@@ -130,24 +130,29 @@ test('la tolérance d horloge de 5 minutes', function () {
 
 groupe('google_decision() — que faire de ce compte Google');
 
-test('sans session : ouvrir, relier, reprendre ou créer', function () {
-    $compte = ['id' => 7, 'google_sub' => null, 'email_verifie' => 1];
-    egale('connecter', google_decision(null, $compte, null), 'compte Google déjà relié');
-    egale('lier', google_decision(null, null, $compte), 'même adresse, confirmée');
-    egale('reprendre', google_decision(null, null, ['email_verifie' => 0] + $compte), 'même adresse, jamais confirmée');
-    egale('refus_conflit', google_decision(null, null, ['google_sub' => 'x'] + $compte), 'adresse reliée à un autre compte Google');
-    egale('creer', google_decision(null, null, null), 'personne');
+test('sans session : ouvrir, refuser ou créer', function () {
+    $compte_email = ['id' => 7, 'google_sub' => null, 'email_verifie' => 1];
+    egale('connecter', google_decision(null, ['id' => 7, 'google_sub' => 's'], null), 'compte créé avec ce compte Google');
+    egale('refus_adresse', google_decision(null, null, $compte_email),
+        'l adresse d un compte e-mail : les deux sortes de comptes ne se relient pas');
+    egale('refus_adresse', google_decision(null, null, ['google_sub' => 'x', 'email_verifie' => 1] + $compte_email),
+        'l adresse d un autre compte Google');
+    egale('creer', google_decision(null, null, null), 'personne : on propose de créer');
 });
 
-test('connecté : confirmer, associer, ou refuser', function () {
-    $moi    = ['id' => 5, 'google_sub' => null];
-    $compte = ['id' => 7, 'google_sub' => null, 'email_verifie' => 1];
+test('un compte e-mail jamais confirmé ne bloque pas l adresse', function () {
+    /* N importe qui a pu le créer avec l adresse d un autre ; Google vient
+       de prouver à qui elle est. Ce compte jamais activé cède la place. */
+    egale('creer', google_decision(null, null, ['id' => 7, 'google_sub' => null, 'email_verifie' => 0]),
+        'création proposée');
+});
+
+test('connecté : seulement confirmer son identité, jamais relier', function () {
+    $moi = ['id' => 5, 'google_sub' => 's5'];
     egale('confirmer', google_decision($moi, ['id' => 5], null), 'son propre compte Google');
-    egale('refus_autre', google_decision($moi, $compte, null), 'le compte Google d un autre');
-    egale('associer', google_decision($moi, null, null), 'compte Google libre');
-    egale('associer', google_decision($moi, null, $compte), 'même si son adresse est celle d un autre compte');
-    egale('refus_deja_lie', google_decision(['id' => 5, 'google_sub' => 'autre-sub'], null, null),
-        'déjà relié à un autre compte Google');
+    egale('refus_autre', google_decision($moi, ['id' => 7], null), 'le compte Google d un autre');
+    egale('refus_autre', google_decision(['id' => 5, 'google_sub' => null], null, null),
+        'un compte e-mail ne se relie pas à Google');
 });
 
 groupe('identifiant_depuis_google() — le nom d un compte créé');

@@ -12,39 +12,26 @@ require __DIR__ . '/../lanceur.php';
 
 groupe('initiales() — l avatar par défaut');
 
-test('prénom et nom donnent deux initiales', function () {
-    egale('MB', initiales(['prenom' => 'Marc', 'nom' => 'Bonvin']), 'la forme habituelle');
+test('les deux premières lettres de l identifiant', function () {
+    /* Le site ne demande plus ni prénom ni nom : l avatar par défaut
+       vient de l identifiant, le seul nom qu ait un compte. */
+    egale('LE', initiales(['identifiant' => 'lecteur92']), 'deux lettres');
 });
 
-test('un seul des deux suffit', function () {
-    egale('M', initiales(['prenom' => 'Marc', 'nom' => '']), 'prénom seul');
-    egale('B', initiales(['prenom' => '', 'nom' => 'Bonvin']), 'nom seul');
-});
-
-test('le résultat est en majuscules', function () {
-    egale('MB', initiales(['prenom' => 'marc', 'nom' => 'bonvin']), 'saisie en minuscules');
-});
-
-test('les accents sont conservés et mis en majuscule', function () {
+test('le résultat est en majuscules, accents compris', function () {
     /* mb_strtoupper() et non strtoupper() : ce dernier laisserait « é »
-       intact et l avatar afficherait « éO » au lieu de « ÉÔ ». */
-    egale('ÉÔ', initiales(['prenom' => 'éva', 'nom' => 'ôte']), 'É et Ô');
+       intact et l avatar afficherait « éV » au lieu de « ÉV ». */
+    egale('ÉV', initiales(['identifiant' => 'éva']), 'É majuscule');
 });
 
-test('un prénom non latin n est pas tronqué au milieu d un caractère', function () {
+test('un prénom ou un nom encore présents sont ignorés', function () {
+    egale('LE', initiales(['prenom' => 'Marc', 'nom' => 'Bonvin', 'identifiant' => 'lecteur92']),
+        'seul l identifiant compte');
+});
+
+test('un caractère non latin n est pas coupé au milieu', function () {
     // mb_substr() compte des caractères, pas des octets.
-    egale('荒川', initiales(['prenom' => '荒', 'nom' => '川']), 'des idéogrammes');
-});
-
-test('sans nom ni prénom, on retombe sur l identifiant', function () {
-    egale('LE', initiales(['identifiant' => 'lecteur92']), 'les deux premières lettres');
-});
-
-test('les espaces ne comptent pas pour un prénom', function () {
-    /* Sans le trim(), un prénom fait d un seul espace produirait une
-       initiale vide au lieu de laisser la place à l identifiant. */
-    egale('LE', initiales(['prenom' => '   ', 'nom' => '', 'identifiant' => 'lecteur92']),
-        'on passe bien à l identifiant');
+    egale('荒川', initiales(['identifiant' => '荒川弘']), 'des idéogrammes');
 });
 
 test('un identifiant d une seule lettre ne casse rien', function () {

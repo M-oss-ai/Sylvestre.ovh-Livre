@@ -251,7 +251,7 @@ il part, sur quelle période, et comment il l'affiche),
 `mots_encodes` (l'e-mail tel qu'il part : texte et HTML, liens vers le
 site seulement, en-têtes encodés), `import_serie` et `import_complement`
 (une ligne de sauvegarde, et ce que l'import rend à une série déjà
-présente), `google_url_autorisation`, `pkce_defi`, `base64url`, `google_lire_id_token`, `google_verifier_revendications`, `google_decision`, `identifiant_depuis_google`, `google_confirmation_recente`, `bouton_google` (la connexion avec Google, sauf l'échange du code qui appelle Google), `flash` et `flash_prendre` (le message qui ne revient pas au rechargement), `duree_cookie_lisible` et les mentions légales rendues selon `SESSION_DUREE` / `REMEMBER_DUREE_VIP`, `titre_normalise`, `mangadex_titre`,
+présente), `google_url_autorisation`, `pkce_defi`, `base64url`, `google_lire_id_token`, `google_verifier_revendications`, `google_decision` (comptes e-mail et Google séparés), `forme_identifiant`, `forme_email`, `identifiant_depuis_google`, `google_confirmation_recente`, `bouton_google` (la connexion avec Google, sauf l'échange du code qui appelle Google), `flash` et `flash_prendre` (le message qui ne revient pas au rechargement), `duree_cookie_lisible` et les mentions légales rendues selon `SESSION_DUREE` / `REMEMBER_DUREE_VIP`, `titre_normalise`, `mangadex_titre`,
 `couverture_quota` et `couverture_quota_illimite` (0 ou réglage absent : aucun quota), `couverture_tranche_lisible`,
 `mangadex_id_depuis_url` (le lien vers MangaDex, et les hôtes sosies
 qu'il refuse), `couverture_tome_vise`, `mangadex_image_locale` (son
@@ -296,7 +296,7 @@ effacée dès qu'on le corrige), `Lib.urlImageAcceptee`, `Lib.dureeToast`,
 `Bibliotheque.voisine` (les flèches dans la grille),
 `Bibliotheque.suiviDefilement` (les filtres qui s'effacent et reviennent,
 rebonds et recalages du navigateur compris), `Bibliotheque.annonceQuota`
-et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`.
+et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`, `ReglesMdp.manques` et `brancher` (les règles du mot de passe non respectées, et quand les dire — mêmes messages que `valider_mot_de_passe`).
 
 **Non couvert, côté navigateur** — le branchement sur la page : les
 écouteurs d'`app.js` et de `settings.js`, les appels à l'API, les

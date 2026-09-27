@@ -179,7 +179,14 @@ test('de l UTF-8 invalide est refusé d un seul message', function () {
     vrai(erreur_mentionne($erreurs, 'non reconnus'), 'le message explique la cause');
 });
 
-test('une chaîne vide accumule les manquements', function () {
-    $erreurs = valider_mot_de_passe('');
-    vrai(count($erreurs) >= 5, 'longueur et les quatre classes sont signalées');
+test('une chaîne vide dit seulement « obligatoire »', function () {
+    /* Cinq règles pour un champ oublié seraient du bruit : on ne cite les
+       règles qu à qui a commencé à écrire. */
+    egale([MESSAGE_CHAMP_OBLIGATOIRE], valider_mot_de_passe(''), 'un seul message');
+});
+
+test('seules les règles non respectées sont citées', function () {
+    $erreurs = valider_mot_de_passe('abcdefgh1!');
+    egale(['Le mot de passe doit contenir au moins une majuscule.'], $erreurs, 'il ne manque que la majuscule');
+    egale([], valider_mot_de_passe('Abcdefgh1!'), 'tout y est : rien à dire');
 });

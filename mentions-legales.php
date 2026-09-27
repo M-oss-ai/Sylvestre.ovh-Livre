@@ -105,13 +105,11 @@ $connecte = utilisateur_actuel() !== null;
 
     <h3 class="legal-h3">Ce qui est collecté</h3>
     <ul class="legal-puces">
-      <li><b>Votre compte</b> — identifiant, adresse e-mail, prénom et nom (facultatifs),
-          photo de profil (facultative), mot de passe (jamais en clair : seule une
-          empreinte bcrypt est conservée).</li>
+      <li><b>Votre compte</b> — identifiant, adresse e-mail, photo de profil (facultative),
+          mot de passe (jamais en clair : seule une empreinte bcrypt est conservée).</li>
       <?php if (google_actif()): ?>
-      <li><b>Connexion avec Google</b> (si vous l'utilisez) — l'identifiant technique de
-          votre compte Google, votre adresse e-mail, et votre prénom et nom à la création
-          du compte.</li>
+      <li><b>Compte créé avec Google</b> — l'identifiant technique de votre compte Google,
+          et l'adresse e-mail qu'il nous transmet.</li>
       <?php endif; ?>
       <li><b>Votre bibliothèque</b> — titres, auteurs, tomes, statuts de lecture et
           couvertures que vous enregistrez.</li>
@@ -217,9 +215,8 @@ $connecte = utilisateur_actuel() !== null;
       <?php if (google_actif()): ?>
       <li><b>Google</b> — seulement si vous choisissez « Continuer avec Google ». Vous vous
           identifiez alors <b>chez Google</b> : ce site ne voit jamais votre mot de passe
-          Google. Google nous transmet l'identifiant de votre compte Google, votre adresse
-          e-mail (vérifiée par lui) et votre nom ; il sait, de son côté, que vous vous êtes
-          connecté ici. Vous pouvez dissocier votre compte Google dans les Paramètres.</li>
+          Google. Google nous transmet l'identifiant de votre compte Google et votre adresse
+          e-mail (vérifiée par lui) ; il sait, de son côté, que vous vous êtes connecté ici.</li>
       <?php endif; ?>
     </ul>
   </section>

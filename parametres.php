@@ -55,7 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
             $erreurs_mdp['nouveau'] = $faiblesses;
         }
-        if ($nouveau !== $confirm) {
+        if ($confirm === '') {
+            $erreurs_mdp['confirmation'] = MESSAGE_CHAMP_OBLIGATOIRE;
+        } elseif ($nouveau !== $confirm) {
             $erreurs_mdp['confirmation'] = 'Les deux nouveaux mots de passe ne correspondent pas.';
         }
 
@@ -79,8 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($formulaire === 'profil') {
-        $prenom      = texte($_POST['prenom'] ?? '', 80);
-        $nom         = texte($_POST['nom'] ?? '', 80);
         $identifiant = texte($_POST['identifiant'] ?? '', 50);
         $email       = texte($_POST['email'] ?? '', 190);
 
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // un message « adresse invalide » sous l'ancienne adresse,
         // réaffichée à sa place, ne voudrait rien dire.
         $saisie_profil = [
-            'prenom' => $prenom, 'nom' => $nom, 'identifiant' => $identifiant, 'email' => $email,
+            'identifiant' => $identifiant, 'email' => $email,
             'photo_url' => texte($_POST['photo_url'] ?? '', 500),
         ];
 
@@ -135,8 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ancienne  = (string) $moi['photo'];
             $photo_maj = photo_depuis_formulaire($fichier, $ancienne);
 
-            $pdo->prepare('UPDATE utilisateur SET prenom = ?, nom = ?, identifiant = ?, photo = ? WHERE id = ?')
-                ->execute([$prenom, $nom, $identifiant, $photo_maj, (int) $moi['id']]);
+            $pdo->prepare('UPDATE utilisateur SET identifiant = ?, photo = ? WHERE id = ?')
+                ->execute([$identifiant, $photo_maj, (int) $moi['id']]);
 
             if ($ancienne !== '' && $ancienne !== $photo_maj) {
                 supprimer_image_locale($ancienne);
@@ -181,23 +181,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    /* Dissocier Google : seulement si le compte a un mot de passe, sinon
-       plus rien ne permettrait d'y entrer (la condition est dans la
-       requête elle-même, pas seulement dans la page). */
-    if ($formulaire === 'dissocier_google') {
-        $req = $pdo->prepare("UPDATE utilisateur SET google_sub = NULL WHERE id = ? AND mot_de_passe <> ''");
-        $req->execute([(int) $moi['id']]);
-        unset($_SESSION['google_confirme']);
-        if ($req->rowCount() > 0) {
-            journal_securite('google_dissocie', ['utilisateur' => (int) $moi['id']]);
-            flash('Compte Google dissocié. Connectez-vous désormais avec votre identifiant et votre mot de passe.');
-        } else {
-            flash("Définissez d'abord un mot de passe : sans lui, vous ne pourriez plus vous connecter.", 'erreur');
-        }
-        header('Location: parametres.php#securite');
-        exit;
-    }
-
     // Une erreur : on relit le compte pour réafficher des valeurs à jour.
     $moi = exiger_connexion();
 }
@@ -216,7 +199,6 @@ $attente_email = changement_email_en_attente((int) $moi['id']);
 
 // Valeurs affichées dans le Profil : la saisie refusée, sinon le compte.
 $v = $erreurs_profil && $saisie_profil ? $saisie_profil : [
-    'prenom' => (string) $moi['prenom'], 'nom' => (string) $moi['nom'],
     'identifiant' => (string) $moi['identifiant'], 'email' => (string) $moi['email'],
     'photo_url' => preg_match('#^https://#i', $photo) ? $photo : '',
 ];
@@ -303,17 +285,6 @@ $nb_series = (int) $req->fetchColumn();
       <input type="hidden" name="formulaire" value="profil">
       <input type="hidden" name="photo_retiree" id="a-photo-removed" value="0">
 
-      <div class="field-row">
-        <div class="field">
-          <label for="a-firstname">Prénom</label>
-          <input id="a-firstname" name="prenom" type="text" autocomplete="given-name" maxlength="80" value="<?= e($v['prenom']) ?>">
-        </div>
-        <div class="field">
-          <label for="a-lastname">Nom</label>
-          <input id="a-lastname" name="nom" type="text" autocomplete="family-name" maxlength="80" value="<?= e($v['nom']) ?>">
-        </div>
-      </div>
-
       <!-- data-compte : la valeur ENREGISTRÉE, à laquelle le JS compare la
            saisie. Après une erreur, le champ réaffiche la saisie refusée ;
            comparer à elle cacherait le champ du mot de passe. -->
@@ -322,7 +293,7 @@ $nb_series = (int) $req->fetchColumn();
         <input id="a-username" name="identifiant" type="text" autocomplete="username" maxlength="30" required
                data-compte="<?= e($moi['identifiant']) ?>" value="<?= e($v['identifiant']) ?>"<?= champ_aria($erreurs_profil, 'identifiant', 'a-username', 'a-username-aide') ?>>
         <?= champ_erreur($erreurs_profil, 'identifiant', 'a-username') ?>
-        <p class="hint" id="a-username-aide">Il sert à vous connecter : le changer demande votre mot de passe.</p>
+        <p class="hint" id="a-username-aide">Il sert à vous connecter : le changer demande <?= $sans_mdp ? 'de confirmer avec Google' : 'votre mot de passe' ?>.</p>
       </div>
 
       <div class="field">
@@ -331,7 +302,7 @@ $nb_series = (int) $req->fetchColumn();
                data-compte="<?= e($moi['email']) ?>" value="<?= e($v['email']) ?>"<?= champ_aria($erreurs_profil, 'email', 'a-email', 'a-email-aide') ?>>
         <?= champ_erreur($erreurs_profil, 'email', 'a-email') ?>
         <p class="hint" id="a-email-aide">
-          Changer d'adresse demande votre mot de passe, et la nouvelle adresse doit être
+          Changer d'adresse demande <?= $sans_mdp ? 'de confirmer avec Google' : 'votre mot de passe' ?>, et la nouvelle adresse doit être
           confirmée par e-mail. L'adresse actuelle reste active jusque-là — une faute de
           frappe ne peut donc pas vous enfermer dehors.
         </p>
@@ -406,10 +377,10 @@ $nb_series = (int) $req->fetchColumn();
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔒</span> Sécurité</h2>
 
     <?php if ($sans_mdp): ?>
-      <!-- Compte créé par Google : pas de mot de passe. En définir un permet
-           aussi de se connecter avec l'identifiant, et de dissocier Google. -->
+      <!-- Compte créé avec Google, sans mot de passe. En définir un permet
+           aussi de se connecter avec l'identifiant. -->
       <p class="hint">Ce compte n'a pas de mot de passe : vous vous connectez avec Google.
-        Définissez-en un pour pouvoir aussi vous connecter avec votre identifiant.</p>
+        Vous pouvez en définir un pour vous connecter aussi avec votre identifiant.</p>
       <?php if (!$google_ok): ?>
         <p class="hint">Pour cela, confirmez d'abord votre identité avec Google.</p>
         <?= bouton_google('Confirmer avec Google', 'parametres') ?>
@@ -449,7 +420,9 @@ $nb_series = (int) $req->fetchColumn();
         <label for="a-new">Nouveau mot de passe</label>
         <div class="password-wrap">
           <input id="a-new" name="mot_de_passe_nouveau" type="password" autocomplete="new-password" required
-                 minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="<?= MDP_MIN ?> caractères minimum"<?= champ_aria($erreurs_mdp, 'nouveau', 'a-new', 'mdp-regle') ?>>
+                 maxlength="<?= MDP_MAX ?>"
+                 data-regles-mdp data-mdp-min="<?= MDP_MIN ?>" data-mdp-max="<?= MDP_MAX ?>"
+                 data-identifiant-valeur="<?= e($moi['identifiant']) ?>"<?= champ_aria($erreurs_mdp, 'nouveau', 'a-new') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="a-new" aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'nouveau', 'a-new') ?>
@@ -459,11 +432,10 @@ $nb_series = (int) $req->fetchColumn();
         <label for="a-new2">Confirmer le nouveau mot de passe</label>
         <div class="password-wrap">
           <input id="a-new2" name="mot_de_passe_confirmation" type="password" autocomplete="new-password" required
-                 minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>"<?= champ_aria($erreurs_mdp, 'confirmation', 'a-new2') ?>>
+                 maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs_mdp, 'confirmation', 'a-new2') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="a-new2" aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'confirmation', 'a-new2') ?>
-        <p class="hint" id="mdp-regle"><?= e(MDP_REGLE) ?></p>
       </div>
 
       <button type="submit" class="btn btn-primary full"><?= $sans_mdp ? 'Définir le mot de passe' : 'Changer le mot de passe' ?></button>
@@ -474,25 +446,13 @@ $nb_series = (int) $req->fetchColumn();
     </form>
     <?php endif; ?>
 
-    <?php if (google_actif() || (string) $moi['google_sub'] !== ''): ?>
+    <?php if ((string) $moi['google_sub'] !== ''): ?>
+      <!-- Un compte créé avec Google le reste : il ne se délie pas, et un
+           compte créé avec une adresse e-mail ne s'y relie pas (deux sortes
+           de comptes, voir google_decision). -->
       <div class="settings-divider"></div>
       <h3 class="settings-sous-titre">Compte Google</h3>
-      <?php if ((string) $moi['google_sub'] !== ''): ?>
-        <p class="hint">✅ Associé : « Continuer avec Google » ouvre ce compte.</p>
-        <?php if ($sans_mdp): ?>
-          <p class="hint">Pour le dissocier, définissez d'abord un mot de passe : sans lui, vous ne
-            pourriez plus vous connecter.</p>
-        <?php else: ?>
-          <form method="post" action="parametres.php#securite">
-            <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-            <input type="hidden" name="formulaire" value="dissocier_google">
-            <button type="submit" class="btn btn-ghost full">Dissocier mon compte Google</button>
-          </form>
-        <?php endif; ?>
-      <?php else: ?>
-        <p class="hint">Associez votre compte Google pour vous connecter en un clic, sans mot de passe.</p>
-        <?= bouton_google('Associer mon compte Google', 'parametres') ?>
-      <?php endif; ?>
+      <p class="hint">Ce compte a été créé avec Google : « Continuer avec Google » l'ouvre.</p>
     <?php endif; ?>
 
     <div class="settings-divider"></div>
@@ -674,6 +634,7 @@ $nb_series = (int) $req->fetchColumn();
 
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
+<script src="<?= e(actif('js/mdp.js')) ?>" defer></script>
 <script src="<?= e(actif('js/settings.js')) ?>" defer></script>
 </body>
 </html>

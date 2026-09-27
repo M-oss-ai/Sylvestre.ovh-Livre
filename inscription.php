@@ -24,7 +24,12 @@ if (utilisateur_actuel()) {
 $erreurs = [];
 $envoye  = false;
 $attente = 0;
-$valeurs = ['identifiant' => '', 'email' => '', 'prenom' => '', 'nom' => ''];
+$valeurs = ['identifiant' => '', 'email' => ''];
+
+/* On choisit d'abord COMMENT s'inscrire (Google ou adresse e-mail), puis
+   on remplit le formulaire. Sans Google configuré, il n'y a rien à
+   choisir : le formulaire s'affiche aussitôt. */
+$avec_email = !google_actif() || ($_GET['avec'] ?? '') === 'email' || $_SERVER['REQUEST_METHOD'] === 'POST';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exiger_csrf();
@@ -40,8 +45,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $valeurs['identifiant'] = texte($_POST['identifiant'] ?? '', 50);
     $valeurs['email']       = texte($_POST['email'] ?? '', 190);
-    $valeurs['prenom']      = texte($_POST['prenom'] ?? '', 80);
-    $valeurs['nom']         = texte($_POST['nom'] ?? '', 80);
     $mdp                    = (string) ($_POST['mot_de_passe'] ?? '');
     $mdp2                   = (string) ($_POST['confirmation'] ?? '');
 
@@ -57,16 +60,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($bloque > 0) {
         $erreurs[''] = '';   // le message est celui du compte à rebours, plus bas
     } else {
-        if (!preg_match('/^[A-Za-z0-9._-]{3,30}$/', $valeurs['identifiant'])) {
-            $erreurs['identifiant'] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
+        /* Un champ vide : « Ce champ est obligatoire. », rien d'autre. Aucun
+           « * » ne l'annonce d'avance. */
+        if ($message = forme_identifiant($valeurs['identifiant'])) {
+            $erreurs['identifiant'] = $message;
         }
-        if (!filter_var($valeurs['email'], FILTER_VALIDATE_EMAIL)) {
-            $erreurs['email'] = "L'adresse e-mail n'est pas valide.";
+        if ($message = forme_email($valeurs['email'])) {
+            $erreurs['email'] = $message;
         }
+        // Seules les règles NON respectées (valider_mot_de_passe).
         if ($faiblesses = valider_mot_de_passe($mdp, $valeurs['identifiant'])) {
             $erreurs['mot_de_passe'] = $faiblesses;
         }
-        if ($mdp !== $mdp2) {
+        if ($mdp2 === '') {
+            $erreurs['confirmation'] = MESSAGE_CHAMP_OBLIGATOIRE;
+        } elseif ($mdp !== $mdp2) {
             $erreurs['confirmation'] = 'Les deux mots de passe ne correspondent pas.';
         }
     }
@@ -134,8 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    même raison que celui des séries : un COUNT séparé se
                    fait doubler par deux inscriptions simultanées. */
                 $req = $pdo->prepare(
-                    'INSERT INTO utilisateur (identifiant, email, mot_de_passe, prenom, nom, email_verifie)
-                     SELECT ?, ?, ?, ?, ?, 0
+                    'INSERT INTO utilisateur (identifiant, email, mot_de_passe, email_verifie)
+                     SELECT ?, ?, ?, 0
                        FROM DUAL
                       WHERE (SELECT n FROM (SELECT COUNT(*) AS n FROM utilisateur) AS c) < ?'
                 );
@@ -143,8 +151,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $valeurs['identifiant'],
                     $valeurs['email'],
                     password_hash($mdp, PASSWORD_DEFAULT),   // jamais de mot de passe en clair en base
-                    $valeurs['prenom'],
-                    $valeurs['nom'],
                     MAX_UTILISATEURS,
                 ]);
 
@@ -222,6 +228,23 @@ $csrf = jeton_csrf();
     </p>
     <p class="auth-switch"><a href="connexion.php">Aller à la connexion</a></p>
 
+  <?php elseif (!$avec_email): ?>
+
+    <!-- Étape 1 : COMMENT s'inscrire. Le formulaire ne vient qu'après. -->
+    <div class="auth-head">
+      <p class="auth-logo" aria-hidden="true">📚</p>
+      <h1>Créer un compte</h1>
+      <p class="hint">Votre bibliothèque vous suit d'un appareil à l'autre.</p>
+    </div>
+
+    <div class="choix-methode">
+      <?= bouton_google("S'inscrire avec Google") ?>
+      <a class="btn btn-ghost full" href="inscription.php?avec=email">✉️ S'inscrire avec une adresse e-mail</a>
+    </div>
+
+    <p class="auth-switch">Déjà un compte ? <a href="connexion.php">Se connecter</a></p>
+    <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
+
   <?php else: ?>
 
     <div class="auth-head">
@@ -241,41 +264,33 @@ $csrf = jeton_csrf();
       </div>
     <?php endif; ?>
 
-    <?php if (google_actif()): ?>
-      <!-- Google authentifie la personne chez lui ; google.php fait le reste
-           (ouvrir, relier ou créer le compte). -->
-      <?= bouton_google("S'inscrire avec Google") ?>
-      <p class="separateur-ou"><span>ou</span></p>
-    <?php endif; ?>
-
+    <!-- Aucun « * » ni consigne d'avance : un champ oublié le dit à l'envoi
+         (« Ce champ est obligatoire. »), le mot de passe ne cite que les
+         règles qui manquent (js/mdp.js), et ce qui concerne le lien de
+         confirmation s'affiche à l'étape suivante, quand il est parti. -->
     <form method="post" action="inscription.php" autocomplete="on" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
 
-      <!-- L'essentiel d'abord, le facultatif (prénom, nom) en dernier : ce
-           dernier ouvrait le formulaire, et l'astérisque n'était expliqué
-           nulle part. -->
-      <p class="hint legende-obligatoire">* obligatoire</p>
-
       <div class="field">
-        <label for="identifiant">Identifiant *</label>
+        <label for="identifiant">Identifiant</label>
         <input id="identifiant" name="identifiant" type="text" required autocomplete="username"
-               placeholder="Ex. lecteur-manga" value="<?= e($valeurs['identifiant']) ?>"<?= champ_aria($erreurs, 'identifiant', 'identifiant') ?>>
+               placeholder="Ex. lecteur-manga" value="<?= e($valeurs['identifiant']) ?>"<?= champ_aria($erreurs, 'identifiant', 'identifiant') ?><?= $erreurs ? '' : ' autofocus' ?>>
         <?= champ_erreur($erreurs, 'identifiant', 'identifiant') ?>
       </div>
 
       <div class="field">
-        <label for="email">E-mail *</label>
+        <label for="email">E-mail</label>
         <input id="email" name="email" type="email" required autocomplete="email"
-               placeholder="vous@exemple.com" value="<?= e($valeurs['email']) ?>"<?= champ_aria($erreurs, 'email', 'email', 'email-aide') ?>>
+               placeholder="vous@exemple.com" value="<?= e($valeurs['email']) ?>"<?= champ_aria($erreurs, 'email', 'email') ?>>
         <?= champ_erreur($erreurs, 'email', 'email') ?>
-        <p class="hint" id="email-aide">Vous recevrez un lien de confirmation : il faut le suivre pour activer le compte.</p>
       </div>
 
       <div class="field">
-        <label for="mot_de_passe">Mot de passe *</label>
+        <label for="mot_de_passe">Mot de passe</label>
         <div class="password-wrap">
           <input id="mot_de_passe" name="mot_de_passe" type="password" required
-                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="<?= MDP_MIN ?> caractères minimum"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe', 'mdp-regle') ?>>
+                 autocomplete="new-password" maxlength="<?= MDP_MAX ?>"
+                 data-regles-mdp data-mdp-min="<?= MDP_MIN ?>" data-mdp-max="<?= MDP_MAX ?>" data-identifiant="identifiant"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="mot_de_passe"
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
@@ -283,31 +298,22 @@ $csrf = jeton_csrf();
       </div>
 
       <div class="field">
-        <label for="confirmation">Confirmer le mot de passe *</label>
+        <label for="confirmation">Confirmer le mot de passe</label>
         <div class="password-wrap">
           <input id="confirmation" name="confirmation" type="password" required
-                 autocomplete="new-password" minlength="<?= MDP_MIN ?>" maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
+                 autocomplete="new-password" maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
           <button type="button" class="icon-btn toggle-password" data-cible="confirmation"
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
-        <p class="hint" id="mdp-regle"><?= e(MDP_REGLE) ?></p>
-      </div>
-
-      <div class="field-row">
-        <div class="field">
-          <label for="prenom">Prénom <span class="facultatif">(facultatif)</span></label>
-          <input id="prenom" name="prenom" type="text" autocomplete="given-name" value="<?= e($valeurs['prenom']) ?>">
-        </div>
-        <div class="field">
-          <label for="nom">Nom <span class="facultatif">(facultatif)</span></label>
-          <input id="nom" name="nom" type="text" autocomplete="family-name" value="<?= e($valeurs['nom']) ?>">
-        </div>
       </div>
 
       <button type="submit" class="btn btn-primary full">Créer mon compte</button>
     </form>
 
+    <?php if (google_actif()): ?>
+      <p class="auth-switch"><a href="inscription.php">← Autres façons de s'inscrire</a></p>
+    <?php endif; ?>
     <p class="auth-switch">Déjà un compte ? <a href="connexion.php">Se connecter</a></p>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
 
@@ -318,5 +324,6 @@ $csrf = jeton_csrf();
 
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/auth.js')) ?>" defer></script>
+<script src="<?= e(actif('js/mdp.js')) ?>" defer></script>
 </body>
 </html>

@@ -172,16 +172,20 @@ function texte(mixed $valeur, int $max = 190): string
    3bis. Politique de mot de passe
    --------------------------------------------------------------------- */
 
-/** Rappel affiché sous les champs « nouveau mot de passe ». Construit à
-    partir de MDP_MIN : le texte ne peut donc pas mentir sur la règle
-    réellement appliquée, quoi qu'on mette dans le .env. */
-define('MDP_REGLE', MDP_MIN . ' caractères minimum, avec au moins une majuscule, une minuscule, '
-                  . 'un chiffre et un caractère spécial. Les espaces ne comptent pour rien : '
-                  . 'ni dans la longueur, ni comme caractère spécial.');
+/** Un champ requis laissé vide : le même message partout. Aucun « * »
+    n'annonce les champs obligatoires ; on le dit seulement à qui en a
+    oublié un. */
+const MESSAGE_CHAMP_OBLIGATOIRE = 'Ce champ est obligatoire.';
 
 /**
  * Vérifie qu'un mot de passe respecte la politique du site et retourne la
  * liste des manquements — tableau vide = accepté.
+ *
+ * Seules les règles NON respectées sont rendues : la page n'affiche plus
+ * la politique complète d'avance, seulement ce qui manque (js/mdp.js en
+ * est le miroir, pour le dire pendant la saisie). Vide : « Ce champ est
+ * obligatoire. », et rien d'autre — cinq règles pour un champ oublié
+ * seraient du bruit.
  *
  * Une seule définition pour les quatre endroits qui créent ou changent un
  * mot de passe (inscription, paramètres avec et sans JavaScript,
@@ -198,6 +202,9 @@ function valider_mot_de_passe(string $mdp, string $identifiant = ''): array
     // garde-fou, toutes les vérifications ci-dessous passeraient à côté.
     if (!mb_check_encoding($mdp, 'UTF-8')) {
         return ['Le mot de passe contient des caractères non reconnus.'];
+    }
+    if ($mdp === '') {
+        return [MESSAGE_CHAMP_OBLIGATOIRE];
     }
 
     $erreurs = [];
@@ -562,7 +569,7 @@ function utilisateur_actuel(): ?array
     }
 
     $req = $pdo->prepare(
-        'SELECT id, identifiant, email, email_verifie, prenom, nom, photo, forfait,
+        'SELECT id, identifiant, email, email_verifie, photo, forfait,
                 session_version, adulte_confirme, filtre_sensible, cree_le, google_sub,
                 (mot_de_passe = \'\') AS sans_mot_de_passe
            FROM utilisateur WHERE id = ?'
@@ -622,6 +629,30 @@ function exiger_connexion_api(): array
 }
 
 /**
+ * La forme d'un identifiant : '' s'il convient, sinon le message à
+ * afficher sous le champ. Partagée par l'inscription, les Paramètres et
+ * la création d'un compte Google.
+ */
+function forme_identifiant(string $identifiant): string
+{
+    if ($identifiant === '') {
+        return MESSAGE_CHAMP_OBLIGATOIRE;
+    }
+    return preg_match('/^[A-Za-z0-9._-]{3,30}$/', $identifiant)
+        ? ''
+        : "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
+}
+
+/** La forme d'une adresse e-mail : '' si elle convient, sinon le message. */
+function forme_email(string $email): string
+{
+    if ($email === '') {
+        return MESSAGE_CHAMP_OBLIGATOIRE;
+    }
+    return filter_var($email, FILTER_VALIDATE_EMAIL) ? '' : "L'adresse e-mail n'est pas valide.";
+}
+
+/**
  * Valide les champs d'identité d'un profil et vérifie que l'identifiant
  * n'est pas déjà pris. Retourne la liste des erreurs (vide = correct).
  *
@@ -638,11 +669,11 @@ function valider_profil(string $identifiant, string $email, int $utilisateur_id)
     global $pdo;
     $erreurs = [];
 
-    if (!preg_match('/^[A-Za-z0-9._-]{3,30}$/', $identifiant)) {
-        $erreurs['identifiant'] = "L'identifiant doit faire 3 à 30 caractères (lettres, chiffres, . _ -).";
+    if ($message = forme_identifiant($identifiant)) {
+        $erreurs['identifiant'] = $message;
     }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $erreurs['email'] = "L'adresse e-mail n'est pas valide.";
+    if ($message = forme_email($email)) {
+        $erreurs['email'] = $message;
     }
     if ($erreurs) {
         return $erreurs;   // inutile d'interroger la base sur une saisie invalide
@@ -1074,15 +1105,12 @@ function revoquer_session_persistante(): void
     }
 }
 
-/** Initiales affichées dans l'avatar quand aucune photo n'est définie. */
+/** Initiales affichées dans l'avatar quand aucune photo n'est définie :
+    les deux premières lettres de l'identifiant (le site ne demande plus
+    ni prénom ni nom). */
 function initiales(array $u): string
 {
-    $p = trim((string) ($u['prenom'] ?? ''));
-    $n = trim((string) ($u['nom'] ?? ''));
-    if ($p !== '' || $n !== '') {
-        return mb_strtoupper(mb_substr($p, 0, 1, 'UTF-8') . mb_substr($n, 0, 1, 'UTF-8'), 'UTF-8');
-    }
-    return mb_strtoupper(mb_substr((string) ($u['identifiant'] ?? ''), 0, 2, 'UTF-8'), 'UTF-8');
+    return mb_strtoupper(mb_substr(trim((string) ($u['identifiant'] ?? '')), 0, 2, 'UTF-8'), 'UTF-8');
 }
 
 /**

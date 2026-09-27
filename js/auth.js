@@ -15,7 +15,9 @@
 
   /* Le message posé sous un champ par le serveur (champ_erreur, en PHP)
      disparaît dès qu'on corrige ce champ : il ne doit pas survivre à ce
-     qui l'a causé. Même convention que js/commun.js. */
+     qui l'a causé. Même convention que js/commun.js, et comme lui en
+     phase de CAPTURE : le champ entend l'évènement ensuite, et peut
+     reposer un message encore valable (règles du mot de passe, js/mdp.js). */
   document.addEventListener("input", (e) => {
     const champ = e.target;
     if (!champ.id || champ.getAttribute("aria-invalid") !== "true") return;
@@ -26,5 +28,5 @@
     const reste = (champ.getAttribute("aria-describedby") || "").split(/\s+/).filter((x) => x && x !== id);
     if (reste.length) champ.setAttribute("aria-describedby", reste.join(" "));
     else champ.removeAttribute("aria-describedby");
-  });
+  }, true);
 })();

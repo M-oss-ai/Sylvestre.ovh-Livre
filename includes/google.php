@@ -156,45 +156,44 @@ function google_verifier_revendications(array $c, string $client_id, string $non
  *   $par_sub   le compte déjà relié à ce compte Google, ou null
  *   $par_email le compte qui porte l'adresse Google, ou null
  *
- * Rend l'une de ces décisions :
- *   « confirmer »      connecté, et c'est bien son compte Google : la
- *                      personne vient de prouver son identité
- *   « associer »       connecté, compte Google libre : on le relie
- *   « refus_autre »    connecté, mais ce compte Google appartient à un
- *                      autre compte du site
- *   « refus_deja_lie » connecté, mais le compte est déjà relié à un
- *                      AUTRE compte Google
- *   « connecter »      compte Google déjà relié : on ouvre ce compte
- *   « lier »           même adresse, confirmée : on relie, puis on ouvre
- *   « reprendre »      même adresse, jamais confirmée (voir google.php)
- *   « refus_conflit »  même adresse, mais reliée à un autre compte Google
- *   « creer »          personne : nouveau compte
+ * Deux sortes de comptes, qui ne se mélangent pas : un compte créé avec
+ * une adresse e-mail ne se relie jamais à Google, et un compte créé avec
+ * Google ne s'en délie jamais. D'où ces seules décisions :
+ *
+ *   « confirmer »     connecté, et c'est bien le compte Google de ce
+ *                     compte : la personne vient de prouver son identité
+ *   « refus_autre »   connecté, mais avec un autre compte Google
+ *   « connecter »     compte créé avec ce compte Google : on l'ouvre
+ *   « refus_adresse » l'adresse appartient déjà à un compte (créé avec
+ *                     une adresse e-mail et confirmé, ou avec un autre
+ *                     compte Google) : on ne relie rien
+ *   « creer »         personne : on propose de créer le compte
+ *
+ * Un compte e-mail JAMAIS confirmé ne bloque pas l'adresse : n'importe qui
+ * a pu le créer avec l'adresse d'un autre. Google vient de prouver à qui
+ * elle appartient ; ce compte jamais activé cède la place à la création
+ * (voir google-inscription.php).
  */
 function google_decision(?array $moi, ?array $par_sub, ?array $par_email): string
 {
     if ($moi !== null) {
-        if ($par_sub !== null) {
-            return (int) $par_sub['id'] === (int) $moi['id'] ? 'confirmer' : 'refus_autre';
-        }
-        return (string) ($moi['google_sub'] ?? '') !== '' ? 'refus_deja_lie' : 'associer';
+        return $par_sub !== null && (int) $par_sub['id'] === (int) $moi['id'] ? 'confirmer' : 'refus_autre';
     }
     if ($par_sub !== null) {
         return 'connecter';
     }
-    if ($par_email !== null) {
-        if ((string) ($par_email['google_sub'] ?? '') !== '') {
-            return 'refus_conflit';
-        }
-        return (int) ($par_email['email_verifie'] ?? 0) === 1 ? 'lier' : 'reprendre';
+    if ($par_email !== null
+        && ((int) ($par_email['email_verifie'] ?? 0) === 1 || (string) ($par_email['google_sub'] ?? '') !== '')) {
+        return 'refus_adresse';
     }
     return 'creer';
 }
 
 /**
- * Un identifiant pour un compte créé par Google, tiré de l'adresse :
- * « Marie.Dupont+manga@gmail.com » → « Marie.Dupont ». Même règle que
- * l'inscription (3 à 30 caractères : lettres, chiffres, . _ -), avec de
- * la marge pour un suffixe numérique si le nom est déjà pris.
+ * L'identifiant PROPOSÉ à la création d'un compte Google, tiré de
+ * l'adresse : « Marie.Dupont+manga@gmail.com » → « Marie.Dupont ». La
+ * personne le garde ou le change (google-inscription.php). Même règle
+ * que l'inscription (3 à 30 caractères : lettres, chiffres, . _ -).
  */
 function identifiant_depuis_google(string $email): string
 {

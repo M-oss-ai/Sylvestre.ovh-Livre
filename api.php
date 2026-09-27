@@ -101,8 +101,6 @@ if ($action === 'donnees.exporter') {
     echo '  "profil": ', json_encode([
         'identifiant' => $moi['identifiant'],
         'email'       => $moi['email'],
-        'prenom'      => $moi['prenom'],
-        'nom'         => $moi['nom'],
         'photo'       => url_image_sure($moi['photo']),
     ], $options), ",\n";
     echo '  "series": [';
@@ -179,7 +177,7 @@ switch ($action) {
         $statut = (string) ($_POST['statut'] ?? 'cours');
 
         if ($titre === '') {
-            reponse_json(['ok' => false, 'champ' => 'titre', 'erreur' => 'Le titre est obligatoire.'], 422);
+            reponse_json(['ok' => false, 'champ' => 'titre', 'erreur' => MESSAGE_CHAMP_OBLIGATOIRE], 422);
         }
         if (!isset(STATUTS[$statut])) {
             $statut = 'cours';
@@ -355,8 +353,6 @@ switch ($action) {
 
     /* ---------------- Profil ---------------- */
     case 'compte.profil': {
-        $prenom      = texte($_POST['prenom'] ?? '', 80);
-        $nom         = texte($_POST['nom'] ?? '', 80);
         $identifiant = texte($_POST['identifiant'] ?? '', 50);
         $email       = texte($_POST['email'] ?? '', 190);
 
@@ -378,7 +374,7 @@ switch ($action) {
            exigé pour l'un comme pour l'autre — sinon une session volée
            suffit à renommer le compte (la victime ne peut plus se
            connecter) ou à détourner l'adresse de récupération.
-           Le prénom, le nom et la photo ne demandent rien. */
+           La photo ne demande rien. */
         if ($email_change || $identifiant_change) {
             exiger_mot_de_passe($mon_id);
         }
@@ -403,9 +399,9 @@ switch ($action) {
              - une simple faute de frappe ne rend pas le compte
                irrécupérable, puisque l'ancienne adresse reste active. */
         $req = $pdo->prepare(
-            'UPDATE utilisateur SET prenom = ?, nom = ?, identifiant = ?, photo = ? WHERE id = ?'
+            'UPDATE utilisateur SET identifiant = ?, photo = ? WHERE id = ?'
         );
-        $req->execute([$prenom, $nom, $identifiant, $photo, $mon_id]);
+        $req->execute([$identifiant, $photo, $mon_id]);
 
         if ($ancienne !== '' && $ancienne !== $photo) {
             supprimer_image_locale($ancienne);
@@ -442,7 +438,7 @@ switch ($action) {
                laquelle comptait. La demande en cours s'affiche à part. */
             'email'     => $moi['email'],
             'email_attente' => $email_change ? changement_email_en_attente($mon_id) : null,
-            'initiales' => initiales(['prenom' => $prenom, 'nom' => $nom, 'identifiant' => $identifiant]),
+            'initiales' => initiales(['identifiant' => $identifiant]),
             'message'   => $message,
         ]);
     }
@@ -473,7 +469,9 @@ switch ($action) {
         if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
             $erreurs['nouveau'] = $faiblesses;
         }
-        if ($nouveau !== $confirm) {
+        if ($confirm === '') {
+            $erreurs['confirmation'] = MESSAGE_CHAMP_OBLIGATOIRE;
+        } elseif ($nouveau !== $confirm) {
             $erreurs['confirmation'] = 'Les deux nouveaux mots de passe ne correspondent pas.';
         }
         if ($erreurs) {

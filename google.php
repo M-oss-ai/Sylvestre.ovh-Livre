@@ -7,13 +7,13 @@
    Google nous renvoie la personne, et l'on décide quoi faire de son
    compte (google_decision) :
 
-     - compte Google déjà relié          → on ouvre ce compte ;
-     - adresse d'un compte existant       → on relie, puis on l'ouvre
-       (et un e-mail prévient le titulaire) ;
-     - adresse inconnue                   → nouveau compte, sans mot de
-       passe : il se connectera avec Google ;
-     - déjà connecté (depuis Paramètres)  → on associe ce compte Google,
-       ou l'on note que la personne vient de confirmer son identité.
+     - compte créé avec ce compte Google  → on l'ouvre ;
+     - adresse d'un compte e-mail         → refus : les deux sortes de
+       comptes ne se relient pas ;
+     - adresse inconnue                    → google-inscription.php, où
+       l'on choisit son identifiant ;
+     - déjà connecté (depuis Paramètres)   → la personne vient de
+       confirmer son identité (compte sans mot de passe).
 
    Toute erreur ramène à la page d'où l'on venait, avec un message ; le
    détail technique va au journal, jamais à l'écran.
@@ -111,22 +111,6 @@ $par_email = $req->fetch() ?: null;
 
 $decision = google_decision($moi, $par_sub, $par_email);
 
-/** Relie ce compte Google au compte $id, s'il ne l'est pas déjà ailleurs. */
-function google_relier(int $id, string $sub, ?array $moi): void
-{
-    global $pdo;
-    try {
-        $req = $pdo->prepare('UPDATE utilisateur SET google_sub = ? WHERE id = ? AND google_sub IS NULL');
-        $req->execute([$sub, $id]);
-    } catch (PDOException $e) {
-        // Index unique : relié à un autre compte entre-temps.
-        google_echec('Ce compte Google est déjà associé à un autre compte du site.', $moi);
-    }
-    if ($req->rowCount() === 0) {
-        google_echec('Votre compte est déjà associé à un autre compte Google.', $moi);
-    }
-}
-
 switch ($decision) {
     case 'confirmer':
         google_noter_confirmation((int) $moi['id']);
@@ -135,127 +119,32 @@ switch ($decision) {
         header('Location: ' . $destination);
         exit;
 
-    case 'associer':
-        google_relier((int) $moi['id'], $sub, $moi);
-        google_noter_confirmation((int) $moi['id']);
-        journal_securite('google_associe', ['utilisateur' => (int) $moi['id']]);
-        avertir_google_associe((string) $moi['email'], (string) $moi['identifiant'], $email_google);
-        flash('Compte Google associé ✅ — vous pourrez vous connecter avec « Continuer avec Google ».');
-        header('Location: ' . $destination);
-        exit;
-
     case 'refus_autre':
-        google_echec('Ce compte Google est déjà associé à un autre compte du site.', $moi);
+        google_echec("Ce compte Google n'est pas celui de votre compte. Choisissez le bon compte Google.", $moi);
 
-    case 'refus_deja_lie':
-        google_echec('Votre compte est déjà associé à un autre compte Google. Dissociez-le d\'abord.', $moi);
-
-    case 'refus_conflit':
-        journal_securite('google_conflit', ['utilisateur' => (int) $par_email['id']]);
-        google_echec('Un compte du site utilise déjà cette adresse, associé à un autre compte Google.', $moi);
+    case 'refus_adresse':
+        /* Deux sortes de comptes, qui ne se relient pas : l'adresse sert
+           déjà à un compte créé avec une adresse e-mail. */
+        google_echec((string) ($par_email['google_sub'] ?? '') !== ''
+            ? 'Cette adresse est déjà utilisée par un autre compte.'
+            : 'Un compte existe déjà avec cette adresse e-mail : connectez-vous avec votre '
+              . 'identifiant et votre mot de passe.', $moi);
 
     case 'connecter':
         $id = (int) $par_sub['id'];
-        break;
-
-    case 'lier':
-        /* Même adresse, déjà confirmée par e-mail sur le site, et Google
-           vient de prouver que la personne la possède : c'est le même
-           titulaire. Il est prévenu par e-mail, à l'adresse du compte. */
-        $id = (int) $par_email['id'];
-        google_relier($id, $sub, $moi);
-        avertir_google_associe((string) $par_email['email'], (string) $par_email['identifiant'], $email_google);
-        journal_securite('google_associe', ['utilisateur' => $id]);
-        flash('Votre compte est maintenant relié à Google ✅ — votre mot de passe reste valable.');
-        break;
-
-    case 'reprendre':
-        /* Même adresse, mais JAMAIS confirmée : n'importe qui a pu créer ce
-           compte avec l'adresse d'un autre, et en connaître le mot de passe.
-           Google vient de prouver à qui appartient l'adresse : le compte lui
-           revient, et le mot de passe choisi par l'inconnu est effacé (toutes
-           ses sessions avec). Un titulaire légitime qui avait simplement
-           oublié de confirmer en définira un nouveau dans les Paramètres. */
-        $id = (int) $par_email['id'];
-        $pdo->prepare("UPDATE utilisateur SET google_sub = ?, email_verifie = 1, mot_de_passe = '' WHERE id = ? AND google_sub IS NULL")
-            ->execute([$sub, $id]);
-        invalider_sessions($id);
-        $pdo->prepare("DELETE FROM jeton_action WHERE utilisateur_id = ? AND type IN ('verification', 'reinit')")
-            ->execute([$id]);
-        journal_securite('google_reprise', ['utilisateur' => $id]);
-        flash('Adresse confirmée par Google ✅ Ce compte n\'avait jamais été activé : par sécurité, '
-            . 'son mot de passe a été retiré. Vous vous connecterez avec Google, ou en définissant '
-            . 'un mot de passe dans Paramètres › Sécurité.');
-        break;
+        connecter($id);
+        google_noter_confirmation($id);
+        journal_securite('connexion_google', ['utilisateur' => $id]);
+        header('Location: ' . $destination);
+        exit;
 
     case 'creer':
-        $id = google_creer_compte($c, $sub, $email_google);
-        break;
-
-    default:
-        google_echec("Google n'a pas pu vous connecter. Réessayez.", $moi);
+        /* Rien n'est créé ici : la personne choisit d'abord son identifiant
+           (et, si elle veut, un mot de passe). Ce que Google a confirmé
+           attend dans la session le temps de remplir la page. */
+        $_SESSION['google_inscription'] = ['sub' => $sub, 'email' => $email_google, 'le' => time()];
+        header('Location: google-inscription.php');
+        exit;
 }
 
-/**
- * Un nouveau compte, sans mot de passe, adresse confirmée par Google.
- * Mêmes garde-fous que l'inscription : limiteur par adresse IP, et
- * plafond de comptes appliqué dans l'INSERT lui-même.
- */
-function google_creer_compte(array $c, string $sub, string $email): int
-{
-    global $pdo;
-
-    $bloque = limiteur_bloque_depuis('inscription');
-    if ($bloque > 0) {
-        google_echec('Trop de comptes créés depuis cette adresse. Réessayez dans ' . $bloque . ' secondes.', null);
-    }
-    limiteur_echec('inscription', INSCRIPTION_MAX, INSCRIPTION_BLOCAGE);
-
-    // Un identifiant libre : le début de l'adresse, puis un suffixe si pris.
-    $base = identifiant_depuis_google($email);
-    $identifiant = $base;
-    $existe = $pdo->prepare('SELECT 1 FROM utilisateur WHERE identifiant = ?');
-    for ($n = 2; ; $n++) {
-        $existe->execute([$identifiant]);
-        if (!$existe->fetchColumn()) {
-            break;
-        }
-        $identifiant = $base . ($n < 100 ? $n : random_int(100, 999999));
-    }
-
-    try {
-        $req = $pdo->prepare(
-            "INSERT INTO utilisateur (identifiant, email, mot_de_passe, prenom, nom, email_verifie, google_sub)
-             SELECT ?, ?, '', ?, ?, 1, ?
-               FROM DUAL
-              WHERE (SELECT n FROM (SELECT COUNT(*) AS n FROM utilisateur) AS c) < ?"
-        );
-        $req->execute([
-            $identifiant, $email,
-            texte($c['given_name'] ?? '', 80), texte($c['family_name'] ?? '', 80),
-            $sub, MAX_UTILISATEURS,
-        ]);
-    } catch (PDOException $e) {
-        // Doublon apparu entre la recherche et l'écriture (deux onglets).
-        error_log('google: création refusée (' . $e->getMessage() . ')');
-        google_echec('La création du compte a échoué. Réessayez.', null);
-    }
-    if ($req->rowCount() === 0) {
-        google_echec('Le nombre maximum de comptes a été atteint. Contactez l\'administrateur : ' . ADMIN_EMAIL, null);
-    }
-
-    $id = (int) $pdo->lastInsertId();
-    journal_securite('google_compte_cree', ['utilisateur' => $id]);
-    flash('Bienvenue ! Votre compte a été créé avec Google ✅ Votre identifiant est « '
-        . $identifiant . ' » — modifiable dans Paramètres.');
-    return $id;
-}
-
-/* ---------------------------------------------------------------------
-   4. Ouverture de la session
-   --------------------------------------------------------------------- */
-connecter($id);
-google_noter_confirmation($id);
-journal_securite('connexion_google', ['utilisateur' => $id]);
-header('Location: ' . $destination);
-exit;
+google_echec("Google n'a pas pu vous connecter. Réessayez.", $moi);

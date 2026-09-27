@@ -41,6 +41,11 @@ $identifiant = '';
    c'est ce qui autorise l'affichage du bouton « renvoyer le lien ». */
 $a_confirmer = false;
 
+/* On choisit d'abord COMMENT se connecter (Google ou adresse e-mail), puis
+   on remplit le formulaire. Sans Google configuré, rien à choisir. Un
+   envoi du formulaire (POST) reste évidemment sur le formulaire. */
+$avec_email = !google_actif() || ($_GET['avec'] ?? '') === 'email' || $_SERVER['REQUEST_METHOD'] === 'POST';
+
 if (isset($_GET['deconnecte'])) {
     $info = 'Vous êtes déconnecté. À bientôt !';
 }
@@ -229,12 +234,14 @@ $csrf = jeton_csrf();
       <div class="settings-divider"></div>
     <?php endif; ?>
 
-    <?php if (google_actif()): ?>
-      <!-- Google authentifie la personne chez lui ; google.php fait le reste
-           (ouvrir, relier ou créer le compte). -->
-      <?= bouton_google('Continuer avec Google') ?>
-      <p class="separateur-ou"><span>ou</span></p>
-    <?php endif; ?>
+    <?php if (!$avec_email): ?>
+      <!-- Étape 1 : COMMENT se connecter. Google authentifie la personne chez
+           lui (google.php fait le reste) ; l'adresse e-mail mène au formulaire. -->
+      <div class="choix-methode">
+        <?= bouton_google('Continuer avec Google') ?>
+        <a class="btn btn-ghost full" href="connexion.php?avec=email">✉️ Continuer avec une adresse e-mail</a>
+      </div>
+    <?php else: ?>
 
     <form method="post" action="connexion.php" autocomplete="on" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
@@ -263,6 +270,10 @@ $csrf = jeton_csrf();
     </form>
 
     <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié ?</a></p>
+    <?php if (google_actif()): ?>
+      <p class="auth-switch"><a href="connexion.php">← Autres façons de se connecter</a></p>
+    <?php endif; ?>
+    <?php endif; ?>
     <p class="auth-switch">Pas encore de compte ? <a href="inscription.php">Créer un compte</a></p>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
   </section>

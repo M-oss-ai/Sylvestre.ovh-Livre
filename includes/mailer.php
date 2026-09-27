@@ -450,27 +450,6 @@ function avertir_mot_de_passe_change(string $email, string $identifiant): void
 }
 
 /**
- * Prévient qu'un compte Google vient d'être relié au compte : c'est une
- * nouvelle façon d'y entrer, le titulaire doit le savoir. $email_google
- * est l'adresse du compte Google, qui peut différer de celle du site.
- */
-function avertir_google_associe(string $email, string $identifiant, string $email_google): void
-{
-    envoyer_email(
-        $email,
-        'Un compte Google a été associé à votre compte',
-        "Bonjour {$identifiant},\n\n"
-        . "Le compte Google {$email_google} peut désormais ouvrir votre compte "
-        . "Ma Bibliothèque Manga (« Continuer avec Google »).\n\n"
-        . "Si c'est vous, vous n'avez rien à faire. Vous pouvez le dissocier à tout "
-        . "moment dans Paramètres › Sécurité.\n\n"
-        . "SINON, quelqu'un a accès à votre compte : changez votre mot de passe ici, "
-        . "puis dissociez ce compte Google dans les Paramètres :\n"
-        . url_publique('mot-de-passe-oublie.php')
-    );
-}
-
-/**
  * Prévient qu'un compte vient d'être supprimé.
  *
  * C'est l'action la plus irréversible du site, et c'était la seule

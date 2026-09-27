@@ -668,18 +668,6 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .btn-google:hover { background: #f7f8f8; border-color: #c4c7c5; }
 .google-g { width: 18px; height: 18px; flex: none; }
 
-/* « ou » entre le bouton Google et le formulaire. */
-.separateur-ou {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 16px 0;
-  color: var(--text-dim);
-  font-size: 12.5px;
-}
-.separateur-ou::before,
-.separateur-ou::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
-
 /* Paramètres › Sécurité : les sous-parties (Compte Google). */
 .settings-sous-titre { font-size: 14px; margin: 0 0 6px; color: var(--text); }
 .confirmation-google { color: var(--termine); }
@@ -951,10 +939,12 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
 
-/* Inscription : la légende de l'astérisque, et la mention des champs
-   facultatifs, en casse normale dans une étiquette en capitales. */
-.legende-obligatoire { margin: 0 0 4px; text-align: right; }
-.field label .facultatif { text-transform: none; font-weight: 400; letter-spacing: 0; }
+/* Connexion et inscription : l'étape où l'on choisit COMMENT (Google ou
+   adresse e-mail), avant tout formulaire. */
+.choix-methode { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 4px; }
+
+/* Création d'un compte Google : l'adresse fournie par Google, rappelée. */
+.adresse-google { margin: 0 0 14px; }
 
 /* L'aide sous « Tome lu » : collée au champ, sans pousser la rangée. */
 .field-row .hint { margin-top: 4px; }

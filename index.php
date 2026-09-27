@@ -171,7 +171,7 @@ $flash = flash_prendre();
       <p id="form-erreur" class="erreur-form hidden" role="alert" tabindex="-1"></p>
 
       <div class="field">
-        <label for="f-title">Titre *</label>
+        <label for="f-title">Titre</label>
         <input id="f-title" name="titre" type="text" required maxlength="190" placeholder="Ex. One Piece">
       </div>
 

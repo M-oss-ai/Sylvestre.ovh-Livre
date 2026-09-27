@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (573 tests : 518 PHP en 42 fichiers, 55 JavaScript)
+php tests/lancer.php              # toute la suite (584 tests : 519 PHP en 42 fichiers, 65 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -56,7 +56,9 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 `parametres.php`, `mot-de-passe-oublie.php`,
 `reinitialiser-mot-de-passe.php`, `verifier-email.php`,
 `deconnexion.php`, `mentions-legales.php`, `google.php` (départ vers
-Google et retour : ouvre, relie ou crée le compte).
+Google et retour : ouvre le compte, ou mène à la création),
+`google-inscription.php` (création d'un compte Google : identifiant,
+mot de passe facultatif).
 
 `api.php` est le **point d'entrée AJAX unique** : un `switch` sur
 `$_POST['action']`. Chaque branche vérifie le CSRF et cloisonne par
@@ -68,7 +70,8 @@ e-mails, et rapport d'activité envoyé à `ADMIN_EMAIL`.
 ### Le client
 
 `js/commun.js` (socle partagé), `js/app.js` (bibliothèque),
-`js/auth.js`, `js/settings.js`, `js/delai.js` (comptes à rebours des
+`js/auth.js`, `js/settings.js`, `js/mdp.js` (règles du mot de passe
+pendant la saisie), `js/delai.js` (comptes à rebours des
 attentes). `css/style.css` pour tout le style.
 
 `app.js` commence par `window.Bibliotheque` : sa logique pure (carte
@@ -135,6 +138,20 @@ et rendues par `champ_aria()` / `champ_erreur()` ; l'API nomme le champ
 (`champ`, ou `erreurs` pour plusieurs) et `Lib.erreurChamp()` le pose.
 `Lib.toast()` ne sert plus qu'aux confirmations.
 
+**Aucune consigne d'avance dans un formulaire.** Pas de « * », pas de
+« obligatoire » : un champ requis laissé vide le dit à l'envoi
+(`MESSAGE_CHAMP_OBLIGATOIRE`, via `forme_identifiant()` /
+`forme_email()` / `valider_mot_de_passe()`). Le mot de passe ne cite que
+les règles NON respectées : `valider_mot_de_passe()` côté serveur, et
+`js/mdp.js` (son miroir, mêmes messages) en quittant le champ puis
+pendant la frappe — tout champ `data-regles-mdp`. Une règle ajoutée d'un
+côté s'ajoute de l'autre, tests compris. Ce qui concerne le lien de
+confirmation se dit à l'étape suivante, quand il est parti.
+
+**Le site ne connaît ni prénom ni nom** (retirés, migration 8) : un
+compte, c'est un identifiant et une adresse. L'avatar par défaut prend
+les deux premières lettres de l'identifiant (`initiales()`).
+
 **La grille ne compte qu'un arrêt de tabulation.** `carte.php` pose
 `tabindex="-1"` sur tout ce qui est focalisable dans une carte, et
 `js/app.js` rend le sien à la carte active (`FOCUSABLES_CARTE`). Un
@@ -161,8 +178,21 @@ par mot de passe n'y mène). Là où les autres retapent leur mot de passe,
 il repasse par Google : `verifier_mot_de_passe_limite()` le sait et
 demande `google_confirmation_recente()`, attachée à l'id du compte. Toute
 nouvelle action sensible passe donc par cette fonction, jamais par
-`password_verify()` directement. Dissocier Google n'est permis qu'à un
-compte qui a un mot de passe (condition dans la requête elle-même).
+`password_verify()` directement.
+
+**Comptes e-mail et comptes Google ne se relient pas** (choix de
+l'utilisateur) : `google_decision()` refuse l'adresse d'un compte e-mail
+confirmé, et il n'y a ni « associer » ni « dissocier ». Un compte créé
+avec Google l'est par `google-inscription.php` : google.php range
+l'identité confirmée dans `$_SESSION['google_inscription']`, la personne
+choisit son identifiant (et un mot de passe facultatif), et l'INSERT
+suit. Un compte e-mail JAMAIS confirmé portant l'adresse est supprimé
+à ce moment-là : il n'a jamais pu être ouvert.
+
+**Connexion et inscription commencent par le choix de la méthode**
+(Google ou adresse e-mail, `?avec=email`), avant tout formulaire. Sans
+Google configuré, ce choix n'a pas lieu d'être : le formulaire vient
+directement.
 
 **La signature du jeton Google n'est pas vérifiée, et c'est voulu** : il
 arrive par un appel HTTPS direct du serveur à Google, jamais par le
@@ -311,7 +341,7 @@ que du contenu correct y *paraît* faux.
 
 **Un champ focalisé ne se quitte pas tout seul sur téléphone.** Ni un
 tap ailleurs, ni un glissement de la page ne fermaient le clavier
-virtuel — et cliquer sur l'ÉTIQUETTE du champ focalisé (« Titre * »)
+virtuel — et cliquer sur l'ÉTIQUETTE du champ focalisé (« Titre »)
 le refocalisait silencieusement (comportement natif du navigateur),
 donnant l'impression que rien ne se passait. `js/commun.js` y répond,
 sans wiring par page (auto-actif partout où `commun.js` est chargé) :

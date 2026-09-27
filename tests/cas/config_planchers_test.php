@@ -61,9 +61,9 @@ test('MDP_MAX reste au-dessus de MDP_MIN', function () {
 });
 
 test('le texte d aide ne peut pas mentir sur la règle appliquée', function () {
-    /* MDP_REGLE est construite à partir de MDP_MIN, jamais écrite en dur :
-       le rappel affiché sous le champ suit donc toujours la règle réelle. */
-    contient((string) MDP_MIN, MDP_REGLE, 'la règle affichée cite le vrai minimum');
+    /* Le message de longueur est construit à partir de MDP_MIN, jamais
+       écrit en dur : il suit donc toujours la règle réellement appliquée. */
+    contient((string) MDP_MIN, implode(' ', valider_mot_de_passe('Aa1!')), 'le message cite le vrai minimum');
 });
 
 groupe('Limiteur anti force brute');

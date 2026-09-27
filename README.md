@@ -182,28 +182,35 @@ importantes :
 
 ## Connexion avec Google
 
-« Continuer avec Google » (connexion et inscription) ouvre, relie ou
-crée un compte, comme sur la plupart des sites. Le site ne voit jamais
+Sur la page de connexion comme sur celle d'inscription, on choisit
+d'abord **comment** : « Continuer avec Google » ou « avec une adresse
+e-mail » ; le formulaire ne vient qu'ensuite. Le site ne voit jamais
 le mot de passe Google : la personne s'identifie **chez Google**, qui
 renvoie ensuite vers `google.php` avec un code à usage unique ; le
 serveur échange ce code contre un jeton qui dit qui elle est
 (OpenID Connect, flux par code avec PKCE — détails dans
 `includes/google.php`).
 
+**Deux sortes de comptes, qui ne se relient pas** : un compte créé avec
+une adresse e-mail ne s'associe jamais à Google, et un compte créé avec
+Google ne s'en délie jamais.
+
 | Situation | Ce qui se passe |
 |---|---|
-| Compte Google déjà relié | Le compte s'ouvre |
-| Même adresse qu'un compte, confirmée | Le compte est relié à Google, puis s'ouvre ; un e-mail prévient le titulaire |
-| Même adresse, jamais confirmée | Google prouve à qui est l'adresse : le compte lui revient, et le mot de passe choisi par l'inconnu qui l'a créé est effacé |
-| Adresse inconnue | Nouveau compte, **sans mot de passe**, identifiant tiré de l'adresse (modifiable) |
-| Déjà connecté (Paramètres) | « Associer mon compte Google », même d'une autre adresse |
+| Compte créé avec ce compte Google | Il s'ouvre |
+| Adresse d'un compte créé avec une adresse e-mail | Refus : « connectez-vous avec votre identifiant et votre mot de passe » |
+| Adresse inconnue | `google-inscription.php` : on choisit son identifiant (proposé d'après l'adresse), et si on veut un mot de passe |
+| Adresse d'un compte e-mail jamais confirmé | Comme une adresse inconnue : ce compte jamais activé cède la place, Google ayant prouvé à qui est l'adresse |
+
+L'adresse du compte est celle de Google, déjà vérifiée : aucun e-mail de
+confirmation à attendre. Elle se change ensuite dans les Paramètres, avec
+le lien de confirmation habituel.
 
 Un compte sans mot de passe **repasse par Google** là où les autres
 retapent le leur (supprimer le compte, vider, changer d'adresse ou
 d'identifiant) : la confirmation vaut `GOOGLE_CONFIRMATION_DUREE`
-secondes. Il peut définir un mot de passe dans Paramètres › Sécurité ;
-dissocier Google n'est possible qu'ensuite, pour ne jamais s'enfermer
-dehors. « Mot de passe oublié » reste la porte de secours.
+secondes. Il peut définir un mot de passe dans Paramètres › Sécurité.
+« Mot de passe oublié » reste la porte de secours.
 
 **Mise en place** — dans la console Google Cloud : « API et services »
 › « Écran de consentement OAuth » (nom de l'application, adresse de
@@ -479,7 +486,7 @@ configuration.
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migration 7 : `utilisateur.google_sub`) |
+| `livre.sql` | Schéma complet, rejouable (migration 8 : `prenom` et `nom` retirés) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
@@ -491,6 +498,7 @@ configuration.
 | `api.php` | Actions AJAX + export JSON |
 | `inscription.php` · `connexion.php` · `deconnexion.php` | Comptes |
 | `google.php` · `includes/google.php` | « Continuer avec Google » : départ, retour, décision |
+| `google-inscription.php` | Création d'un compte Google : choix de l'identifiant, mot de passe facultatif |
 | `mot-de-passe-oublie.php` · `reinitialiser-mot-de-passe.php` · `verifier-email.php` | Récupération et confirmation |
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
 | `mentions-legales.php` | Mentions légales et confidentialité |

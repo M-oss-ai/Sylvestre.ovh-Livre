@@ -989,7 +989,7 @@ window.Bibliotheque = (() => {
     e.preventDefault();
     effacerErreursFiche();
     if (!$fTitle.value.trim()) {
-      L.erreurChamp($fTitle, "Le titre est obligatoire.");
+      L.erreurChamp($fTitle, "Ce champ est obligatoire.");
       $fTitle.focus();
       return;
     }
