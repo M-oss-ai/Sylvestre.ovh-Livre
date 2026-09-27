@@ -74,6 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($mdp !== $mdp2) {
                 $erreurs['confirmation'] = 'Les deux mots de passe ne correspondent pas.';
             }
+            /* Un mot de passe n'est jamais réaffiché : après une erreur
+               ailleurs (l'identifiant pris), il faut le dire, sinon le
+               compte serait créé sans lui au prochain envoi. */
+            if ($erreurs && !isset($erreurs['mot_de_passe'])) {
+                $erreurs['mot_de_passe'] = 'Retapez votre mot de passe.';
+            }
         }
     }
 
@@ -131,6 +137,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+/* Les champs du mot de passe restent repliés derrière « Ajouter un mot de
+   passe », sauf s'il en a été saisi un : il faut alors le retaper. */
+$mdp_ouvert = isset($erreurs['mot_de_passe']) || isset($erreurs['confirmation']);
+
 $csrf = jeton_csrf();
 ?>
 <!DOCTYPE html>
@@ -173,7 +183,16 @@ $csrf = jeton_csrf();
       </div>
 
       <!-- Facultatif : sans mot de passe, on se connecte avec Google seul.
-           Avec, il est demandé en seconde étape, après Google. -->
+           Avec, il est demandé en seconde étape, après Google. Un <details>
+           plutôt qu'un script : le bouton marche aussi sans JavaScript.
+           Replié, il vide ses champs (js/auth.js) : on ne crée pas un mot de
+           passe auquel on vient de renoncer. -->
+      <details class="ajout-mdp"<?= $mdp_ouvert ? ' open' : '' ?>>
+        <summary>
+          <span class="btn btn-ghost full"><span class="si-ferme">🔑 Ajouter un mot de passe</span><span class="si-ouvert">Ne pas ajouter de mot de passe</span></span>
+          <span class="hint" id="mdp-facultatif">Facultatif : il vous sera demandé après Google, à chaque connexion.</span>
+        </summary>
+
       <div class="field">
         <label for="mot_de_passe">Mot de passe</label>
         <div class="password-wrap">
@@ -184,7 +203,6 @@ $csrf = jeton_csrf();
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
-        <p class="hint" id="mdp-facultatif">Facultatif : il vous sera demandé après Google, à chaque connexion.</p>
       </div>
 
       <div class="field">
@@ -197,6 +215,7 @@ $csrf = jeton_csrf();
         </div>
         <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
       </div>
+      </details>
 
       <button type="submit" class="btn btn-primary full">Créer mon compte</button>
     </form>

@@ -29,4 +29,28 @@
     if (reste.length) champ.setAttribute("aria-describedby", reste.join(" "));
     else champ.removeAttribute("aria-describedby");
   }, true);
+
+  /* « Ajouter un mot de passe » (google-inscription.php) : déplié, le
+     curseur va au champ ; replié, les champs se vident avec leurs erreurs.
+     Sans cela, un mot de passe tapé puis abandonné partait quand même. */
+  document.querySelectorAll("details.ajout-mdp").forEach((bloc) => {
+    /* « toggle » part aussi au chargement quand le serveur rend le bloc
+       ouvert (après une erreur) : le focus n'y bouge que sur un clic, pour
+       ne pas le voler au premier champ fautif. */
+    let parClic = false;
+    bloc.querySelector("summary").addEventListener("click", () => { parClic = true; });
+    bloc.addEventListener("toggle", () => {
+      if (bloc.open) {
+        if (parClic) bloc.querySelector("input").focus();
+      } else {
+        bloc.querySelectorAll("input").forEach((champ) => {
+          champ.value = "";
+          const message = document.getElementById(champ.id + "-erreur");
+          if (message) message.remove();
+          champ.removeAttribute("aria-invalid");
+        });
+      }
+      parClic = false;
+    });
+  });
 })();

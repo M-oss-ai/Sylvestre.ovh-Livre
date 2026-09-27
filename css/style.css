@@ -947,6 +947,17 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 /* Création d'un compte Google : l'adresse fournie par Google, rappelée. */
 .adresse-google { margin: 0 0 14px; }
 
+/* Création d'un compte Google : le mot de passe facultatif, replié derrière
+   un bouton (un <details>, voir google-inscription.php). */
+.ajout-mdp { margin: 4px 0 16px; }
+.ajout-mdp > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.ajout-mdp > summary::-webkit-details-marker { display: none; }
+.ajout-mdp > summary:focus { outline: none; }
+.ajout-mdp > summary:focus-visible .btn { outline: 2px solid var(--gold); outline-offset: 2px; }
+.ajout-mdp[open] > summary { margin-bottom: 14px; }
+.ajout-mdp .si-ouvert, .ajout-mdp[open] .si-ferme { display: none; }
+.ajout-mdp[open] .si-ouvert { display: inline; }
+
 /* L'aide sous « Tome lu » : collée au champ, sans pousser la rangée. */
 .field-row .hint { margin-top: 4px; }
 
