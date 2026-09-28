@@ -511,6 +511,14 @@ switch ($action) {
         ]);
     }
 
+    /* ---------------- Renoncer à l'action confirmée ----------------
+       « Annuler » dans la fenêtre de confirmation d'un compte Google :
+       le délai s'arrête là, et la refaire demandera de se reconnecter. */
+    case 'compte.annuler_confirmation': {
+        google_oublier_confirmation();
+        reponse_json(['ok' => true]);
+    }
+
     /* ---------------- Renvoyer l'e-mail de confirmation ---------------- */
     case 'compte.renvoyer_verification': {
         if ((int) $moi['email_verifie'] === 1) {

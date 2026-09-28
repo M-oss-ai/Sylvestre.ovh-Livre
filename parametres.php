@@ -198,6 +198,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
        nouvelle adresse cesse de fonctionner. Rien d'autre ne bouge — en
        particulier le lien de blocage reçu par l'ancienne adresse reste
        valable (voir avertir_changement_email_demande). */
+    /* Renoncer à l'action confirmée : le délai s'arrête là, et la refaire
+       demandera de se reconnecter. */
+    if ($formulaire === 'annuler_confirmation') {
+        $en_cours = google_confirmation_en_cours((int) $moi['id']);
+        google_oublier_confirmation();
+        flash('Action annulée : pour la refaire, il faudra vous reconnecter avec Google.');
+        header('Location: ' . google_page_action((string) ($en_cours['action'] ?? 'compte.motdepasse')));
+        exit;
+    }
+
     if ($formulaire === 'annuler_email') {
         $pdo->prepare("DELETE FROM jeton_action WHERE utilisateur_id = ? AND type = 'changement_email'")
             ->execute([(int) $moi['id']]);
@@ -223,12 +233,20 @@ $sans_mdp   = (int) $moi['sans_mot_de_passe'] === 1;
 $confirme   = $par_google ? google_confirmation_en_cours((int) $moi['id']) : null;
 $confirme_pour = static fn (string $action): bool => ($confirme['action'] ?? '') === $action;
 
-/** « ✅ Identité confirmée : il vous reste 9 min 58 s pour … ». */
+/**
+ * « ✅ Identité confirmée : il vous reste 9 min 58 s pour … », et de quoi
+ * y renoncer. Le bouton se rattache par « form » au formulaire caché
+ * #annuler-confirmation-form : ce bloc peut se trouver DANS un autre
+ * formulaire (le Profil), qui ne peut pas en contenir un second.
+ */
 function bloc_confirme(?array $confirme, string $pour): string
 {
     $n = (int) ($confirme['restant'] ?? 0);
-    return '<p class="hint confirmation-google" data-fin-confirmation>✅ Identité confirmée : il vous reste '
-        . '<b class="delai" data-restant="' . $n . '">' . $n . ' secondes</b> pour ' . e($pour) . '.</p>';
+    return '<div class="bloc-confirme" data-fin-confirmation>'
+        . '<p class="hint confirmation-google">✅ Identité confirmée : il vous reste '
+        . '<b class="delai" data-restant="' . $n . '">' . $n . ' secondes</b> pour ' . e($pour) . '.</p>'
+        . '<button type="submit" form="annuler-confirmation-form" class="btn btn-ghost small">Annuler</button>'
+        . '</div>';
 }
 
 /** Le bouton qui part se reconnecter pour $action, et ce qu'il faudra faire. */
@@ -406,6 +424,11 @@ $nb_series = (int) $req->fetchColumn();
     <form id="annuler-email-form" method="post" action="parametres.php#profil" class="hidden">
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="formulaire" value="annuler_email">
+    </form>
+    <!-- « Annuler » d'un bloc « Identité confirmée » (bloc_confirme). -->
+    <form id="annuler-confirmation-form" method="post" action="parametres.php" class="hidden">
+      <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+      <input type="hidden" name="formulaire" value="annuler_confirmation">
     </form>
 
     <?php if (!$moi['email_verifie']): ?>

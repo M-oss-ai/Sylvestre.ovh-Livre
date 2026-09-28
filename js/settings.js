@@ -462,14 +462,27 @@ window.Parametres = (() => {
     elementDeclencheur = null;
   }
 
-  document.getElementById("confirm-cancel").addEventListener("click", fermerConfirmation);
-  $confirmOverlay.addEventListener("click", (e) => { if (e.target === $confirmOverlay) fermerConfirmation(); });
+  /* Annuler (bouton, clic à côté, Échap) : pour un compte Google qui s'était
+     reconnecté pour cette action, le délai s'arrête là. La refaire
+     demandera de se reconnecter — une fenêtre refermée ne doit pas laisser
+     derrière elle une suppression prête à partir. */
+  function annulerConfirmation() {
+    if (PAR_GOOGLE && CONFIRME.action && CONFIRME.action === actionEnAttente) {
+      CONFIRME.action = "";
+      if (arreterDelai) { arreterDelai(); arreterDelai = null; }
+      L.api("compte.annuler_confirmation", {}).catch(() => {});
+    }
+    fermerConfirmation();
+  }
+
+  document.getElementById("confirm-cancel").addEventListener("click", annulerConfirmation);
+  $confirmOverlay.addEventListener("click", (e) => { if (e.target === $confirmOverlay) annulerConfirmation(); });
   document.addEventListener("keydown", (e) => {
     if ($confirmOverlay.classList.contains("hidden")) return;
     // Cette modale demande un mot de passe : laisser la tabulation filer
     // derrière elle est exactement ce qu'il ne faut pas faire.
     if (e.key === "Tab") L.piegerFocus($confirmOverlay, e);
-    else if (e.key === "Escape") fermerConfirmation();
+    else if (e.key === "Escape") annulerConfirmation();
   });
 
   async function lancerAction() {

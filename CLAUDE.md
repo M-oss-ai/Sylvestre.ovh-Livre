@@ -182,7 +182,8 @@ supprimer son mot de passe, vider, supprimer le compte — la liste fermée
 secondes pour cliquer « Confirmer ». La confirmation vaut pour UN compte,
 UNE action et UNE fois (`google_confirmation_en_cours()`,
 `google_oublier_confirmation()` dès l'action faite) ; se connecter n'en
-donne aucune. `verifier_mot_de_passe_limite($id, $mdp, $attente, $action)`
+donne aucune, et « Annuler » l'efface (`compte.annuler_confirmation`,
+ou le formulaire `annuler_confirmation` des Paramètres). `verifier_mot_de_passe_limite($id, $mdp, $attente, $action)`
 le sait : toute nouvelle action sensible passe par elle avec sa clé de
 `GOOGLE_ACTIONS`, jamais par `password_verify()` directement — et doit
 consommer la confirmation une fois faite. Un compte e-mail, lui, retape
