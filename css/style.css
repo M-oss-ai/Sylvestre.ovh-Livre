@@ -1456,7 +1456,7 @@ html.verification-session body { visibility: hidden; }
   gap: 8px;
 }
 
-.profile-avatar-actions input[type="url"] { font-size: 13px; padding: 10px 12px; }
+.profile-avatar-actions input[type="url"] { padding: 10px 12px; }
 
 .settings-divider {
   height: 1px;
