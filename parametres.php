@@ -727,7 +727,7 @@ $nb_series = (int) $req->fetchColumn();
      une nouvelle. js/settings.js bascule de l'une à l'autre. -->
 <div id="confirm-overlay" class="overlay hidden">
   <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-    <h2 id="confirm-title">Confirmer ?</h2>
+    <h2 id="confirm-title">Confirmer&nbsp;?</h2>
 
     <div id="confirm-phase-identite">
       <p class="hint">Confirmez d'abord votre identité<?= $par_google && !$sans_mdp ? ', puis votre mot de passe' : '' ?>.

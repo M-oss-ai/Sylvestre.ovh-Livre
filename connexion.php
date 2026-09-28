@@ -293,7 +293,7 @@ $csrf = jeton_csrf();
       <button type="submit" class="btn btn-primary full">Se connecter</button>
     </form>
 
-    <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié ?</a></p>
+    <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
     <?php if (google_actif()): ?>
       <p class="auth-switch"><a href="connexion.php">← Autres façons de se connecter</a></p>
     <?php endif; ?>

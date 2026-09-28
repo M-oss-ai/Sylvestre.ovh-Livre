@@ -1559,8 +1559,11 @@ select,
 
   /* Celui du bas ferait doublon. « Annuler » et « Supprimer » restent :
      ce sont des gestes qu'on ne veut surtout pas a portee de pouce
-     pendant qu'on saisit. */
-  .modal-actions .btn-primary { display: none; }
+     pendant qu'on saisit. Limite a la fiche de serie : ecrit pour toutes
+     les modales, il cachait aussi le bouton final des petites fenetres
+     de confirmation (« Enregistrer », « Confirmer mon identite »,
+     « Compris »), qui n'ont pas de barre du haut pour le remplacer. */
+  #series-form .modal-actions .btn-primary { display: none; }
   /* Les resultats de recherche ne defilent plus dans leur propre cadre :
      300 px sur un telephone, c est une ligne et demie de vignettes, et
      la seconde ligne se devine sous le bord sans qu on sache qu elle est

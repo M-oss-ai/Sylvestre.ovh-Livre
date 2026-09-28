@@ -253,7 +253,7 @@ $flash = flash_prendre();
 
 <div id="confirm-overlay" class="overlay hidden">
   <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-    <h2 id="confirm-title">Supprimer cette série ?</h2>
+    <h2 id="confirm-title">Supprimer cette série&nbsp;?</h2>
     <p id="confirm-text" class="hint">Cette action est définitive.</p>
     <div class="modal-actions">
       <div class="grow"></div>
@@ -267,7 +267,7 @@ $flash = flash_prendre();
      jeter la saisie (voir fermerSiRienNeChange dans js/app.js). -->
 <div id="abandon-overlay" class="overlay hidden">
   <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="abandon-titre" aria-describedby="abandon-texte">
-    <h2 id="abandon-titre">Abandonner les modifications ?</h2>
+    <h2 id="abandon-titre">Abandonner les modifications&nbsp;?</h2>
     <p id="abandon-texte" class="hint">Ce que vous avez changé dans cette fiche n'est pas enregistré et sera perdu.</p>
     <div class="modal-actions">
       <div class="grow"></div>

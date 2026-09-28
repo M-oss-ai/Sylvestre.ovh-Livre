@@ -523,7 +523,9 @@ window.Parametres = (() => {
    * traitée ici, de la même façon pour les quatre actions.
    */
   function demanderConfirmation(titre, texte, libelle, action, onConfirme, destructif) {
-    $confirmTitle.textContent = titre;
+    // Espace insecable avant « ? » : sur telephone, le point
+    // d'interrogation partait seul a la ligne.
+    $confirmTitle.textContent = titre.replace(/ ([?!:;])/g, " $1");
     if (texte) {
       $confirmText.textContent = (destructif ? "⚠️ " : "") + texte;
       $confirmText.classList.remove("hidden");
