@@ -308,6 +308,12 @@ deux instructions `CREATE DATABASE` et `USE` du début (signalées dans le
 fichier) : chez OVH la base est créée depuis le manager et le `USE`
 échouerait, entraînant tout le reste avec lui.
 
+**Hors mode strict, une valeur absente d'un `ENUM` ne fait aucune erreur** :
+MySQL range `''`. Le lien « bloquer le changement d'adresse » est ainsi
+parti mort en production (`blocage_email` inconnu de la base). Depuis,
+`generer_jeton_action()` relit le type écrit et lève une exception s'il
+diffère.
+
 Ne jamais fournir une liste partielle de migrations : c'est ainsi que
 `mail_file` a été oubliée sur le serveur, et le cron plantait en 500 à
 chaque passage.

@@ -742,6 +742,18 @@ function generer_jeton_action(int $utilisateur_id, string $type, int $duree_seco
          VALUES (?, ?, ?, ?, ?)'
     )->execute([$utilisateur_id, hash('sha256', $jeton), $type, $donnee, $expire]);
 
+    /* Un type absent de l'ENUM (livre.sql pas rejoué) n'échoue pas hors
+       mode strict : MySQL range '' avec un simple avertissement, et le
+       lien envoyé est mort dès sa naissance — c'est arrivé en production
+       avec « blocage_email ». On relit donc ce qui a été écrit. */
+    $id = (int) $pdo->lastInsertId();
+    $ecrit = $pdo->prepare('SELECT type FROM jeton_action WHERE id = ?');
+    $ecrit->execute([$id]);
+    if ($ecrit->fetchColumn() !== $type) {
+        $pdo->prepare('DELETE FROM jeton_action WHERE id = ?')->execute([$id]);
+        throw new RuntimeException("jeton_action.type ne connaît pas « {$type} » : rejouez livre.sql.");
+    }
+
     return $jeton;
 }
 
