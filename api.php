@@ -15,6 +15,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/carte.php';
 require_once __DIR__ . '/includes/couvertures.php';
+require_once __DIR__ . '/includes/google.php';   // les modifications en attente d'un compte Google
 
 $moi    = exiger_connexion_api();
 $mon_id = (int) $moi['id'];
@@ -370,9 +371,22 @@ switch ($action) {
     }
 
     /* ---------------- Profil ---------------- */
+    /* « preparer = 1 » (compte Google) : tout vérifier, puis RANGER la
+       saisie dans la session au lieu de l'enregistrer — le navigateur part
+       ensuite se reconnecter chez Google, et la page repartira de zéro.
+       « en_attente = 1 » : au retour, enregistrer ce qui a été rangé (voir
+       google_attente). Le reste du chemin est le même. */
     case 'compte.profil': {
-        $identifiant = texte($_POST['identifiant'] ?? '', 50);
-        $email       = texte($_POST['email'] ?? '', 190);
+        $preparer = ($_POST['preparer'] ?? '') === '1';
+        $attente  = null;
+        if (($_POST['en_attente'] ?? '') === '1') {
+            $attente = google_attente($_SESSION['google_attente'] ?? null, $mon_id, 'compte.profil', time());
+            if ($attente === null) {
+                reponse_json(['ok' => false, 'erreur' => 'Ces modifications ne sont plus en attente : saisissez-les à nouveau.'], 409);
+            }
+        }
+        $identifiant = $attente ? (string) $attente['identifiant'] : texte($_POST['identifiant'] ?? '', 50);
+        $email       = $attente ? (string) $attente['email'] : texte($_POST['email'] ?? '', 190);
 
         /* « erreurs » range les messages par champ : le navigateur les pose
            chacun sous le sien. « erreur » les reprend tous, pour qui n'en
@@ -380,12 +394,37 @@ switch ($action) {
         if ($faiblesses = valider_profil($identifiant, $email, $mon_id)) {
             reponse_json(['ok' => false, 'erreurs' => $faiblesses, 'erreur' => implode(' ', $faiblesses)], 422);
         }
-        if (url_image_refusee($_POST['photo_url'] ?? '')) {
+        if (!$attente && url_image_refusee($_POST['photo_url'] ?? '')) {
             reponse_json(['ok' => false, 'champ' => 'photo_url', 'erreur' => MESSAGE_URL_IMAGE_REFUSEE], 422);
         }
 
         $email_change       = (strcasecmp($email, (string) $moi['email']) !== 0);
         $identifiant_change = ($identifiant !== (string) $moi['identifiant']);
+        $ancienne           = (string) $moi['photo'];
+
+        $photo_saisie = static function () use ($ancienne): string {
+            $erreur_image = null;
+            $fichier = enregistrer_image('photo_fichier', $erreur_image);
+            if ($erreur_image !== null) {
+                reponse_json(['ok' => false, 'champ' => 'photo', 'erreur' => $erreur_image], 422);
+            }
+            return photo_depuis_formulaire($fichier, $ancienne);
+        };
+
+        if ($preparer) {
+            if (!compte_google($mon_id) || !($email_change || $identifiant_change)) {
+                reponse_json(['ok' => false, 'erreur' => 'Rien à mettre en attente.'], 422);
+            }
+            /* Pas de email_disponible() ici : dire qu'une adresse est prise
+               AVANT la preuve d'identité révélerait qu'un compte existe. Elle
+               est vérifiée à l'enregistrement. Une photo envoyée est déjà
+               écrite : jamais adoptée, purger.php l'effacera. */
+            $_SESSION['google_attente'] = [
+                'id' => $mon_id, 'action' => 'compte.profil', 'le' => time(),
+                'donnees' => ['identifiant' => $identifiant, 'email' => $email, 'photo' => $photo_saisie()],
+            ];
+            reponse_json(['ok' => true]);
+        }
 
         /* Ces deux champs servent à se connecter et à récupérer le compte :
            qui les contrôle contrôle le compte. Le mot de passe est donc
@@ -400,13 +439,7 @@ switch ($action) {
             reponse_json(['ok' => false, 'champ' => 'email', 'erreur' => 'Cette adresse e-mail est déjà utilisée.'], 422);
         }
 
-        $erreur_image = null;
-        $fichier = enregistrer_image('photo_fichier', $erreur_image);
-        if ($erreur_image !== null) {
-            reponse_json(['ok' => false, 'champ' => 'photo', 'erreur' => $erreur_image], 422);
-        }
-        $ancienne = (string) $moi['photo'];
-        $photo    = photo_depuis_formulaire($fichier, $ancienne);
+        $photo = $attente ? (string) $attente['photo'] : $photo_saisie();
 
         /* La nouvelle adresse n'est PAS écrite ici. Elle attend dans le
            jeton, et ne remplacera l'ancienne qu'au clic sur le lien de
@@ -423,6 +456,7 @@ switch ($action) {
         if ($email_change || $identifiant_change) {
             oublier_confirmation();   // elle ne sert qu'une fois
         }
+        unset($_SESSION['google_attente']);
 
         if ($ancienne !== '' && $ancienne !== $photo) {
             supprimer_image_locale($ancienne);
@@ -459,6 +493,7 @@ switch ($action) {
                laquelle comptait. La demande en cours s'affiche à part. */
             'email'     => $moi['email'],
             'email_attente' => $email_change ? changement_email_en_attente($mon_id) : null,
+            'identifiant' => $identifiant,
             'initiales' => initiales(['identifiant' => $identifiant]),
             'message'   => $message,
         ]);
@@ -472,27 +507,40 @@ switch ($action) {
        POST refusé revenait avec les trois champs vides. Vérifié d'abord,
        il ne part que s'il va réussir, et une erreur laisse la saisie en
        place. Le POST, lui, revérifie tout. */
+    /* « preparer » et « en_attente » : comme pour le Profil. Seule
+       l'empreinte du nouveau mot de passe attend dans la session, jamais
+       le mot de passe lui-même. */
     case 'compte.motdepasse': {
-        $actuel  = (string) ($_POST['actuel'] ?? '');
-        $nouveau = (string) ($_POST['nouveau'] ?? '');
-        $confirm = (string) ($_POST['confirmation'] ?? '');
+        $actuel   = (string) ($_POST['actuel'] ?? '');
+        $nouveau  = (string) ($_POST['nouveau'] ?? '');
+        $confirm  = (string) ($_POST['confirmation'] ?? '');
+        $preparer = ($_POST['preparer'] ?? '') === '1';
+        $en_attente = null;
+        if (($_POST['en_attente'] ?? '') === '1') {
+            $en_attente = google_attente($_SESSION['google_attente'] ?? null, $mon_id, 'compte.motdepasse', time());
+            if ($en_attente === null) {
+                reponse_json(['ok' => false, 'erreur' => 'Ce mot de passe n\'est plus en attente : saisissez-le à nouveau.'], 409);
+            }
+        }
 
         $erreurs = [];
         $attente = null;
-        if (!verifier_mot_de_passe_limite($mon_id, $actuel, $attente, 'compte.motdepasse')) {
+        if (!$preparer && !verifier_mot_de_passe_limite($mon_id, $actuel, $attente, 'compte.motdepasse')) {
             $erreurs['actuel'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
                 : ((string) $moi['google_sub'] !== ''
                     ? message_reconnexion_google('compte.motdepasse')
                     : 'Mot de passe actuel incorrect.');
         }
-        if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
-            $erreurs['nouveau'] = $faiblesses;
-        }
-        if ($confirm === '') {
-            $erreurs['confirmation'] = MESSAGE_CHAMP_OBLIGATOIRE;
-        } elseif ($nouveau !== $confirm) {
-            $erreurs['confirmation'] = 'Les deux nouveaux mots de passe ne correspondent pas.';
+        if (!$en_attente) {
+            if ($faiblesses = valider_mot_de_passe($nouveau, (string) $moi['identifiant'])) {
+                $erreurs['nouveau'] = $faiblesses;
+            }
+            if ($confirm === '') {
+                $erreurs['confirmation'] = MESSAGE_CHAMP_OBLIGATOIRE;
+            } elseif ($nouveau !== $confirm) {
+                $erreurs['confirmation'] = 'Les deux nouveaux mots de passe ne correspondent pas.';
+            }
         }
         if ($erreurs) {
             $tous = [];
@@ -503,9 +551,20 @@ switch ($action) {
         if (($_POST['verifier'] ?? '') === '1') {
             reponse_json(['ok' => true]);
         }
+        if ($preparer) {
+            if (!compte_google($mon_id)) {
+                reponse_json(['ok' => false, 'erreur' => 'Rien à mettre en attente.'], 422);
+            }
+            $_SESSION['google_attente'] = [
+                'id' => $mon_id, 'action' => 'compte.motdepasse', 'le' => time(),
+                'donnees' => ['empreinte' => password_hash($nouveau, PASSWORD_DEFAULT)],
+            ];
+            reponse_json(['ok' => true]);
+        }
 
         $req = $pdo->prepare('UPDATE utilisateur SET mot_de_passe = ? WHERE id = ?');
-        $req->execute([password_hash($nouveau, PASSWORD_DEFAULT), $mon_id]);
+        $req->execute([$en_attente ? (string) $en_attente['empreinte'] : password_hash($nouveau, PASSWORD_DEFAULT), $mon_id]);
+        unset($_SESSION['google_attente']);
 
         /* Toutes les sessions du compte sont invalidées : les autres
            appareils (et un éventuel attaquant déjà connecté) sont
@@ -532,6 +591,7 @@ switch ($action) {
        le délai s'arrête là, et la refaire demandera de se reconnecter. */
     case 'compte.annuler_confirmation': {
         oublier_confirmation();
+        unset($_SESSION['google_attente']);   // les modifications qui attendaient partent avec elle
         reponse_json(['ok' => true]);
     }
 

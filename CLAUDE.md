@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (605 tests : 540 PHP en 43 fichiers, 65 JavaScript)
+php tests/lancer.php              # toute la suite (607 tests : 542 PHP en 43 fichiers, 65 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -194,12 +194,21 @@ bouton Google, pas de champ mot de passe) : cliquer « Enregistrer » (ou
    le vérifie et NOTE une confirmation, sans rien faire d'autre. Un compte
    Google se reconnecte (`google.php?action=…`), son mot de passe suit
    s'il en a un (`google-mot-de-passe.php`) : une vraie navigation, qui
-   revient sur la page — la fenêtre s'y rouvre d'elle-même pour Vider et
-   Supprimer (`BOUTON_ACTION`), déjà à la phase suivante ; pour le Profil
-   et le mot de passe, la page a rechargé et ses champs sont vides, la
-   confirmation reste simplement disponible pour la prochaine tentative.
+   revient sur la page — la fenêtre s'y rouvre d'elle-même, déjà à la
+   phase suivante (`BOUTON_ACTION` pour Vider et Supprimer).
+   **La saisie ne se perd pas dans l'aller-retour** (demande de
+   l'utilisateur) : pour le Profil et le mot de passe, le lien Google
+   envoie d'abord la saisie à api.php (`preparer=1`), qui la vérifie et la
+   range dans `$_SESSION['google_attente']` — une empreinte, jamais le mot
+   de passe. Au retour, parametres.php la passe (résumée, `data-en-attente`)
+   à la fenêtre, qui propose « Enregistrer ces modifications ? » ; le
+   bouton rappelle l'action avec `en_attente=1`. Voir `google_attente()`.
+   Revers assumé : un mot de passe ainsi défini ne passe pas par le POST
+   classique, le gestionnaire de mots de passe ne propose pas de le garder.
 2. **Action** — `CONFIRMATION_DUREE` secondes pour cliquer le
-   bouton final, qui fait le travail réel.
+   bouton final, qui fait le travail réel. La fin du délai vaut
+   « Annuler » (choix de l'utilisateur) : la fenêtre se ferme, et la
+   confirmation comme la saisie en attente s'effacent.
 
 La confirmation vaut pour UN compte, UNE action et UNE fois
 (`confirmation_en_cours()`, `oublier_confirmation()` dès l'action faite) ;

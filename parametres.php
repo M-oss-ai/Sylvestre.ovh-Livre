@@ -203,6 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($formulaire === 'annuler_confirmation') {
         $en_cours = confirmation_en_cours((int) $moi['id']);
         oublier_confirmation();
+        unset($_SESSION['google_attente']);
         flash('Action annulée : pour la refaire, il faudra vous reconnecter avec Google.');
         header('Location: ' . google_page_action((string) ($en_cours['action'] ?? 'compte.motdepasse')));
         exit;
@@ -237,6 +238,23 @@ $par_google = (string) $moi['google_sub'] !== '';
 $sans_mdp   = (int) $moi['sans_mot_de_passe'] === 1;
 $confirme   = confirmation_en_cours((int) $moi['id']);
 $confirme_pour = static fn (string $action): bool => ($confirme['action'] ?? '') === $action;
+
+/* Retour de Google avec des modifications saisies avant de partir (voir
+   google_attente) : la fenêtre de confirmation les propose aussitôt.
+   Seul ce qui s'affiche passe au navigateur — jamais l'empreinte d'un
+   mot de passe. */
+$en_attente = null;
+if ($par_google && $confirme) {
+    $donnees = google_attente($_SESSION['google_attente'] ?? null, (int) $moi['id'], $confirme['action'], time());
+    if ($donnees !== null) {
+        $en_attente = [
+            'action'      => $confirme['action'],
+            'resume'      => google_attente_resume($confirme['action'], $donnees, $moi),
+            'identifiant' => $donnees['identifiant'] ?? null,
+            'email'       => $donnees['email'] ?? null,
+        ];
+    }
+}
 
 /**
  * « ✅ Identité confirmée : il vous reste 9 min 58 s pour … », et de quoi
@@ -297,7 +315,8 @@ $nb_series = (int) $req->fetchColumn();
       data-import-max="<?= IMPORT_TAILLE_MAX ?>" data-prive="1"
       data-compte="<?= (int) $moi['id'] ?>" data-series="<?= $nb_series ?>"
       data-forfait="<?= e((string) $moi['forfait']) ?>" data-par-google="<?= $par_google ? '1' : '0' ?>"
-      data-confirme-action="<?= e($confirme['action'] ?? '') ?>" data-confirme-restant="<?= (int) ($confirme['restant'] ?? 0) ?>">
+      data-confirme-action="<?= e($confirme['action'] ?? '') ?>" data-confirme-restant="<?= (int) ($confirme['restant'] ?? 0) ?>"
+      data-en-attente="<?= e($en_attente ? (string) json_encode($en_attente, JSON_UNESCAPED_UNICODE) : '') ?>">
 
 <header class="topbar settings-topbar">
   <div class="topbar-row settings-topbar-row">

@@ -221,6 +221,56 @@ function google_etape_mdp(mixed $etape, int $maintenant): int
 }
 
 /**
+ * Les modifications qu'un compte Google a saisies AVANT d'aller se
+ * reconnecter (Profil ou mot de passe), ou null.
+ *
+ * Se reconnecter est une vraie navigation : la page repart de zéro et la
+ * saisie serait perdue. Les Paramètres l'envoient donc d'abord (api.php,
+ * « preparer »), le serveur la vérifie et la range dans la session
+ * ($_SESSION['google_attente']) ; au retour, la fenêtre de confirmation
+ * propose directement de l'enregistrer. Elle ne vaut que pour CE compte,
+ * CETTE action, et le temps d'un aller-retour chez Google plus le délai
+ * de confirmation.
+ */
+function google_attente(mixed $attente, int $utilisateur_id, string $action, int $maintenant): ?array
+{
+    if (!is_array($attente) || $utilisateur_id <= 0 || (int) ($attente['id'] ?? 0) !== $utilisateur_id
+        || ($attente['action'] ?? null) !== $action || !is_array($attente['donnees'] ?? null)
+        || (int) ($attente['le'] ?? 0) < $maintenant - GOOGLE_PARCOURS_MAX - CONFIRMATION_DUREE) {
+        return null;
+    }
+    return $attente['donnees'];
+}
+
+/**
+ * Ce que la fenêtre rappelle avant d'enregistrer des modifications mises
+ * en attente : « Identifiant : « ancien » → « nouveau ». Nouvelle photo. »
+ * $moi : le compte tel qu'il est enregistré.
+ */
+function google_attente_resume(string $action, array $donnees, array $moi): string
+{
+    if ($action === 'compte.motdepasse') {
+        return (int) ($moi['sans_mot_de_passe'] ?? 0) === 1
+            ? 'Le mot de passe que vous avez choisi sera défini.'
+            : 'Le nouveau mot de passe que vous avez choisi remplacera l\'actuel.';
+    }
+    $parties = [];
+    $identifiant = (string) ($donnees['identifiant'] ?? '');
+    if ($identifiant !== (string) ($moi['identifiant'] ?? '')) {
+        $parties[] = 'Identifiant : « ' . $moi['identifiant'] . ' » → « ' . $identifiant . ' ».';
+    }
+    $email = (string) ($donnees['email'] ?? '');
+    if (strcasecmp($email, (string) ($moi['email'] ?? '')) !== 0) {
+        $parties[] = 'Adresse e-mail : ' . $email . ' (à confirmer depuis cette adresse).';
+    }
+    $photo = (string) ($donnees['photo'] ?? '');
+    if ($photo !== (string) ($moi['photo'] ?? '')) {
+        $parties[] = $photo === '' ? 'Photo retirée.' : 'Nouvelle photo.';
+    }
+    return implode(' ', $parties);
+}
+
+/**
  * L'identifiant PROPOSÉ à la création d'un compte Google, tiré de
  * l'adresse : « Marie.Dupont+manga@gmail.com » → « Marie.Dupont ». La
  * personne le garde ou le change (google-inscription.php). Même règle

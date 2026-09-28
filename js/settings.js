@@ -152,10 +152,8 @@ window.Parametres = (() => {
     $photoStatus.classList.remove("erreur");
   }
 
-  /** Enregistre le Profil. Appelé directement (photo seule), ou depuis la
-      fenêtre de confirmation quand l'identifiant ou l'adresse change. */
-  async function finirProfil() {
-    const bouton = $profilForm.querySelector('button[type="submit"]');
+  /** Ce que le Profil envoie : ses champs, et la photo choisie. */
+  function donneesProfil() {
     const fd = new FormData($profilForm);
 
     // FormData(form) reprend tous les champs nommés, y compris ceux
@@ -166,29 +164,40 @@ window.Parametres = (() => {
     } else if (photoEnAttente && photoEnAttente.type === "url" && !photoEnAttente.existante) {
       fd.set("photo_url", photoEnAttente.value);
     }
+    return fd;
+  }
 
+  /** Le Profil vient d'être enregistré : la page reprend ce qui compte. */
+  function profilEnregistre(r) {
+    photoEnAttente = r.photo ? { type: "url", value: r.photo, existante: true } : null;
+    $fallback.textContent = r.initiales || "🙂";
+    majApercuPhoto();
+    $photoStatus.textContent = "";
+    $emailPwd.value = "";
+
+    /* Le champ reprend l'adresse ACTIVE : il gardait la nouvelle, pas
+       encore confirmée, et l'on ne savait plus laquelle comptait. La
+       demande en cours s'affiche juste dessous, à part. */
+    $emailInput.value = r.email;
+    $emailInput.dataset.compte = r.email;
+    $usernameInput.value = r.identifiant;
+    $usernameInput.dataset.compte = r.identifiant;
+    if (r.email_attente) {
+      document.getElementById("email-attente-adresse").textContent = r.email_attente.adresse;
+      document.getElementById("email-attente-expire").textContent = r.email_attente.expire;
+      $emailAttente.classList.remove("hidden");
+    }
+    fermerConfirmation();
+    L.toast(r.message);
+  }
+
+  /** Enregistre le Profil. Appelé directement (photo seule), ou depuis la
+      fenêtre de confirmation quand l'identifiant ou l'adresse change. */
+  async function finirProfil() {
+    const bouton = $profilForm.querySelector('button[type="submit"]');
     bouton.disabled = true;
     try {
-      const r = await L.api("compte.profil", fd);
-      photoEnAttente = r.photo ? { type: "url", value: r.photo, existante: true } : null;
-      $fallback.textContent = r.initiales || "🙂";
-      majApercuPhoto();
-      $photoStatus.textContent = "";
-      $emailPwd.value = "";
-
-      /* Le champ reprend l'adresse ACTIVE : il gardait la nouvelle, pas
-         encore confirmée, et l'on ne savait plus laquelle comptait. La
-         demande en cours s'affiche juste dessous, à part. */
-      $emailInput.value = r.email;
-      $emailInput.dataset.compte = r.email;
-      $usernameInput.dataset.compte = $usernameInput.value.trim();
-      if (r.email_attente) {
-        document.getElementById("email-attente-adresse").textContent = r.email_attente.adresse;
-        document.getElementById("email-attente-expire").textContent = r.email_attente.expire;
-        $emailAttente.classList.remove("hidden");
-      }
-      fermerConfirmation();
-      L.toast(r.message);
+      profilEnregistre(await L.api("compte.profil", donneesProfil()));
     } catch (err) {
       /* Identité pas (ou plus) confirmée : la fenêtre gère elle-même ce
          cas (voir lancerAction) en revenant à la phase d'authentification —
@@ -196,21 +205,26 @@ window.Parametres = (() => {
       if (err.attente || err.champ === "mot_de_passe" || (err.donnees && err.donnees.google)) {
         throw err;
       }
-      fermerConfirmation();
-      const champ = L.erreursSurChamps(err, {
-        identifiant: $usernameInput, email: $emailInput, photo_url: $urlInput,
-      });
-      if (champ) {
-        champ.focus();
-      } else if (err.champ === "photo") {
-        $photoStatus.textContent = err.message;
-        $photoStatus.classList.add("erreur");
-        $dropzone.focus();
-      } else {
-        erreurProfil(err.message);
-      }
+      erreursDuProfil(err);
     } finally {
       bouton.disabled = false;
+    }
+  }
+
+  /** Ferme la fenêtre et pose chaque erreur sous son champ du Profil. */
+  function erreursDuProfil(err) {
+    fermerConfirmation();
+    const champ = L.erreursSurChamps(err, {
+      identifiant: $usernameInput, email: $emailInput, photo_url: $urlInput,
+    });
+    if (champ) {
+      champ.focus();
+    } else if (err.champ === "photo") {
+      $photoStatus.textContent = err.message;
+      $photoStatus.classList.add("erreur");
+      $dropzone.focus();
+    } else {
+      erreurProfil(err.message);
     }
   }
 
@@ -282,12 +296,7 @@ window.Parametres = (() => {
     } catch (err) {
       const expiree = err.attente || (err.erreurs && err.erreurs.actuel) || (err.donnees && err.donnees.google);
       if (expiree) throw err; // la fenêtre revient à la phase d'authentification
-      fermerConfirmation();
-      const champ = L.erreursSurChamps(err, {
-        actuel: $mdpActuel || $mdpNouveau, nouveau: $mdpNouveau, confirmation: $mdpConfirmation,
-      });
-      if (champ) champ.focus();
-      else L.erreurChamp($mdpActuel || $mdpNouveau, err.message);
+      erreursDuMotDePasse(err);
       return;
     }
     fermerConfirmation();
@@ -296,6 +305,16 @@ window.Parametres = (() => {
     // la plus proche d'un clic réel ; submit() sert de repli.
     if (typeof $mdpForm.requestSubmit === "function") $mdpForm.requestSubmit($mdpSubmit);
     else $mdpForm.submit();
+  }
+
+  /** Ferme la fenêtre et pose chaque erreur sous son champ du mot de passe. */
+  function erreursDuMotDePasse(err) {
+    fermerConfirmation();
+    const champ = L.erreursSurChamps(err, {
+      actuel: $mdpActuel || $mdpNouveau, nouveau: $mdpNouveau, confirmation: $mdpConfirmation,
+    });
+    if (champ) champ.focus();
+    else L.erreurChamp($mdpActuel || $mdpNouveau, err.message);
   }
 
   if ($mdpForm) $mdpForm.addEventListener("submit", (e) => {
@@ -484,12 +503,10 @@ window.Parametres = (() => {
     }
 
     if (confirmee) {
-      // Délai écoulé pendant que la fenêtre était ouverte : il faut
-      // recommencer, la phase « identité » revient.
-      arreterDelai = window.Delai.lancer($confirmDelai, reste, () => {
-        CONFIRME.action = "";
-        preparerPhase(action);
-      }) || null;
+      // Délai écoulé pendant que la fenêtre était ouverte : c'est un
+      // « Annuler » — la fenêtre se ferme, la confirmation et les
+      // modifications qui attendaient s'effacent.
+      arreterDelai = window.Delai.lancer($confirmDelai, reste, annulerConfirmation) || null;
     }
     /* Jamais sur le bouton qui agit (Confirmer mon identité, ou Confirmer) :
        une touche Entrée ou un second appui suffisait alors à tout
@@ -508,7 +525,7 @@ window.Parametres = (() => {
   function demanderConfirmation(titre, texte, libelle, action, onConfirme, destructif) {
     $confirmTitle.textContent = titre;
     if (texte) {
-      $confirmText.textContent = "⚠️ " + texte;
+      $confirmText.textContent = (destructif ? "⚠️ " : "") + texte;
       $confirmText.classList.remove("hidden");
     } else {
       $confirmText.classList.add("hidden");
@@ -646,6 +663,84 @@ window.Parametres = (() => {
 
   $confirmOk.addEventListener("click", lancerAction);
 
+  /* ---------------- Se reconnecter sans perdre sa saisie ----------------
+     Pour un compte Google, prouver son identité est une vraie navigation :
+     au retour, la page repart de zéro. Pour le Profil et le mot de passe,
+     la saisie part donc d'abord au serveur (« preparer » dans api.php), qui
+     la vérifie et la range dans la session — c'est seulement ensuite qu'on
+     va chez Google. Une erreur (identifiant pris, mot de passe trop
+     court…) se dit tout de suite, sous son champ, sans aller-retour. Au
+     retour, la fenêtre propose d'enregistrer ce qui attendait (plus bas). */
+  function preparerProfil() {
+    const fd = donneesProfil();
+    fd.set("preparer", "1");
+    return L.api("compte.profil", fd).catch((err) => { erreursDuProfil(err); throw err; });
+  }
+
+  function preparerMotDePasse() {
+    return L.api("compte.motdepasse", {
+      nouveau: $mdpNouveau.value, confirmation: $mdpConfirmation.value, preparer: "1",
+    }).catch((err) => { erreursDuMotDePasse(err); throw err; });
+  }
+
+  const PREPARER = { "compte.profil": preparerProfil, "compte.motdepasse": preparerMotDePasse };
+  const $lienGoogle = PAR_GOOGLE ? $phaseIdentite.querySelector("a.btn-google") : null;
+  if ($lienGoogle) {
+    $lienGoogle.addEventListener("click", async (e) => {
+      const preparer = PREPARER[actionEnAttente];
+      if (!preparer) return; // Vider, Supprimer : rien à garder, le lien part tel quel
+      e.preventDefault();
+      if ($lienGoogle.getAttribute("aria-disabled") === "true") return;
+      $lienGoogle.setAttribute("aria-disabled", "true");
+      try {
+        await preparer();
+      } catch (err) {
+        $lienGoogle.removeAttribute("aria-disabled");
+        return; // l'erreur est déjà sous son champ
+      }
+      window.location.href = $lienGoogle.href;
+    });
+  }
+
+  /* Retour de Google avec des modifications rangées avant de partir
+     (data-en-attente, posé par parametres.php) : la fenêtre les rappelle
+     et propose de les enregistrer, déjà à la phase « action ». */
+  let enAttente = null;
+  try {
+    enAttente = JSON.parse(document.body.dataset.enAttente || "null");
+  } catch (e) {
+    enAttente = null;
+  }
+
+  async function finirEnAttente() {
+    const attente = enAttente;
+    try {
+      if (attente.action === "compte.profil") {
+        profilEnregistre(await L.api("compte.profil", { en_attente: "1" }));
+      } else {
+        const r = await L.api("compte.motdepasse", { en_attente: "1" });
+        fermerConfirmation();
+        L.toast(r.message);
+        // La carte Sécurité change (« Supprimer le mot de passe »…).
+        setTimeout(() => window.location.reload(), 900);
+      }
+      enAttente = null;
+    } catch (err) {
+      /* Plus rien ne peut partir tel quel (identifiant pris entre-temps,
+         délai dépassé…) : la saisie revient dans les champs, avec l'erreur
+         sous le sien. Le mot de passe, lui, n'est jamais revenu au
+         navigateur : il reste à le retaper. */
+      enAttente = null;
+      if (attente.action === "compte.profil") {
+        if (attente.identifiant !== null) $usernameInput.value = attente.identifiant;
+        if (attente.email !== null) $emailInput.value = attente.email;
+        erreursDuProfil(err);
+      } else {
+        erreursDuMotDePasse(err);
+      }
+    }
+  }
+
   /* ---------------- Vider / Supprimer ---------------- */
 
   async function finirVider() {
@@ -693,13 +788,19 @@ window.Parametres = (() => {
     );
   });
 
-  /* Retour de Google pour vider ou supprimer : la fenêtre se rouvre
-     d'elle-même, avec le temps qui reste pour cliquer « Confirmer ». Pas
-     pour le Profil ni le mot de passe : la page vient de recharger, leurs
-     champs sont vides — rouvrir la fenêtre n'aiderait pas, la confirmation
-     reste simplement disponible pour la prochaine tentative, dans le délai. */
+  /* Retour de Google : la fenêtre se rouvre d'elle-même, avec le temps qui
+     reste pour cliquer le bouton final. Vider et Supprimer n'ont rien à
+     garder ; le Profil et le mot de passe retrouvent ce qui avait été saisi
+     avant de partir (enAttente, plus haut). */
   const BOUTON_ACTION = { "donnees.vider": "btn-clear-library", "compte.supprimer": "btn-delete-account" };
-  if (PAR_GOOGLE && BOUTON_ACTION[CONFIRME.action]) document.getElementById(BOUTON_ACTION[CONFIRME.action]).click();
+  if (PAR_GOOGLE && BOUTON_ACTION[CONFIRME.action]) {
+    document.getElementById(BOUTON_ACTION[CONFIRME.action]).click();
+  } else if (PAR_GOOGLE && enAttente && enAttente.action === CONFIRME.action) {
+    demanderConfirmation(
+      enAttente.action === "compte.profil" ? "Enregistrer ces modifications ?" : "Enregistrer ce mot de passe ?",
+      enAttente.resume, "Enregistrer", enAttente.action, finirEnAttente, false
+    );
+  }
 
   /* Délai écoulé sur un bloc « Identité confirmée » de la page (Supprimer
      le mot de passe, seul endroit qui en garde un — voir parametres.php) :

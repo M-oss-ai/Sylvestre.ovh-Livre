@@ -174,6 +174,35 @@ test('valable le temps du parcours, puis il faut repasser par Google', function 
     egale(0, google_etape_mdp(['id' => -3, 'le' => 1000], 1000), 'jamais un id négatif');
 });
 
+groupe('google_attente() — la saisie gardée pendant l aller-retour chez Google');
+
+test('pour ce compte, cette action, le temps du parcours et de la confirmation', function () {
+    $attente = ['id' => 7, 'action' => 'compte.profil', 'le' => 1000, 'donnees' => ['identifiant' => 'nouveau']];
+    $limite  = 1000 + GOOGLE_PARCOURS_MAX + CONFIRMATION_DUREE;
+    egale(['identifiant' => 'nouveau'], google_attente($attente, 7, 'compte.profil', $limite), 'à la limite : encore là');
+    estNul(google_attente($attente, 7, 'compte.profil', $limite + 1), 'au-delà : perdue');
+    estNul(google_attente($attente, 8, 'compte.profil', 1000), 'un autre compte n en profite pas');
+    estNul(google_attente($attente, 7, 'compte.motdepasse', 1000), 'une autre action non plus');
+    estNul(google_attente($attente, 0, 'compte.profil', 1000), 'personne de connecté');
+    estNul(google_attente(null, 7, 'compte.profil', 1000), 'rien en attente');
+    estNul(google_attente(['id' => 7, 'action' => 'compte.profil', 'le' => 1000, 'donnees' => 'x'], 7, 'compte.profil', 1000), 'des données illisibles');
+});
+
+test('google_attente_resume() — ce que la fenêtre rappelle', function () {
+    $moi = ['identifiant' => 'ancien', 'email' => 'a@exemple.test', 'photo' => 'uploads/a.webp', 'sans_mot_de_passe' => 1];
+    $meme = ['identifiant' => 'ancien', 'email' => 'A@exemple.test', 'photo' => 'uploads/a.webp'];
+    egale('', google_attente_resume('compte.profil', $meme, $moi), 'rien de changé (la casse de l adresse ne compte pas)');
+    egale(
+        'Identifiant : « ancien » → « nouveau ». Adresse e-mail : b@exemple.test (à confirmer depuis cette adresse). Nouvelle photo.',
+        google_attente_resume('compte.profil', ['identifiant' => 'nouveau', 'email' => 'b@exemple.test', 'photo' => 'uploads/b.webp'], $moi),
+        'chaque changement, dans l ordre du formulaire'
+    );
+    egale('Photo retirée.', google_attente_resume('compte.profil', ['photo' => ''] + $meme, $moi), 'la photo retirée');
+    contient('sera défini', google_attente_resume('compte.motdepasse', ['empreinte' => 'x'], $moi), 'un premier mot de passe');
+    contient('remplacera', google_attente_resume('compte.motdepasse', ['empreinte' => 'x'], ['sans_mot_de_passe' => 0] + $moi), 'un mot de passe remplacé');
+    sans('$2y$', google_attente_resume('compte.motdepasse', ['empreinte' => '$2y$10$abc'], $moi), 'jamais l empreinte');
+});
+
 groupe('identifiant_depuis_google() — le nom d un compte créé');
 
 test('le début de l adresse, dans les règles de l inscription', function () {
