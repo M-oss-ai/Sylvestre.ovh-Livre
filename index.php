@@ -29,7 +29,7 @@ $csrf    = jeton_csrf();
    celle des recherches de couverture nulle part. 0 = pas de limite. */
 $quota_series    = $moi['forfait'] === 'illimite' ? 0 : MAX_SERIES_PAR_UTILISATEUR;
 $quota_recherche = couverture_quota($moi);
-$tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
+$tranche         = secondes_lisibles(COUVERTURE_FENETRE);
 
 // Laissé par google.php (« Bienvenue ! », compte relié…) : dit en notification.
 $flash = flash_prendre();

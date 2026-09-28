@@ -5,7 +5,7 @@
    Sert aussi à CONFIRMER une action à risque (« action » dans l'étape,
    voir ACTIONS_SENSIBLES) : la personne, déjà connectée, vient de se
    reconnecter avec Google ; son mot de passe suit, puis elle a
-   GOOGLE_CONFIRMATION_DUREE secondes pour valider cette action-là.
+   CONFIRMATION_DUREE secondes pour valider cette action-là.
 
    Un compte créé avec Google peut définir un mot de passe dans les
    Paramètres. Il lui est alors demandé ICI, après Google, à chaque
@@ -70,8 +70,8 @@ function google_mdp_ouvrir(int $id, string $action): never
     if ($action !== '') {
         noter_confirmation($id, $action);
         journal_securite('google_confirmation', ['utilisateur' => $id, 'action' => $action]);
-        flash('Identité confirmée ✅ — vous avez ' . intdiv(GOOGLE_CONFIRMATION_DUREE, 60)
-            . ' minutes pour ' . ACTIONS_SENSIBLES[$action] . '.');
+        flash('Identité confirmée ✅ — vous avez ' . secondes_lisibles(CONFIRMATION_DUREE)
+            . ' pour ' . ACTIONS_SENSIBLES[$action] . '.');
     } else {
         connecter($id);   // sans confirmation : chaque action à risque demande de se reconnecter
         journal_securite('connexion_google', ['utilisateur' => $id]);

@@ -132,8 +132,8 @@ switch ($decision) {
         }
         noter_confirmation((int) $moi['id'], $action);
         journal_securite('google_confirmation', ['utilisateur' => (int) $moi['id'], 'action' => $action]);
-        flash('Identité confirmée ✅ — vous avez ' . intdiv(GOOGLE_CONFIRMATION_DUREE, 60)
-            . ' minutes pour ' . ACTIONS_SENSIBLES[$action] . '.');
+        flash('Identité confirmée ✅ — vous avez ' . secondes_lisibles(CONFIRMATION_DUREE)
+            . ' pour ' . ACTIONS_SENSIBLES[$action] . '.');
         header('Location: ' . google_page_action($action));
         exit;
 

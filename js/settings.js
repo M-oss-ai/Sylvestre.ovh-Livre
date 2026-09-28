@@ -434,7 +434,7 @@ window.Parametres = (() => {
      phase suivante (voir BOUTON_ACTION plus bas).
 
        Phase « action » (#confirm-phase-action) : identité confirmée,
-     GOOGLE_CONFIRMATION_DUREE secondes pour valider CETTE action précise.
+     CONFIRMATION_DUREE secondes pour valider CETTE action précise.
      Le bouton final fait le travail réel (finirAction, propre à chaque
      action) : mettre à jour le Profil, changer le mot de passe, vider la
      bibliothèque, ou supprimer le compte. */
@@ -444,7 +444,7 @@ window.Parametres = (() => {
   const $confirmText = document.getElementById("confirm-text");
   const $confirmOk = document.getElementById("confirm-ok");
   const $confirmIdentiteOk = document.getElementById("confirm-identite-ok"); // absent pour un compte Google
-  const $confirmPwd = document.getElementById("confirm-password");
+  const $confirmPwd = document.getElementById("confirm-password"); // absent pour un compte Google
   const $confirmExport = document.getElementById("confirm-export");
   const $phaseIdentite = document.getElementById("confirm-phase-identite");
   const $phaseAction = document.getElementById("confirm-phase-action");
@@ -521,8 +521,10 @@ window.Parametres = (() => {
     // Rien à sauvegarder dans une bibliothèque vide, et rien à sauvegarder
     // du tout pour le Profil ou le mot de passe.
     $confirmExport.classList.toggle("hidden", !destructif || NB_SERIES === 0);
-    $confirmPwd.value = "";
-    L.effacerErreur($confirmPwd);
+    if ($confirmPwd) {
+      $confirmPwd.value = "";
+      L.effacerErreur($confirmPwd);
+    }
     actionEnAttente = action;
     finirAction = onConfirme;
     elementDeclencheur = document.activeElement;
@@ -533,7 +535,7 @@ window.Parametres = (() => {
   function fermerConfirmation() {
     if (arreterDelai) { arreterDelai(); arreterDelai = null; }
     $confirmOverlay.classList.add("hidden");
-    $confirmPwd.value = "";
+    if ($confirmPwd) $confirmPwd.value = "";
     actionEnAttente = null;
     finirAction = null;
     // Le focus revient là où il était : sans ça, la navigation au clavier

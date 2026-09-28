@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 putenv('GOOGLE_CLIENT_ID=client-test.apps.googleusercontent.com');
 putenv('GOOGLE_CLIENT_SECRET=secret-de-test');
-putenv('GOOGLE_CONFIRMATION_DUREE=5');   // absurde : relevé à une minute
+putenv('CONFIRMATION_DUREE=5');   // absurde : relevé à une minute
 
 require __DIR__ . '/../lanceur.php';
 require_once CHEMIN_PROJET . '/includes/google.php';
@@ -46,7 +46,7 @@ test('configuré, Google est actif', function () {
 });
 
 test('la confirmation par Google ne peut pas durer moins d une minute', function () {
-    egale(60, GOOGLE_CONFIRMATION_DUREE, 'le .env demandait 5 secondes');
+    egale(60, CONFIRMATION_DUREE, 'le .env demandait 5 secondes');
 });
 
 groupe('google_url_autorisation() — le départ chez Google');

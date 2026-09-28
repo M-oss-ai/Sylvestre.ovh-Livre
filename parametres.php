@@ -259,7 +259,7 @@ function bloc_reconnexion(string $action, string $libelle, bool $avec_mdp): stri
 {
     return '<p class="hint">Il faut d\'abord vous reconnecter avec Google'
         . ($avec_mdp ? ', puis avec votre mot de passe' : '') . '. Vous aurez ensuite '
-        . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . ' minutes pour ' . e(ACTIONS_SENSIBLES[$action]) . '.</p>'
+        . secondes_lisibles(CONFIRMATION_DUREE) . ' pour ' . e(ACTIONS_SENSIBLES[$action]) . '.</p>'
         . bouton_google($libelle, 'parametres', $action);
 }
 
@@ -276,7 +276,7 @@ $v = $erreurs_profil && $saisie_profil ? $saisie_profil : [
 /* Le quota de recherche automatique de couverture n'était annoncé nulle
    part : on le découvrait en butant dessus. */
 $quota_recherche = couverture_quota($moi);
-$tranche         = couverture_tranche_lisible(COUVERTURE_FENETRE);
+$tranche         = secondes_lisibles(COUVERTURE_FENETRE);
 
 $req = $pdo->prepare('SELECT COUNT(*) FROM serie WHERE utilisateur_id = ?');
 $req->execute([(int) $moi['id']]);
@@ -703,7 +703,7 @@ $nb_series = (int) $req->fetchColumn();
      note la confirmation) ; un compte Google se reconnecte (Google, puis
      son mot de passe s'il en a un) et revient sur cette page, où la
      fenêtre se rouvre d'elle-même, déjà à la phase 2.
-       Phase 2, #confirm-phase-action : identité confirmée, GOOGLE_CONFIRMATION_DUREE
+       Phase 2, #confirm-phase-action : identité confirmée, CONFIRMATION_DUREE
      secondes pour valider CETTE action précise — une autre en demanderait
      une nouvelle. js/settings.js bascule de l'une à l'autre. -->
 <div id="confirm-overlay" class="overlay hidden">
@@ -712,7 +712,7 @@ $nb_series = (int) $req->fetchColumn();
 
     <div id="confirm-phase-identite">
       <p class="hint">Confirmez d'abord votre identité<?= $par_google && !$sans_mdp ? ', puis votre mot de passe' : '' ?>.
-        Vous aurez ensuite <?= intdiv(GOOGLE_CONFIRMATION_DUREE, 60) ?> minutes pour confirmer.</p>
+        Vous aurez ensuite <?= secondes_lisibles(CONFIRMATION_DUREE) ?> pour confirmer.</p>
       <?php if ($par_google): ?>
         <?= bouton_google('Se reconnecter avec Google', 'parametres') ?>
       <?php else: ?>

@@ -146,14 +146,10 @@ define('GOOGLE_CLIENT_SECRET', trim(env('GOOGLE_CLIENT_SECRET', '')));
 
 /* Chaque action à risque, e-mail ou Google, demande de prouver son
    identité (mot de passe retapé, ou reconnexion à Google puis son mot de
-   passe s'il en a un). Il reste ensuite GOOGLE_CONFIRMATION_DUREE
-   secondes pour valider CETTE action, une seule fois. Entre 1 minute et
-   1 heure : au-delà, une session volée suffirait de nouveau. Le nom garde
-   « GOOGLE » : c'est pour Google que ce délai existe (un compte e-mail
-   pourrait retaper son mot de passe indéfiniment, une session volée mise
-   à part), mais la même constante borne les deux depuis que la fenêtre de
-   confirmation leur est commune (voir parametres.php, js/settings.js). */
-define('GOOGLE_CONFIRMATION_DUREE', min(3600, max(60, (int) env('GOOGLE_CONFIRMATION_DUREE', '600'))));
+   passe s'il en a un). Il reste ensuite CONFIRMATION_DUREE secondes pour
+   valider CETTE action, une seule fois. Entre 1 minute et 1 heure :
+   au-delà, une session volée suffirait de nouveau. */
+define('CONFIRMATION_DUREE', min(3600, max(60, (int) env('CONFIRMATION_DUREE', '600'))));
 
 /* ---------------------------------------------------------------------
    Identification du client — limiteurs et journal de sécurité
@@ -763,6 +759,19 @@ function duree_lisible(int $heures): string
         return $jours . ' jours';
     }
     return $jours . ' j et ' . $reste . ($reste === 1 ? ' heure' : ' heures');
+}
+
+/**
+ * Une durée courte, en toutes lettres : « 1 minute », « 2 minutes », ou
+ * « 90 secondes » quand ce n'est pas un compte rond de minutes.
+ */
+function secondes_lisibles(int $secondes): string
+{
+    if ($secondes % 60 !== 0) {
+        return $secondes . ' seconde' . ($secondes > 1 ? 's' : '');
+    }
+    $minutes = intdiv($secondes, 60);
+    return $minutes . ' minute' . ($minutes > 1 ? 's' : '');
 }
 
 /* Jeton attendu par purger.php quand il est appelé en HTTP (cron OVH). */

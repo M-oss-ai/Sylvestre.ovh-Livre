@@ -198,7 +198,7 @@ bouton Google, pas de champ mot de passe) : cliquer « Enregistrer » (ou
    Supprimer (`BOUTON_ACTION`), déjà à la phase suivante ; pour le Profil
    et le mot de passe, la page a rechargé et ses champs sont vides, la
    confirmation reste simplement disponible pour la prochaine tentative.
-2. **Action** — `GOOGLE_CONFIRMATION_DUREE` secondes pour cliquer le
+2. **Action** — `CONFIRMATION_DUREE` secondes pour cliquer le
    bouton final, qui fait le travail réel.
 
 La confirmation vaut pour UN compte, UNE action et UNE fois

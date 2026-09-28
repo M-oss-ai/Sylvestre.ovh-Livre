@@ -559,22 +559,6 @@ function couverture_quota(array $utilisateur): int
 }
 
 /**
- * La durée d'une tranche, en toutes lettres, pour l'annoncer à
- * l'utilisateur : « 30 recherches par 2 minutes ».
- *
- * Une règle qu'on ne sait pas énoncer n'est pas une règle claire — d'où
- * cette fonction plutôt qu'un nombre de secondes brut dans le message.
- */
-function couverture_tranche_lisible(int $secondes): string
-{
-    if ($secondes % 60 !== 0) {
-        return $secondes . ' seconde' . ($secondes > 1 ? 's' : '');
-    }
-    $minutes = intdiv($secondes, 60);
-    return $minutes . ' minute' . ($minutes > 1 ? 's' : '');
-}
-
-/**
  * Compte une recherche pour ce compte et dit s'il peut la faire.
  * Retourne 0 si oui, sinon le nombre de secondes avant la tranche
  * suivante — une information, pas une sanction : rien ne s'aggrave, rien

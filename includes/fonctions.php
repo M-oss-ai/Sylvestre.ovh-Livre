@@ -485,7 +485,7 @@ function limiteur_echec(string $action, int $max_essais, int $duree_base, ?strin
  * Une confirmation RÉCENTE (voir confirmation_recente()), pour ce compte
  * et CETTE action-là, suffit toujours — c'est elle qu'un compte Google
  * obtient en se reconnectant, et elle a le même sens pour tout le monde :
- * l'identité vient d'être prouvée, il reste GOOGLE_CONFIRMATION_DUREE
+ * l'identité vient d'être prouvée, il reste CONFIRMATION_DUREE
  * secondes pour agir. Une fois l'action faite, l'appelant appelle
  * oublier_confirmation() : elle ne sert qu'une fois, et jamais pour une
  * autre action.
@@ -948,7 +948,7 @@ function confirmation_en_cours(int $utilisateur_id, ?array $session = null, ?int
         || !isset(ACTIONS_SENSIBLES[(string) ($c['action'] ?? '')])) {
         return null;
     }
-    $restant = (int) ($c['le'] ?? 0) + GOOGLE_CONFIRMATION_DUREE - ($maintenant ?? time());
+    $restant = (int) ($c['le'] ?? 0) + CONFIRMATION_DUREE - ($maintenant ?? time());
     return $restant > 0 ? ['action' => (string) $c['action'], 'restant' => $restant] : null;
 }
 

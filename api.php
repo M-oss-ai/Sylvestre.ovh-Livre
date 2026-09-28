@@ -183,7 +183,7 @@ switch ($action) {
             reponse_json(['ok' => false, 'erreur' => 'Action inconnue.'], 422);
         }
         exiger_mot_de_passe($mon_id, $pour);
-        reponse_json(['ok' => true, 'restant' => GOOGLE_CONFIRMATION_DUREE]);
+        reponse_json(['ok' => true, 'restant' => CONFIRMATION_DUREE]);
     }
 
     /* ---------------- Ajout / modification ---------------- */
@@ -810,7 +810,7 @@ switch ($action) {
             // « limite » : c'est le quota du COMPTE, pas l'encombrement du site.
             reponse_json(['ok' => false, 'attente' => $attente, 'limite' => 'compte', 'erreur' =>
                 'Limite atteinte : ' . $quota . ' recherches par '
-                . couverture_tranche_lisible(COUVERTURE_FENETRE)
+                . secondes_lisibles(COUVERTURE_FENETRE)
                 . '. Nouvelle recherche dans ' . $attente . ' secondes.'], 429);
         }
 
@@ -849,7 +849,7 @@ switch ($action) {
             'recherches' => $quota > 0 ? [
                 'restantes' => couverture_restantes($mon_id, $quota),
                 'quota'     => $quota,
-                'tranche'   => couverture_tranche_lisible(COUVERTURE_FENETRE),
+                'tranche'   => secondes_lisibles(COUVERTURE_FENETRE),
             ] : null,
             /* Signaler le filtre seulement quand il a pu retirer quelque
                chose ET que l'utilisateur peut y faire quelque chose. Si
