@@ -247,7 +247,8 @@ il part, sur quelle période, et comment il l'affiche),
 `enregistrer_image`, `enregistrer_image_depuis_donnees`, `gif_anime`,
 `corriger_orientation`, `traiter_image`, `ecrire_image`, `url_publique`,
 `envoyer_email`, `envoyer_email_smtp` (validation), `avertir_compte_supprime`
-(câblage), `composer_message`, `message_mime`, `corps_html` et
+(câblage), `acces_compte` et les `avis_*` (un e-mail ne parle que du mot de
+passe qui existe), `composer_message`, `message_mime`, `corps_html` et
 `mots_encodes` (l'e-mail tel qu'il part : texte et HTML, liens vers le
 site seulement, en-têtes encodés), `import_serie` et `import_complement`
 (une ligne de sauvegarde, et ce que l'import rend à une série déjà

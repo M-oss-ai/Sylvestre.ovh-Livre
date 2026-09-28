@@ -76,10 +76,10 @@ test('les quatre avis existent et acceptent leurs arguments', function () {
        légitime quand quelqu un d autre a son mot de passe, et une erreur
        PHP au moment de les composer les ferait disparaître en silence. */
     vider_journal_test();
-    avertir_mot_de_passe_change('titulaire@exemple.test', 'lecteur92');
+    avertir_mot_de_passe_change('titulaire@exemple.test', 'lecteur92', 'email');
     avertir_mot_de_passe_supprime('titulaire@exemple.test', 'lecteur92');
-    avertir_compte_supprime('titulaire@exemple.test', 'lecteur92');
-    avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test');
+    avertir_compte_supprime('titulaire@exemple.test', 'lecteur92', 'google');
+    avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test', 'email');
     vrai(true, 'les quatre se composent sans lever d erreur');
 });
 
@@ -89,7 +89,7 @@ test('l avis de changement d adresse part même sans son lien de blocage', funct
        dont livre.sql n a pas encore été rejoué. L avis doit partir quand
        même, avec l ancien conseil, et l échec doit être consigné. */
     vider_journal_test();
-    avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test');
+    avertir_changement_email_demande(42, 'ancienne@exemple.test', 'lecteur92', 'nouvelle@exemple.test', 'email');
     contient('avertir_changement_email_demande', journal_test(), 'l échec du jeton est consigné');
     contient('SMTP non configuré', journal_test(), 'et l envoi a tout de même été tenté');
 });

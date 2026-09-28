@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (590 tests : 525 PHP en 42 fichiers, 65 JavaScript)
+php tests/lancer.php              # toute la suite (605 tests : 540 PHP en 43 fichiers, 65 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -138,6 +138,14 @@ l'id `<id du champ>-erreur`. En PHP, les erreurs sont rangées par champ
 et rendues par `champ_aria()` / `champ_erreur()` ; l'API nomme le champ
 (`champ`, ou `erreurs` pour plusieurs) et `Lib.erreurChamp()` le pose.
 `Lib.toast()` ne sert plus qu'aux confirmations.
+
+**Un e-mail ne parle que du mot de passe qui existe.** Un compte Google
+peut ne pas en avoir : chaque avis se compose selon `acces_compte()`
+(« email », « google », « google_mdp »), passé par l'appelant depuis
+`$moi['google_sub']` et `sans_mot_de_passe` AVANT l'action. Les textes sont
+dans les fonctions pures `avis_*()` de `mailer.php`, testées. « Mot de
+passe oublié » n'envoie aucun lien à un compte Google sans mot de passe :
+en définir un demande de se reconnecter avec Google.
 
 **Aucune consigne d'avance dans un formulaire.** Pas de « * », pas de
 « obligatoire » : un champ requis laissé vide le dit à l'envoi

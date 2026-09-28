@@ -29,22 +29,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         limiteur_echec('mdp_oublie', MDP_OUBLIE_MAX, MDP_OUBLIE_BLOCAGE);
 
-        $req = $pdo->prepare('SELECT id, identifiant FROM utilisateur WHERE email = ?');
+        $req = $pdo->prepare(
+            "SELECT id, identifiant, google_sub, (mot_de_passe <> '') AS a_mdp FROM utilisateur WHERE email = ?"
+        );
         $req->execute([$email]);
         $u = $req->fetch();
 
         if ($u) {
-            $jeton = generer_jeton_action((int) $u['id'], 'reinit', 3600); // 1 h
-            envoyer_email(
-                $email,
-                'Réinitialisation de votre mot de passe',
-                "Bonjour {$u['identifiant']},\n\n"
-                . "Une réinitialisation de mot de passe a été demandée pour ce compte. "
-                . "Cliquez sur ce lien pour choisir un nouveau mot de passe (valable 1 heure) :\n"
-                . url_publique('reinitialiser-mot-de-passe.php?jeton=' . $jeton) . "\n\n"
-                . "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : "
-                . "rien ne sera changé sur votre compte."
-            );
+            /* Un compte Google sans mot de passe ne reçoit pas de lien : il
+               n'a rien à réinitialiser, et en définir un demande de se
+               reconnecter avec Google (Paramètres › Sécurité). */
+            $acces = acces_compte($u['google_sub'], (int) $u['a_mdp'] === 1);
+            $lien  = $acces === 'google' ? null
+                : url_publique('reinitialiser-mot-de-passe.php?jeton='
+                    . generer_jeton_action((int) $u['id'], 'reinit', 3600)); // 1 h
+            [$sujet, $corps] = avis_mot_de_passe_oublie((string) $u['identifiant'], $acces, $lien);
+            envoyer_email($email, $sujet, $corps);
         }
 
         // Même message que le compte existe ou non : on ne révèle jamais

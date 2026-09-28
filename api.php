@@ -417,7 +417,7 @@ switch ($action) {
             journal_securite('changement_email_demande', [
                 'utilisateur' => $mon_id, 'vers' => $email,
             ]);
-            avertir_changement_email_demande($mon_id, (string) $moi['email'], $identifiant, $email);
+            avertir_changement_email_demande($mon_id, (string) $moi['email'], $identifiant, $email, acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
 
             $jeton = generer_jeton_action($mon_id, 'changement_email', 86400, $email);
             $envoye = envoyer_email(
@@ -500,7 +500,7 @@ switch ($action) {
         connecter($mon_id);
         google_oublier_confirmation();   // elle ne sert qu'une fois
         journal_securite('mot_de_passe_change', ['utilisateur' => $mon_id]);
-        avertir_mot_de_passe_change((string) $moi['email'], (string) $moi['identifiant']);
+        avertir_mot_de_passe_change((string) $moi['email'], (string) $moi['identifiant'], acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
 
         reponse_json([
             'ok'      => true,
@@ -754,7 +754,7 @@ switch ($action) {
         /* Après la suppression, pas avant : on ne prévient que d'un
            effacement qui a réellement eu lieu. $moi est déjà en mémoire,
            la ligne n'a plus besoin d'exister pour qu'on sache où écrire. */
-        avertir_compte_supprime((string) $moi['email'], (string) $moi['identifiant']);
+        avertir_compte_supprime((string) $moi['email'], (string) $moi['identifiant'], acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
 
         /* Une session vidée et renouvelée plutôt que détruite : la page
            de connexion qui suit doit pouvoir dire que c'est fait. Elle

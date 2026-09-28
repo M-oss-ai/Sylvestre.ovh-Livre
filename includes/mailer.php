@@ -427,26 +427,63 @@ function url_publique(string $chemin): string
    de passe : sans eux, une prise de contrôle est silencieuse.
    --------------------------------------------------------------------- */
 
-function avertir_mot_de_passe_change(string $email, string $identifiant): void
+/**
+ * Comment ce compte s'ouvre. Un e-mail ne parle que de ce qui existe : un
+ * compte Google sans mot de passe n'en a aucun à changer, à oublier, ni à
+ * s'être fait voler.
+ *   « email »      : l'adresse et le mot de passe ;
+ *   « google »     : Google seul ;
+ *   « google_mdp » : Google, puis le mot de passe du site.
+ */
+function acces_compte(?string $google_sub, bool $a_mot_de_passe): string
 {
-    envoyer_email(
-        $email,
-        'Votre mot de passe a été modifié',
-        "Bonjour {$identifiant},
+    if ((string) $google_sub === '') {
+        return 'email';
+    }
+    return $a_mot_de_passe ? 'google_mdp' : 'google';
+}
 
-"
-        . "Le mot de passe de votre compte Ma Bibliothèque Manga vient d'être modifié, "
-        . "et tous vos autres appareils ont été déconnectés.
+/**
+ * Le mot de passe vient d'être changé — ou défini, pour un compte Google
+ * qui n'en avait pas. $acces décrit le compte AVANT le changement : c'est
+ * ce qu'a dû franchir celui qui l'a fait.
+ *
+ * @return array{0: string, 1: string} le sujet et le corps
+ */
+function avis_mot_de_passe_change(string $identifiant, string $acces): array
+{
+    $sujet = 'Votre mot de passe a été modifié';
+    $fait  = "Le mot de passe de votre compte Ma Bibliothèque Manga vient d'être modifié, "
+           . "et tous vos autres appareils ont été déconnectés.";
+    if ($acces === 'google') {
+        $sujet = 'Un mot de passe a été ajouté à votre compte';
+        $fait  = "Un mot de passe vient d'être ajouté à votre compte Ma Bibliothèque Manga : il vous "
+               . "sera demandé après Google, à chaque connexion. Tous vos autres appareils ont été "
+               . "déconnectés.";
+    }
 
-"
-        . "Si vous êtes à l'origine de ce changement, vous n'avez rien à faire.
+    $recours = match ($acces) {
+        'google'     => "SINON, quelqu'un a accès à votre compte Google : ce changement exige de s'y "
+                      . "reconnecter. Sécurisez-le d'abord (changez son mot de passe chez Google), puis "
+                      . "choisissez-en un vous-même ici :\n",
+        'google_mdp' => "SINON, quelqu'un a accès à votre compte Google et connaissait votre mot de passe "
+                      . "du site : ce changement exige les deux. Sécurisez d'abord votre compte Google "
+                      . "(changez son mot de passe chez Google), puis demandez un nouveau mot de passe "
+                      . "ici :\n",
+        default      => "SINON, votre compte est compromis : reprenez-en le contrôle immédiatement "
+                      . "en demandant un nouveau mot de passe ici :\n",
+    };
 
-"
-        . "SINON, votre compte est compromis : reprenez-en le contrôle immédiatement "
-        . "en demandant un nouveau mot de passe ici :
-"
-        . url_publique('mot-de-passe-oublie.php')
-    );
+    return [$sujet, "Bonjour {$identifiant},\n\n"
+        . $fait . "\n\n"
+        . "Si vous êtes à l'origine de ce changement, vous n'avez rien à faire.\n\n"
+        . $recours . url_publique('mot-de-passe-oublie.php')];
+}
+
+function avertir_mot_de_passe_change(string $email, string $identifiant, string $acces): void
+{
+    [$sujet, $corps] = avis_mot_de_passe_change($identifiant, $acces);
+    envoyer_email($email, $sujet, $corps);
 }
 
 /**
@@ -481,33 +518,40 @@ function avertir_mot_de_passe_supprime(string $email, string $identifiant): void
  * Envoyé APRÈS la suppression, et seulement si elle a réussi. La file de
  * rattrapage (mail_file) ne référence aucun compte : un envoi différé
  * survit donc à la disparition de celui-ci.
+ *
+ * @return array{0: string, 1: string} le sujet et le corps
  */
-function avertir_compte_supprime(string $email, string $identifiant): void
+function avis_compte_supprime(string $identifiant, string $acces): array
 {
-    envoyer_email(
-        $email,
-        'Votre compte a été supprimé',
-        "Bonjour {$identifiant},
+    $recours = match ($acces) {
+        'google'     => "SINON, quelqu'un a accès à votre compte Google — la suppression exige de s'y "
+                      . "reconnecter. Le compte étant effacé, il n'y a plus rien à sécuriser ici, mais "
+                      . "sécurisez votre compte Google sans attendre (changez son mot de passe chez Google).",
+        'google_mdp' => "SINON, quelqu'un a accès à votre compte Google et connaissait votre mot de passe "
+                      . "du site — la suppression exige les deux. Le compte étant effacé, il n'y a plus "
+                      . "rien à sécuriser ici, mais sécurisez votre compte Google sans attendre (changez "
+                      . "son mot de passe chez Google), et si vous utilisiez ce mot de passe ailleurs, "
+                      . "changez-le sur ces autres sites.",
+        default      => "SINON, quelqu'un connaissait votre mot de passe — la suppression l'exige. Le "
+                      . "compte étant effacé, il n'y a plus rien à sécuriser ici, mais si vous utilisiez "
+                      . "ce mot de passe ailleurs, changez-le sur ces autres sites sans attendre.",
+    };
 
-"
+    return ['Votre compte a été supprimé', "Bonjour {$identifiant},\n\n"
         . "Le compte Ma Bibliothèque Manga associé à cette adresse vient d'être supprimé, "
-        . "ainsi que l'intégralité de la bibliothèque qui lui était rattachée.
-
-"
+        . "ainsi que l'intégralité de la bibliothèque qui lui était rattachée.\n\n"
         . "Cette suppression est définitive : rien n'a été conservé, et le contenu ne peut "
-        . "pas être restauré.
-
-"
+        . "pas être restauré.\n\n"
         . "Si vous êtes à l'origine de cette suppression, vous n'avez rien à faire. Vous "
-        . "pouvez créer un nouveau compte à tout moment :
-"
-        . url_publique('inscription.php') . "
+        . "pouvez créer un nouveau compte à tout moment :\n"
+        . url_publique('inscription.php') . "\n\n"
+        . $recours];
+}
 
-"
-        . "SINON, quelqu'un connaissait votre mot de passe — la suppression l'exige. Le "
-        . "compte étant effacé, il n'y a plus rien à sécuriser ici, mais si vous utilisiez "
-        . "ce mot de passe ailleurs, changez-le sur ces autres sites sans attendre."
-    );
+function avertir_compte_supprime(string $email, string $identifiant, string $acces): void
+{
+    [$sujet, $corps] = avis_compte_supprime($identifiant, $acces);
+    envoyer_email($email, $sujet, $corps);
 }
 
 /**
@@ -517,7 +561,9 @@ function avertir_compte_supprime(string $email, string $identifiant): void
  *
  * Ce lien sert celui qui a encore sa boîte, mais plus l'exclusivité de
  * son mot de passe. Il ne donne rien de plus à qui aurait volé la boîte :
- * « Mot de passe oublié » lui ouvrait déjà le compte.
+ * « Mot de passe oublié » lui ouvrait déjà le compte. Pour un compte Google
+ * sans mot de passe, il en fait choisir un : demandé après Google, c'est
+ * lui qui tiendra l'intrus à l'écart.
  *
  * Il reste valable 7 jours, MÊME une fois le changement confirmé :
  * l'attaquant tient la nouvelle boîte et confirme en quelques secondes,
@@ -525,39 +571,131 @@ function avertir_compte_supprime(string $email, string $identifiant): void
  * donc au compte l'adresse que voici. Aucune autre demande ne le remplace
  * (voir generer_jeton_action()) : l'attaquant pourrait les faire lui-même.
  */
-function avertir_changement_email_demande(int $utilisateur_id, string $ancien_email, string $identifiant, string $nouveau_email): void
+function avertir_changement_email_demande(int $utilisateur_id, string $ancien_email, string $identifiant, string $nouveau_email, string $acces): void
+{
+    /* Si le jeton ne peut pas être créé (livre.sql pas encore rejoué),
+       l'avis part quand même, avec l'ancien conseil : c'est le seul signal
+       qu'a le titulaire, il ne doit pas dépendre d'une migration. */
+    try {
+        $lien = url_publique('reinitialiser-mot-de-passe.php?jeton='
+            . generer_jeton_action($utilisateur_id, 'blocage_email', 7 * 86400, $ancien_email, false));
+    } catch (Throwable $e) {
+        error_log('avertir_changement_email_demande: ' . $e->getMessage());
+        $lien = null;
+    }
+
+    [$sujet, $corps] = avis_changement_email($identifiant, $nouveau_email, $acces, $lien);
+    envoyer_email($ancien_email, $sujet, $corps);
+}
+
+/**
+ * L'avis de changement d'adresse. $lien est celui du blocage, ou null s'il
+ * n'a pas pu être créé.
+ *
+ * @return array{0: string, 1: string} le sujet et le corps
+ */
+function avis_changement_email(string $identifiant, string $nouveau_email, string $acces, ?string $lien): array
 {
     // L'adresse visée n'est que partiellement affichée : cet e-mail peut
     // finir sous d'autres yeux que ceux du titulaire.
     $masque = preg_replace('/^(.).*(.@)/u', '$1***$2', $nouveau_email) ?? '***';
 
-    /* Si le jeton ne peut pas être créé (livre.sql pas encore rejoué),
-       l'avis part quand même, avec l'ancien conseil : c'est le seul signal
-       qu'a le titulaire, il ne doit pas dépendre d'une migration. */
-    try {
-        $jeton   = generer_jeton_action($utilisateur_id, 'blocage_email', 7 * 86400, $ancien_email, false);
-        $recours = "SINON, quelqu'un a votre mot de passe. Bloquez le changement d'adresse "
-                 . "et changez de mot de passe ici (lien valable 7 jours) :\n"
-                 . url_publique('reinitialiser-mot-de-passe.php?jeton=' . $jeton) . "\n\n"
-                 . "Ce lien fonctionne même si le changement a déjà été confirmé : il rend alors "
-                 . "cette adresse-ci au compte. Tous les appareils connectés seront déconnectés.";
-    } catch (Throwable $e) {
-        error_log('avertir_changement_email_demande: ' . $e->getMessage());
-        $recours = "SINON, quelqu'un a votre mot de passe. Changez-le tout de suite :\n"
-                 . url_publique('mot-de-passe-oublie.php');
+    $qui = match ($acces) {
+        'google'     => "SINON, quelqu'un a accès à votre compte Google : ce changement exige de s'y "
+                      . "reconnecter. Sécurisez-le d'abord (changez son mot de passe chez Google), puis ",
+        'google_mdp' => "SINON, quelqu'un a accès à votre compte Google et connaît votre mot de passe du "
+                      . "site : ce changement exige les deux. Sécurisez d'abord votre compte Google "
+                      . "(changez son mot de passe chez Google), puis ",
+        default      => "SINON, quelqu'un a votre mot de passe. ",
+    };
+
+    if ($lien !== null) {
+        $recours = $qui . match ($acces) {
+            'google'     => "bloquez le changement d'adresse ici (lien valable 7 jours). Vous y "
+                          . "choisirez un mot de passe, qui vous sera demandé après Google à chaque "
+                          . "connexion :\n",
+            'google_mdp' => "bloquez le changement d'adresse et changez de mot de passe ici (lien "
+                          . "valable 7 jours) :\n",
+            default      => "Bloquez le changement d'adresse et changez de mot de passe ici (lien "
+                          . "valable 7 jours) :\n",
+        } . $lien . "\n\n"
+          . "Ce lien fonctionne même si le changement a déjà été confirmé : il rend alors "
+          . "cette adresse-ci au compte. Tous les appareils connectés seront déconnectés.";
+    } else {
+        $recours = $qui . match ($acces) {
+            'google'     => "reconnectez-vous au site avec Google et remettez cette adresse-ci dans "
+                          . "les Paramètres :\n" . url_publique('parametres.php#profil'),
+            'google_mdp' => "changez de mot de passe ici :\n" . url_publique('mot-de-passe-oublie.php'),
+            default      => "Changez-le tout de suite :\n" . url_publique('mot-de-passe-oublie.php'),
+        };
     }
 
-    envoyer_email(
-        $ancien_email,
-        "Demande de changement d'adresse e-mail",
-        "Bonjour {$identifiant},\n\n"
+    return ["Demande de changement d'adresse e-mail", "Bonjour {$identifiant},\n\n"
         . "Quelqu'un vient de demander à remplacer l'adresse e-mail de votre compte "
         . "par {$masque}.\n\n"
         . "Cette adresse-ci reste active tant que la nouvelle n'a pas été confirmée : "
         . "si vous êtes à l'origine de la demande, ouvrez simplement le lien envoyé à "
         . "la nouvelle adresse.\n\n"
-        . $recours
-    );
+        . $recours];
+}
+
+/**
+ * « Mot de passe oublié ». Un compte Google sans mot de passe n'a rien à
+ * réinitialiser : il reçoit le chemin de Google, pas de lien ($lien est
+ * alors ignoré). En créer un par ce biais contournerait la reconnexion
+ * que Google exige pour définir un mot de passe.
+ *
+ * @return array{0: string, 1: string} le sujet et le corps
+ */
+function avis_mot_de_passe_oublie(string $identifiant, string $acces, ?string $lien): array
+{
+    if ($acces === 'google' || $lien === null) {
+        return ['Connexion à votre compte', "Bonjour {$identifiant},\n\n"
+            . "Une réinitialisation de mot de passe a été demandée pour ce compte, mais il n'en a "
+            . "pas : vous vous connectez avec Google.\n"
+            . url_publique('connexion.php') . "\n\n"
+            . "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : "
+            . "rien n'a changé sur votre compte."];
+    }
+
+    return ['Réinitialisation de votre mot de passe', "Bonjour {$identifiant},\n\n"
+        . "Une réinitialisation de mot de passe a été demandée pour ce compte. "
+        . "Cliquez sur ce lien pour choisir un nouveau mot de passe (valable 1 heure) :\n"
+        . $lien . "\n\n"
+        . ($acces === 'google_mdp'
+            ? "Google restera demandé avant lui, à chaque connexion.\n\n"
+            : '')
+        . "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : "
+        . "rien ne sera changé sur votre compte."];
+}
+
+/**
+ * Quelqu'un a voulu s'inscrire avec l'adresse d'un compte existant : son
+ * titulaire l'apprend, avec le chemin de SA connexion.
+ *
+ * @return array{0: string, 1: string} le sujet et le corps
+ */
+function avis_tentative_inscription(string $identifiant, string $acces): array
+{
+    $chemin = match ($acces) {
+        'google'     => "Si c'était vous : connectez-vous avec Google, comme d'habitude.\n"
+                      . url_publique('connexion.php') . "\n\n",
+        'google_mdp' => "Si c'était vous : connectez-vous avec Google, puis votre mot de passe, "
+                      . "comme d'habitude.\n"
+                      . url_publique('connexion.php') . "\n"
+                      . "Mot de passe oublié ?\n"
+                      . url_publique('mot-de-passe-oublie.php') . "\n\n",
+        default      => "Si c'était vous : connectez-vous simplement avec votre compte existant.\n"
+                      . url_publique('connexion.php') . "\n"
+                      . "Mot de passe oublié ?\n"
+                      . url_publique('mot-de-passe-oublie.php') . "\n\n",
+    };
+
+    return ['Tentative de création de compte avec votre adresse', "Bonjour {$identifiant},\n\n"
+        . "Quelqu'un vient d'essayer de créer un compte Ma Bibliothèque Manga avec votre "
+        . "adresse e-mail. Comme un compte existe déjà, rien n'a été créé et rien n'a changé.\n\n"
+        . $chemin
+        . "Si ce n'était pas vous, vous n'avez rien à faire : votre compte n'a pas été touché."];
 }
 
 /* ---------------------------------------------------------------------

@@ -109,9 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
            le lien de blocage heurterait alors la contrainte d'unicité, et
            l'adresse ne pourrait plus être rendue. */
         $req = $pdo->prepare(
-            "SELECT id, identifiant FROM utilisateur WHERE email = ?
+            "SELECT id, identifiant, google_sub, (mot_de_passe <> '') AS a_mdp FROM utilisateur WHERE email = ?
              UNION
-             SELECT u.id, u.identifiant
+             SELECT u.id, u.identifiant, u.google_sub, (u.mot_de_passe <> '') AS a_mdp
                FROM jeton_action j
                JOIN utilisateur u ON u.id = j.utilisateur_id
               WHERE j.type = 'blocage_email' AND j.donnee = ? AND j.expire > NOW()
@@ -124,18 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // On ne crée rien, et on prévient le propriétaire légitime :
             // c'est lui, et lui seul, qui apprend qu'on a tenté quelque
             // chose avec son adresse.
-            envoyer_email(
-                $valeurs['email'],
-                'Tentative de création de compte avec votre adresse',
-                "Bonjour {$existant['identifiant']},\n\n"
-                . "Quelqu'un vient d'essayer de créer un compte Ma Bibliothèque Manga avec votre "
-                . "adresse e-mail. Comme un compte existe déjà, rien n'a été créé et rien n'a changé.\n\n"
-                . "Si c'était vous : connectez-vous simplement avec votre compte existant.\n"
-                . url_publique('connexion.php') . "\n"
-                . "Mot de passe oublié ?\n"
-                . url_publique('mot-de-passe-oublie.php') . "\n\n"
-                . "Si ce n'était pas vous, vous n'avez rien à faire : votre compte n'a pas été touché."
+            [$sujet, $corps] = avis_tentative_inscription(
+                (string) $existant['identifiant'],
+                acces_compte($existant['google_sub'], (int) $existant['a_mdp'] === 1)
             );
+            envoyer_email($valeurs['email'], $sujet, $corps);
         } else {
             try {
                 /* Le quota de comptes est appliqué par l'insertion, pour la

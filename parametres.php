@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             connecter((int) $moi['id']);
             google_oublier_confirmation();   // elle ne sert qu'une fois
             journal_securite('mot_de_passe_change', ['utilisateur' => (int) $moi['id']]);
-            avertir_mot_de_passe_change((string) $moi['email'], (string) $moi['identifiant']);
+            avertir_mot_de_passe_change((string) $moi['email'], (string) $moi['identifiant'], acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
             // Redirection après POST : le rechargement de la page ne
             // redemande pas l'envoi du formulaire, et le gestionnaire de
             // mots de passe voit une navigation réussie — c'est ce qui
@@ -151,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 journal_securite('changement_email_demande', [
                     'utilisateur' => (int) $moi['id'], 'vers' => $email,
                 ]);
-                avertir_changement_email_demande((int) $moi['id'], (string) $moi['email'], $identifiant, $email);
+                avertir_changement_email_demande((int) $moi['id'], (string) $moi['email'], $identifiant, $email, acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
                 $jeton = generer_jeton_action((int) $moi['id'], 'changement_email', 86400, $email);
                 envoyer_email(
                     $email,
