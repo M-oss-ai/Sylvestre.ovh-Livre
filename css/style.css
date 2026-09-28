@@ -1567,6 +1567,14 @@ select,
      la. Deux zones de defilement imbriquees sont par ailleurs penibles
      au pouce — on n en garde qu une, celle de la modale. */
   .cover-results { max-height: none; }
+
+  /* « Recherche auto » a la portee du pouce sans defiler : la zone de
+     depot vide n a pas besoin des 150 px prevus pour un aperçu d image
+     (cover-preview grandit d elle-meme au-dela si besoin), et les champs
+     du dessus se resserrent un peu. Mesure sur un ecran de 375x667 :
+     sans ceci, le bouton restait sous la ligne de flottaison. */
+  #series-form .field { margin-bottom: 10px; }
+  .dropzone { min-height: 90px; }
 }
 
 /* En dessous de ~560px : cartes en liste horizontale (image à gauche),
