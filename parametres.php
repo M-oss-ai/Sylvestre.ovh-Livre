@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([password_hash($nouveau, PASSWORD_DEFAULT), (int) $moi['id']]);
             invalider_sessions((int) $moi['id']);
             connecter((int) $moi['id']);
-            google_oublier_confirmation();   // elle ne sert qu'une fois
+            oublier_confirmation();   // elle ne sert qu'une fois
             journal_securite('mot_de_passe_change', ['utilisateur' => (int) $moi['id']]);
             avertir_mot_de_passe_change((string) $moi['email'], (string) $moi['identifiant'], acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
             // Redirection après POST : le rechargement de la page ne
@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare('UPDATE utilisateur SET identifiant = ?, photo = ? WHERE id = ?')
                 ->execute([$identifiant, $photo_maj, (int) $moi['id']]);
             if ($email_change || $identifiant_change) {
-                google_oublier_confirmation();   // elle ne sert qu'une fois
+                oublier_confirmation();   // elle ne sert qu'une fois
             }
 
             if ($ancienne !== '' && $ancienne !== $photo_maj) {
@@ -185,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $pdo->prepare("UPDATE utilisateur SET mot_de_passe = '' WHERE id = ? AND google_sub IS NOT NULL")
                 ->execute([(int) $moi['id']]);
-            google_oublier_confirmation();   // elle ne sert qu'une fois
+            oublier_confirmation();   // elle ne sert qu'une fois
             journal_securite('mot_de_passe_supprime', ['utilisateur' => (int) $moi['id']]);
             avertir_mot_de_passe_supprime((string) $moi['email'], (string) $moi['identifiant']);
             flash('Mot de passe supprimé ✅ — vous vous connectez désormais avec Google seul.');
@@ -201,8 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     /* Renoncer à l'action confirmée : le délai s'arrête là, et la refaire
        demandera de se reconnecter. */
     if ($formulaire === 'annuler_confirmation') {
-        $en_cours = google_confirmation_en_cours((int) $moi['id']);
-        google_oublier_confirmation();
+        $en_cours = confirmation_en_cours((int) $moi['id']);
+        oublier_confirmation();
         flash('Action annulée : pour la refaire, il faudra vous reconnecter avec Google.');
         header('Location: ' . google_page_action((string) ($en_cours['action'] ?? 'compte.motdepasse')));
         exit;
@@ -224,13 +224,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Laissé par la redirection qui suit un enregistrement : affiché une fois.
 $info = flash_prendre($genre_info);
 
-/* Un compte e-mail retape son mot de passe pour chaque action à risque.
-   Un compte Google se reconnecte (Google, puis son mot de passe s'il en a
-   un) pour UNE action, qu'il valide ensuite ici dans le délai : voir
-   google_confirmation_en_cours(). */
+/* Chaque action à risque (Profil, Sécurité, Vider, Supprimer) demande de
+   prouver son identité : un compte e-mail retape son mot de passe, un
+   compte Google se reconnecte (Google, puis son mot de passe s'il en a
+   un) — dans les deux cas via la fenêtre de confirmation (voir
+   js/settings.js), pas dans le formulaire lui-même. Une fois prouvée,
+   l'identité vaut pour CETTE action, ce compte, et le délai en cours :
+   voir confirmation_en_cours(). Seule « Supprimer le mot de passe »
+   reste affichée à part plus bas : elle n'existe que pour un compte
+   Google, il n'y a rien à unifier. */
 $par_google = (string) $moi['google_sub'] !== '';
 $sans_mdp   = (int) $moi['sans_mot_de_passe'] === 1;
-$confirme   = $par_google ? google_confirmation_en_cours((int) $moi['id']) : null;
+$confirme   = confirmation_en_cours((int) $moi['id']);
 $confirme_pour = static fn (string $action): bool => ($confirme['action'] ?? '') === $action;
 
 /**
@@ -243,7 +248,7 @@ function bloc_confirme(?array $confirme, string $pour): string
 {
     $n = (int) ($confirme['restant'] ?? 0);
     return '<div class="bloc-confirme" data-fin-confirmation>'
-        . '<p class="hint confirmation-google">✅ Identité confirmée : il vous reste '
+        . '<p class="hint confirmation-active">✅ Identité confirmée : il vous reste '
         . '<b class="delai" data-restant="' . $n . '">' . $n . ' secondes</b> pour ' . e($pour) . '.</p>'
         . '<button type="submit" form="annuler-confirmation-form" class="btn btn-ghost small">Annuler</button>'
         . '</div>';
@@ -254,7 +259,7 @@ function bloc_reconnexion(string $action, string $libelle, bool $avec_mdp): stri
 {
     return '<p class="hint">Il faut d\'abord vous reconnecter avec Google'
         . ($avec_mdp ? ', puis avec votre mot de passe' : '') . '. Vous aurez ensuite '
-        . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . ' minutes pour ' . e(GOOGLE_ACTIONS[$action]) . '.</p>'
+        . intdiv(GOOGLE_CONFIRMATION_DUREE, 60) . ' minutes pour ' . e(ACTIONS_SENSIBLES[$action]) . '.</p>'
         . bouton_google($libelle, 'parametres', $action);
 }
 
@@ -359,7 +364,7 @@ $nb_series = (int) $req->fetchColumn();
         <input id="a-username" name="identifiant" type="text" autocomplete="username" maxlength="30" required
                data-compte="<?= e($moi['identifiant']) ?>" value="<?= e($v['identifiant']) ?>"<?= champ_aria($erreurs_profil, 'identifiant', 'a-username', 'a-username-aide') ?>>
         <?= champ_erreur($erreurs_profil, 'identifiant', 'a-username') ?>
-        <p class="hint" id="a-username-aide">Il sert à vous connecter : le changer demande <?= $par_google ? 'de vous reconnecter avec Google' : 'votre mot de passe' ?>.</p>
+        <p class="hint" id="a-username-aide">Il sert à vous connecter : le changer demande de confirmer votre identité.</p>
       </div>
 
       <div class="field">
@@ -368,7 +373,7 @@ $nb_series = (int) $req->fetchColumn();
                data-compte="<?= e($moi['email']) ?>" value="<?= e($v['email']) ?>"<?= champ_aria($erreurs_profil, 'email', 'a-email', 'a-email-aide') ?>>
         <?= champ_erreur($erreurs_profil, 'email', 'a-email') ?>
         <p class="hint" id="a-email-aide">
-          Changer d'adresse demande <?= $par_google ? 'de vous reconnecter avec Google' : 'votre mot de passe' ?>, et la nouvelle adresse doit être
+          Changer d'adresse demande de confirmer votre identité, et la nouvelle adresse doit être
           confirmée par e-mail. L'adresse actuelle reste active jusque-là — une faute de
           frappe ne peut donc pas vous enfermer dehors.
         </p>
@@ -385,8 +390,13 @@ $nb_series = (int) $req->fetchColumn();
         </div>
       </div>
 
-      <!-- Affiché par le JS quand l'identifiant ou l'adresse change ;
-           toujours présent dans le HTML pour que la page fonctionne sans JS. -->
+      <!-- Sans JavaScript, c'est ICI que se prouve l'identité (Google se
+           reconnecte, un compte e-mail retape son mot de passe) : ce bloc
+           reste donc TOUJOURS dans le HTML. Avec JavaScript, js/settings.js
+           le cache dès le chargement : la preuve d'identité passe alors
+           par la fenêtre de confirmation, ouverte au clic sur
+           « Enregistrer », et pareille pour les deux — c'est elle qui rend
+           la page identique d'un compte à l'autre. -->
       <div class="field" id="email-password-field">
         <?php if ($par_google): ?>
           <!-- Compte Google : rien à retaper ici, il se reconnecte pour cette
@@ -394,7 +404,7 @@ $nb_series = (int) $req->fetchColumn();
                l'affichage des erreurs n'aient qu'un seul cas à connaître. -->
           <input id="a-email-password" name="mot_de_passe" type="hidden" value="">
           <?php if ($confirme_pour('compte.profil')): ?>
-            <?= bloc_confirme($confirme, GOOGLE_ACTIONS['compte.profil']) ?>
+            <?= bloc_confirme($confirme, ACTIONS_SENSIBLES['compte.profil']) ?>
           <?php else: ?>
             <?= bloc_reconnexion('compte.profil', 'Se reconnecter avec Google', !$sans_mdp) ?>
           <?php endif; ?>
@@ -453,19 +463,30 @@ $nb_series = (int) $req->fetchColumn();
       <p class="hint intro-securite"><?= $sans_mdp
           ? 'Vous vous connectez avec Google. Vous pouvez ajouter un mot de passe : il vous sera alors demandé après Google, à chaque connexion.'
           : 'Vous vous connectez avec Google, puis avec votre mot de passe.' ?></p>
-      <?php if ($confirme_pour('compte.motdepasse')): ?>
-        <?= bloc_confirme($confirme, GOOGLE_ACTIONS['compte.motdepasse']) ?>
-      <?php else: ?>
-        <?php if (isset($erreurs_mdp['actuel'])): ?>
-          <!-- La confirmation a expiré (ou a servi) pendant la saisie : le
-               formulaire n'est plus affiché, l'erreur se dit donc ici. -->
-          <p class="erreur-form" role="alert"><?= e($erreurs_mdp['actuel']) ?></p>
+      <!-- Sans JavaScript, la preuve d'identité se fait ICI, avant même
+           d'atteindre le formulaire plus bas (le lien y ramène ensuite).
+           Avec JavaScript, js/settings.js cache ce bloc dès le chargement :
+           la fenêtre de confirmation, ouverte au clic sur le bouton du
+           formulaire, fait le même travail — et pareillement pour un
+           compte e-mail (mot de passe, dans la même fenêtre), ce qui rend
+           la carte identique d'un compte à l'autre. -->
+      <div id="securite-google-banner">
+        <?php if ($confirme_pour('compte.motdepasse')): ?>
+          <?= bloc_confirme($confirme, ACTIONS_SENSIBLES['compte.motdepasse']) ?>
+        <?php else: ?>
+          <?php if (isset($erreurs_mdp['actuel'])): ?>
+            <p class="erreur-form" role="alert"><?= e($erreurs_mdp['actuel']) ?></p>
+          <?php endif; ?>
+          <?= bloc_reconnexion('compte.motdepasse', $sans_mdp ? 'Définir un mot de passe' : 'Changer le mot de passe', !$sans_mdp) ?>
         <?php endif; ?>
-        <?= bloc_reconnexion('compte.motdepasse', $sans_mdp ? 'Définir un mot de passe' : 'Changer le mot de passe', !$sans_mdp) ?>
-      <?php endif; ?>
+      </div>
     <?php endif; ?>
 
-    <?php if (!$par_google || $confirme_pour('compte.motdepasse')): ?>
+    <!-- Toujours présent, y compris pour un compte Google pas encore
+         confirmé (sans JavaScript, une tentative sans confirmation revient
+         avec l'erreur ci-dessus) : c'est ce qui permet à js/settings.js de
+         montrer la même carte aux deux, et de tout faire passer par la
+         fenêtre de confirmation. -->
     <form id="mdp-form" method="post" action="parametres.php#securite" novalidate>
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
       <input type="hidden" name="formulaire" value="motdepasse">
@@ -479,12 +500,8 @@ $nb_series = (int) $req->fetchColumn();
       <input class="visually-hidden" type="text" name="identifiant_lecture" autocomplete="username"
              value="<?= e($moi['identifiant']) ?>" readonly tabindex="-1" aria-hidden="true">
 
-      <?php if ($par_google): ?>
-        <?php if (isset($erreurs_mdp['actuel'])): ?>
-          <p class="erreur-form" role="alert"><?= e($erreurs_mdp['actuel']) ?></p>
-        <?php endif; ?>
-      <?php else: ?>
-      <div class="field">
+      <?php if (!$par_google): ?>
+      <div class="field" id="mdp-actuel-field">
         <label for="a-current">Mot de passe actuel</label>
         <div class="password-wrap">
           <input id="a-current" name="mot_de_passe_actuel" type="password" autocomplete="current-password" required<?= champ_aria($erreurs_mdp, 'actuel', 'a-current') ?>>
@@ -516,13 +533,12 @@ $nb_series = (int) $req->fetchColumn();
         <?= champ_erreur($erreurs_mdp, 'confirmation', 'a-new2') ?>
       </div>
 
-      <button type="submit" class="btn btn-primary full"><?= $sans_mdp ? 'Définir le mot de passe' : 'Changer le mot de passe' ?></button>
+      <button type="submit" id="mdp-submit" class="btn btn-primary full"><?= $sans_mdp ? 'Définir le mot de passe' : 'Changer le mot de passe' ?></button>
       <p class="hint">
         Votre mot de passe est stocké haché (bcrypt) : même en ouvrant la base, il est illisible.
         Le changer déconnecte tous vos autres appareils.
       </p>
     </form>
-    <?php endif; ?>
 
     <?php if ($par_google && !$sans_mdp): ?>
       <!-- Revenir à Google seul : se reconnecter pour CETTE action, puis
@@ -534,7 +550,7 @@ $nb_series = (int) $req->fetchColumn();
           <p class="erreur-form" role="alert"><?= e($erreurs_suppr['mot_de_passe']) ?></p>
         <?php endif; ?>
         <?php if ($confirme_pour('compte.supprimer_mdp')): ?>
-          <?= bloc_confirme($confirme, GOOGLE_ACTIONS['compte.supprimer_mdp']) ?>
+          <?= bloc_confirme($confirme, ACTIONS_SENSIBLES['compte.supprimer_mdp']) ?>
           <form method="post" action="parametres.php#securite">
             <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
             <input type="hidden" name="formulaire" value="supprimer_mdp">
@@ -679,50 +695,61 @@ $nb_series = (int) $req->fetchColumn();
 
 </main>
 
-<!-- Confirmation des actions destructrices : le mot de passe y est
-     redemandé, pour qu'une session volée ne suffise pas à tout effacer. -->
+<!-- Confirmation des actions sensibles (Profil, Sécurité, Vider, Supprimer) :
+     une même fenêtre en deux phases, pareille pour un compte e-mail et un
+     compte Google — seule la façon de prouver son identité diffère.
+       Phase 1, #confirm-phase-identite : un compte e-mail retape son mot
+     de passe ICI, sans que rien ne soit encore fait (compte.authentifier
+     note la confirmation) ; un compte Google se reconnecte (Google, puis
+     son mot de passe s'il en a un) et revient sur cette page, où la
+     fenêtre se rouvre d'elle-même, déjà à la phase 2.
+       Phase 2, #confirm-phase-action : identité confirmée, GOOGLE_CONFIRMATION_DUREE
+     secondes pour valider CETTE action précise — une autre en demanderait
+     une nouvelle. js/settings.js bascule de l'une à l'autre. -->
 <div id="confirm-overlay" class="overlay hidden">
   <div class="modal small" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
     <h2 id="confirm-title">Confirmer ?</h2>
-    <!-- En alerte, pas en simple indication : c'est ce que la personne doit
-         lire avant tout le reste. -->
-    <p id="confirm-text" class="alert alert-error" role="alert">Cette action est définitive.</p>
-    <!-- Dernière occasion de sauvegarder, dans la fenêtre même qui efface :
-         un « pensez à exporter » ne servait à rien sans le bouton à côté.
-         Le fichier se télécharge sans quitter la page. -->
-    <form id="confirm-export" method="post" action="api.php" class="confirm-export hidden">
-      <input type="hidden" name="action" value="donnees.exporter">
-      <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-      <button type="submit" class="btn btn-ghost full">⬇️ Exporter d'abord mes <?= $nb_series ?> série(s)</button>
-    </form>
-    <?php if ($par_google): ?>
-      <!-- Compte Google : rien à taper ici. Il se reconnecte (Google, puis
-           son mot de passe s'il en a un) pour CETTE action, revient ici, et
-           a GOOGLE_CONFIRMATION_DUREE secondes pour cliquer « Confirmer ».
-           js/settings.js montre l'un ou l'autre bloc selon l'action, et
-           règle le lien du bouton Google sur elle. Le champ reste, vide et
-           caché, pour que le script n'ait qu'un seul cas à connaître. -->
-      <input id="confirm-password" type="hidden" value="">
-      <div id="confirm-google-aller">
-        <p class="hint">Pour continuer, reconnectez-vous d'abord avec Google<?= $sans_mdp ? '' : ', puis avec votre mot de passe' ?>.
-          Vous aurez ensuite <?= intdiv(GOOGLE_CONFIRMATION_DUREE, 60) ?> minutes pour confirmer.</p>
+
+    <div id="confirm-phase-identite">
+      <p class="hint">Confirmez d'abord votre identité<?= $par_google && !$sans_mdp ? ', puis votre mot de passe' : '' ?>.
+        Vous aurez ensuite <?= intdiv(GOOGLE_CONFIRMATION_DUREE, 60) ?> minutes pour confirmer.</p>
+      <?php if ($par_google): ?>
         <?= bouton_google('Se reconnecter avec Google', 'parametres') ?>
-      </div>
-      <p id="confirm-google-ok" class="hint confirmation-google hidden">✅ Identité confirmée : il vous reste
-        <b id="confirm-delai"></b> pour confirmer.</p>
-    <?php else: ?>
-    <div class="field">
-      <label for="confirm-password">Saisissez votre mot de passe pour confirmer</label>
-      <div class="password-wrap">
-        <input id="confirm-password" type="password" autocomplete="current-password">
-        <button type="button" class="icon-btn toggle-password" data-cible="confirm-password" aria-label="Afficher le mot de passe">👁️</button>
-      </div>
+      <?php else: ?>
+        <div class="field">
+          <label for="confirm-password">Mot de passe actuel</label>
+          <div class="password-wrap">
+            <input id="confirm-password" type="password" autocomplete="current-password">
+            <button type="button" class="icon-btn toggle-password" data-cible="confirm-password" aria-label="Afficher le mot de passe">👁️</button>
+          </div>
+        </div>
+      <?php endif; ?>
     </div>
-    <?php endif; ?>
+
+    <div id="confirm-phase-action" class="hidden">
+      <!-- En alerte, pas en simple indication : c'est ce que la personne doit
+           lire avant tout le reste. La classe (alerte ou simple info) est
+           posée par js/settings.js selon l'action. -->
+      <p id="confirm-text" class="alert" role="alert">Cette action est définitive.</p>
+      <p class="hint confirmation-active">✅ Identité confirmée : il vous reste
+        <b id="confirm-delai" class="delai"></b> pour confirmer.</p>
+      <!-- Dernière occasion de sauvegarder, dans la fenêtre même qui efface :
+           un « pensez à exporter » ne servait à rien sans le bouton à côté.
+           Le fichier se télécharge sans quitter la page. -->
+      <form id="confirm-export" method="post" action="api.php" class="confirm-export hidden">
+        <input type="hidden" name="action" value="donnees.exporter">
+        <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
+        <button type="submit" class="btn btn-ghost full">⬇️ Exporter d'abord mes <?= $nb_series ?> série(s)</button>
+      </form>
+    </div>
+
     <div class="modal-actions">
       <div class="grow"></div>
       <button type="button" id="confirm-cancel" class="btn btn-ghost">Annuler</button>
-      <button type="button" id="confirm-ok" class="btn btn-danger"<?= $par_google ? ' disabled' : '' ?>>Confirmer</button>
+      <?php if (!$par_google): ?>
+        <button type="button" id="confirm-identite-ok" class="btn btn-primary">Confirmer mon identité</button>
+      <?php endif; ?>
+      <button type="button" id="confirm-ok" class="btn btn-danger hidden" disabled>Confirmer</button>
     </div>
   </div>
 </div>

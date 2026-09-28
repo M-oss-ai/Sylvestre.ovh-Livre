@@ -176,7 +176,7 @@ importantes :
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
-| `GOOGLE_CONFIRMATION_DUREE` | Temps laissé, après s'être reconnecté avec Google, pour valider l'action à risque choisie (une seule) |
+| `GOOGLE_CONFIRMATION_DUREE` | Temps laissé, après avoir prouvé son identité (Google, ou mot de passe pour un compte e-mail), pour valider l'action à risque choisie (une seule) |
 
 ---
 
@@ -208,12 +208,14 @@ confirmation à attendre. Elle se change ensuite dans les Paramètres, avec
 le lien de confirmation habituel.
 
 Pour **chaque action à risque** (supprimer le compte, vider, changer
-d'adresse ou d'identifiant, définir, changer ou supprimer son mot de
-passe), un compte Google **se reconnecte** : Google, puis son mot de passe
-s'il en a un. Il a ensuite `GOOGLE_CONFIRMATION_DUREE` secondes pour
-cliquer « Confirmer », pour cette action-là et une seule fois : une autre
-action demande de se reconnecter. Se connecter au site ne dispense de
-rien.
+d'adresse ou d'identifiant, définir ou changer son mot de passe), les
+Paramètres demandent de prouver son identité dans une même fenêtre,
+qu'on se connecte avec une adresse e-mail ou avec Google : un compte
+e-mail y retape son mot de passe, un compte Google s'y reconnecte
+(Google, puis son mot de passe s'il en a un). Il reste ensuite
+`GOOGLE_CONFIRMATION_DUREE` secondes pour cliquer « Confirmer », pour
+cette action-là et une seule fois : une autre action demande de prouver
+son identité à nouveau. Se connecter au site ne dispense de rien.
 
 Son mot de passe est **facultatif**, et c'est une seconde clé : s'il en a
 un (choisi à la création ou dans Paramètres › Sécurité), il est demandé

@@ -14,7 +14,7 @@
      - adresse inconnue                    → google-inscription.php, où
        l'on choisit son identifiant ;
      - déjà connecté (depuis Paramètres)   → la personne se reconnecte
-       pour UNE action à risque (« action », voir GOOGLE_ACTIONS) ; son
+       pour UNE action à risque (« action », voir ACTIONS_SENSIBLES) ; son
        mot de passe, si elle en a un, est demandé ensuite.
 
    Toute erreur ramène à la page d'où l'on venait, avec un message ; le
@@ -57,7 +57,7 @@ if (!isset($_GET['code']) && !isset($_GET['error']) && !isset($_GET['state'])) {
         'verificateur' => $verificateur,
         'retour'       => isset(GOOGLE_RETOURS[$retour]) ? $retour : ($moi ? 'parametres' : 'index'),
         // L'action à risque pour laquelle on se reconnecte (liste fermée).
-        'action'       => $moi && isset(GOOGLE_ACTIONS[(string) ($_GET['action'] ?? '')]) ? (string) $_GET['action'] : '',
+        'action'       => $moi && isset(ACTIONS_SENSIBLES[(string) ($_GET['action'] ?? '')]) ? (string) $_GET['action'] : '',
         'le'           => time(),
     ];
     header('Location: ' . google_url_autorisation(
@@ -120,7 +120,7 @@ switch ($decision) {
         /* Une reconnexion vaut pour UNE action, choisie avant de partir.
            Le mot de passe du compte, s'il en a un, vient ensuite. */
         $action = (string) ($attendu['action'] ?? '');
-        if (!isset(GOOGLE_ACTIONS[$action])) {
+        if (!isset(ACTIONS_SENSIBLES[$action])) {
             google_echec("Choisissez d'abord, dans les Paramètres, l'action à confirmer.", $moi);
         }
         if ((int) $par_sub['a_mdp'] === 1) {
@@ -130,10 +130,10 @@ switch ($decision) {
             header('Location: google-mot-de-passe.php');
             exit;
         }
-        google_noter_confirmation((int) $moi['id'], $action);
+        noter_confirmation((int) $moi['id'], $action);
         journal_securite('google_confirmation', ['utilisateur' => (int) $moi['id'], 'action' => $action]);
         flash('Identité confirmée ✅ — vous avez ' . intdiv(GOOGLE_CONFIRMATION_DUREE, 60)
-            . ' minutes pour ' . GOOGLE_ACTIONS[$action] . '.');
+            . ' minutes pour ' . ACTIONS_SENSIBLES[$action] . '.');
         header('Location: ' . google_page_action($action));
         exit;
 

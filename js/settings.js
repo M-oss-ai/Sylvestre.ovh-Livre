@@ -44,6 +44,23 @@ window.Parametres = (() => {
 
   L.brancherToggleMotDePasse();
 
+  const PAR_GOOGLE = document.body.dataset.parGoogle === "1";
+
+  /* Sans JavaScript, la preuve d'identité (bouton Google, ou mot de passe
+     retapé) se fait EN PLACE, dans le Profil ou la Sécurité — c'est ce qui
+     fait marcher ces deux cartes sans rien charger. Avec JavaScript, elle
+     passe par la fenêtre de confirmation, ouverte au clic sur « Enregistrer »
+     (ou « Changer le mot de passe »), pareille pour les deux comptes : ces
+     blocs n'ont donc plus lieu d'être visibles, on les cache. */
+  document.getElementById("email-password-field").classList.add("hidden");
+  if (PAR_GOOGLE) {
+    const banniereSecurite = document.getElementById("securite-google-banner");
+    if (banniereSecurite) banniereSecurite.classList.add("hidden");
+  } else {
+    const champActuel = document.getElementById("mdp-actuel-field");
+    if (champActuel) champActuel.classList.add("hidden");
+  }
+
   /* ---------------- Photo de profil ---------------- */
 
   const $dropzone = document.getElementById("settings-dropzone");
@@ -99,34 +116,27 @@ window.Parametres = (() => {
   });
 
   /* ---------------- Profil ----------------
-     Le champ « mot de passe actuel » n'apparaît que si l'identifiant ou
-     l'adresse change — ces deux-là servent à reprendre le compte. Un
-     changement de prénom ne demande rien. Sans JavaScript, le champ
-     reste visible en permanence. */
+     Changer l'identifiant ou l'adresse est une action à risque : elle passe
+     par la fenêtre de confirmation (demanderConfirmation, plus bas), pareille
+     pour un compte e-mail et un compte Google. Le reste du profil (photo)
+     n'en a pas besoin, et s'enregistre directement. */
 
   const $profilForm = document.getElementById("profil-form");
   const $emailInput = document.getElementById("a-email");
   const $usernameInput = document.getElementById("a-username");
-  const $emailPwdField = document.getElementById("email-password-field");
   const $emailPwd = document.getElementById("a-email-password");
   const $profilErreur = document.getElementById("profil-erreur");
   const $emailAttente = document.getElementById("email-attente");
 
   /* La comparaison se fait avec les valeurs ENREGISTRÉES (data-compte),
      pas avec celles du champ au chargement : après un envoi refusé, le
-     champ réaffiche la saisie, et le champ du mot de passe — où se
-     trouve peut-être justement l'erreur — se serait caché. */
-  function majChampMotDePasse() {
+     champ réaffiche la saisie. */
+  function profilChange() {
     const emailChange = $emailInput.value.trim().toLowerCase()
       !== ($emailInput.dataset.compte || "").trim().toLowerCase();
     const usernameChange = $usernameInput.value.trim() !== ($usernameInput.dataset.compte || "").trim();
-    const change = emailChange || usernameChange;
-    $emailPwdField.classList.toggle("hidden", !change);
-    $emailPwd.required = change;
+    return emailChange || usernameChange;
   }
-  $emailInput.addEventListener("input", majChampMotDePasse);
-  $usernameInput.addEventListener("input", majChampMotDePasse);
-  majChampMotDePasse();
 
   function erreurProfil(message) {
     $profilErreur.textContent = message;
@@ -142,23 +152,14 @@ window.Parametres = (() => {
     $photoStatus.classList.remove("erreur");
   }
 
-  $profilForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
+  /** Enregistre le Profil. Appelé directement (photo seule), ou depuis la
+      fenêtre de confirmation quand l'identifiant ou l'adresse change. */
+  async function finirProfil() {
     const bouton = $profilForm.querySelector('button[type="submit"]');
-    effacerErreursProfil();
-
-    if (photoEnAttente && photoEnAttente.refusee) {
-      L.erreurChamp($urlInput, L.MESSAGE_URL_REFUSEE);
-      $urlInput.focus();
-      return;
-    }
+    const fd = new FormData($profilForm);
 
     // FormData(form) reprend tous les champs nommés, y compris ceux
     // rattachés par l'attribut « form » (l'URL et le fichier de la photo).
-    const fd = new FormData($profilForm);
-
-    // Le sélecteur d'image garde le fichier en mémoire ; on le réinjecte
-    // pour couvrir le cas du glisser-déposer, qui ne passe pas par l'input.
     if (photoEnAttente && photoEnAttente.type === "file") {
       fd.set("photo_fichier", photoEnAttente.file);
       fd.delete("photo_url");
@@ -181,21 +182,25 @@ window.Parametres = (() => {
       $emailInput.value = r.email;
       $emailInput.dataset.compte = r.email;
       $usernameInput.dataset.compte = $usernameInput.value.trim();
-      majChampMotDePasse();
       if (r.email_attente) {
         document.getElementById("email-attente-adresse").textContent = r.email_attente.adresse;
         document.getElementById("email-attente-expire").textContent = r.email_attente.expire;
         $emailAttente.classList.remove("hidden");
       }
+      fermerConfirmation();
       L.toast(r.message);
     } catch (err) {
-      // Sous le champ concerné : une notification de deux secondes disait
-      // l'erreur sans dire où.
+      /* Identité pas (ou plus) confirmée : la fenêtre gère elle-même ce
+         cas (voir lancerAction) en revenant à la phase d'authentification —
+         ce n'est pas une erreur du Profil lui-même. */
+      if (err.attente || err.champ === "mot_de_passe" || (err.donnees && err.donnees.google)) {
+        throw err;
+      }
+      fermerConfirmation();
       const champ = L.erreursSurChamps(err, {
-        identifiant: $usernameInput, email: $emailInput, mot_de_passe: $emailPwd, photo_url: $urlInput,
+        identifiant: $usernameInput, email: $emailInput, photo_url: $urlInput,
       });
       if (champ) {
-        if (champ === $emailPwd) $emailPwdField.classList.remove("hidden");
         champ.focus();
       } else if (err.champ === "photo") {
         $photoStatus.textContent = err.message;
@@ -206,6 +211,23 @@ window.Parametres = (() => {
       }
     } finally {
       bouton.disabled = false;
+    }
+  }
+
+  $profilForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    effacerErreursProfil();
+
+    if (photoEnAttente && photoEnAttente.refusee) {
+      L.erreurChamp($urlInput, L.MESSAGE_URL_REFUSEE);
+      $urlInput.focus();
+      return;
+    }
+
+    if (profilChange()) {
+      demanderConfirmation("Enregistrer les modifications ?", "", "Enregistrer", "compte.profil", finirProfil, false);
+    } else {
+      finirProfil();
     }
   });
 
@@ -227,52 +249,61 @@ window.Parametres = (() => {
   }
 
   /* ---------------- Mot de passe ----------------
-     Le formulaire part en POST classique, volontairement : c'est la
-     navigation qui suit la soumission qui déclenche la proposition
-     « Enregistrer ce mot de passe ? » des gestionnaires. L'intercepter
-     en AJAX la ferait perdre — le coffre ne serait pas mis à jour.
+     Changer (ou définir) le mot de passe est toujours une action à risque :
+     elle passe TOUJOURS par la fenêtre de confirmation.
 
-     Mais un POST refusé revenait avec les trois champs VIDES, et
-     l'erreur loin au-dessus. On vérifie donc d'abord, sans rien changer
-     (« verifier » dans api.php) : une erreur s'affiche sous son champ et
-     la saisie reste en place ; tout est bon, le vrai POST part — et le
-     serveur revérifie tout. */
+     Une fois l'identité confirmée, le vrai formulaire part en POST
+     classique, volontairement : c'est la navigation qui suit la soumission
+     qui déclenche la proposition « Enregistrer ce mot de passe ? » des
+     gestionnaires. L'intercepter en AJAX la ferait perdre — le coffre ne
+     serait pas mis à jour.
+
+     Mais un POST refusé revenait avec les trois champs VIDES, et l'erreur
+     loin au-dessus. On vérifie donc d'abord, sans rien changer (« verifier »
+     dans api.php) : une erreur s'affiche sous son champ et la saisie reste
+     en place ; tout est bon, le vrai POST part — et le serveur revérifie
+     tout. */
 
   const $mdpForm = document.getElementById("mdp-form");
+  const $mdpSubmit = document.getElementById("mdp-submit");
   const $mdpActuel = document.getElementById("a-current");
   const $mdpNouveau = document.getElementById("a-new");
   const $mdpConfirmation = document.getElementById("a-new2");
   let mdpVerifie = false;
 
-  // Absent pour un compte Google tant qu'il ne s'est pas reconnecté pour cette action.
-  if ($mdpForm) $mdpForm.addEventListener("submit", async (e) => {
-    if (mdpVerifie) return; // la vérification est passée : le POST part
-    e.preventDefault();
-    const bouton = $mdpForm.querySelector('button[type="submit"]');
-    L.effacerErreurs($mdpForm);
-
-    bouton.disabled = true;
+  async function finirMotDePasse() {
     try {
       await L.api("compte.motdepasse", {
-        actuel: $mdpActuel ? $mdpActuel.value : "", // pas de champ : compte Google
+        actuel: $mdpActuel ? $mdpActuel.value : "", // caché : l'identité est déjà confirmée
         nouveau: $mdpNouveau.value,
         confirmation: $mdpConfirmation.value,
         verifier: "1",
       });
-      mdpVerifie = true;
-      bouton.disabled = false;
-      // requestSubmit() rejoue une soumission complète (évènement compris),
-      // la plus proche d'un clic réel ; submit() sert de repli.
-      if (typeof $mdpForm.requestSubmit === "function") $mdpForm.requestSubmit(bouton);
-      else $mdpForm.submit();
     } catch (err) {
-      bouton.disabled = false;
+      const expiree = err.attente || (err.erreurs && err.erreurs.actuel) || (err.donnees && err.donnees.google);
+      if (expiree) throw err; // la fenêtre revient à la phase d'authentification
+      fermerConfirmation();
       const champ = L.erreursSurChamps(err, {
         actuel: $mdpActuel || $mdpNouveau, nouveau: $mdpNouveau, confirmation: $mdpConfirmation,
       });
       if (champ) champ.focus();
       else L.erreurChamp($mdpActuel || $mdpNouveau, err.message);
+      return;
     }
+    fermerConfirmation();
+    mdpVerifie = true;
+    // requestSubmit() rejoue une soumission complète (évènement compris),
+    // la plus proche d'un clic réel ; submit() sert de repli.
+    if (typeof $mdpForm.requestSubmit === "function") $mdpForm.requestSubmit($mdpSubmit);
+    else $mdpForm.submit();
+  }
+
+  if ($mdpForm) $mdpForm.addEventListener("submit", (e) => {
+    if (mdpVerifie) return; // la fenêtre a déjà tout vérifié : le vrai POST part
+    e.preventDefault();
+    L.effacerErreurs($mdpForm);
+    const libelle = ($mdpSubmit.textContent || "Changer le mot de passe").trim();
+    demanderConfirmation(libelle + " ?", "", libelle, "compte.motdepasse", finirMotDePasse, false);
   });
 
   /* ---------------- Filtre des images sensibles ----------------
@@ -388,88 +419,137 @@ window.Parametres = (() => {
     }
   });
 
-  /* ---------------- Confirmations (vider / supprimer) ----------------
-     Ces deux actions sont irréversibles : le serveur exige le mot de
-     passe (voir exiger_mot_de_passe dans api.php), on le demande donc ici. */
+  /* ---------------- Fenêtre de confirmation ----------------
+     Une même fenêtre, en deux phases, pour les quatre actions à risque
+     (Profil, Sécurité, Vider, Supprimer) — pareille pour un compte e-mail
+     et un compte Google, ce qui répond à la demande : seule la manière de
+     prouver son identité diffère (mot de passe ICI, ou Google).
+
+       Phase « identité » (#confirm-phase-identite) : un compte e-mail
+     retape son mot de passe et clique « Confirmer mon identité » — cela
+     NOTE une confirmation côté serveur (compte.authentifier) sans rien
+     faire d'autre. Un compte Google se reconnecte (Google, puis son mot
+     de passe s'il en a un) : une vraie navigation, qui revient sur cette
+     page — cette même fenêtre se rouvre alors d'elle-même, déjà à la
+     phase suivante (voir BOUTON_ACTION plus bas).
+
+       Phase « action » (#confirm-phase-action) : identité confirmée,
+     GOOGLE_CONFIRMATION_DUREE secondes pour valider CETTE action précise.
+     Le bouton final fait le travail réel (finirAction, propre à chaque
+     action) : mettre à jour le Profil, changer le mot de passe, vider la
+     bibliothèque, ou supprimer le compte. */
 
   const $confirmOverlay = document.getElementById("confirm-overlay");
   const $confirmTitle = document.getElementById("confirm-title");
   const $confirmText = document.getElementById("confirm-text");
   const $confirmOk = document.getElementById("confirm-ok");
+  const $confirmIdentiteOk = document.getElementById("confirm-identite-ok"); // absent pour un compte Google
   const $confirmPwd = document.getElementById("confirm-password");
   const $confirmExport = document.getElementById("confirm-export");
+  const $phaseIdentite = document.getElementById("confirm-phase-identite");
+  const $phaseAction = document.getElementById("confirm-phase-action");
+  const $confirmDelai = document.getElementById("confirm-delai");
   const NB_SERIES = parseInt(document.body.dataset.series || "0", 10) || 0;
-  /* Compte Google : rien à taper. Il se reconnecte pour UNE action (le lien
-     du bouton Google la porte), revient ici, et a le temps restant pour
-     cliquer « Confirmer ». Le serveur pose l'action confirmée et les
-     secondes restantes sur <body>, et revérifie tout à l'envoi. */
-  const PAR_GOOGLE = document.body.dataset.parGoogle === "1";
+
+  /* La confirmation en cours, telle que le serveur la connaît au moment du
+     chargement de la page : posée sur <body> par confirmation_en_cours(),
+     pour UN compte, UNE action, UNE fois — plus de distinction Google/e-mail
+     ici, voir includes/fonctions.php. */
   const CONFIRME = {
     action: document.body.dataset.confirmeAction || "",
     echeance: Date.now() + (parseInt(document.body.dataset.confirmeRestant || "0", 10) || 0) * 1000,
   };
-  const $googleAller = document.getElementById("confirm-google-aller");
-  const $googleOk = document.getElementById("confirm-google-ok");
-  const $confirmDelai = document.getElementById("confirm-delai");
+
+  let actionEnAttente = null;
+  let finirAction = null;
+  let elementDeclencheur = null;
   let arreterDelai = null;
 
-  /** Pour cette action : le bouton « Se reconnecter », ou le temps qui reste. */
-  function preparerGoogle(action) {
+  /** Bascule la fenêtre sur la bonne phase pour $action, et démarre (ou
+      arrête) le compte à rebours de la phase « action ». */
+  function preparerPhase(action) {
     if (arreterDelai) { arreterDelai(); arreterDelai = null; }
     const reste = Math.ceil((CONFIRME.echeance - Date.now()) / 1000);
     const confirmee = CONFIRME.action === action && reste > 0;
-    $googleAller.classList.toggle("hidden", confirmee);
-    $googleOk.classList.toggle("hidden", !confirmee);
+
+    $phaseIdentite.classList.toggle("hidden", confirmee);
+    $phaseAction.classList.toggle("hidden", !confirmee);
+    if ($confirmIdentiteOk) $confirmIdentiteOk.classList.toggle("hidden", confirmee);
+    $confirmOk.classList.toggle("hidden", !confirmee);
     $confirmOk.disabled = !confirmee;
-    const lien = $googleAller.querySelector("a.btn-google");
-    if (lien) lien.href = "google.php?retour=parametres&action=" + encodeURIComponent(action);
+
+    if (PAR_GOOGLE) {
+      const lien = $phaseIdentite.querySelector("a.btn-google");
+      if (lien) lien.href = "google.php?retour=parametres&action=" + encodeURIComponent(action);
+    }
+
     if (confirmee) {
-      // Délai écoulé : il faut se reconnecter, le bouton se grise.
+      // Délai écoulé pendant que la fenêtre était ouverte : il faut
+      // recommencer, la phase « identité » revient.
       arreterDelai = window.Delai.lancer($confirmDelai, reste, () => {
         CONFIRME.action = "";
-        preparerGoogle(action);
+        preparerPhase(action);
       }) || null;
     }
+    /* Jamais sur le bouton qui agit (Confirmer mon identité, ou Confirmer) :
+       une touche Entrée ou un second appui suffisait alors à tout
+       supprimer. */
+    if (confirmee || PAR_GOOGLE) document.getElementById("confirm-cancel").focus();
+    else $confirmPwd.focus();
   }
-  let actionEnAttente = null;
-  let elementDeclencheur = null;
 
-  function demanderConfirmation(titre, texte, libelle, action) {
+  /**
+   * Ouvre la fenêtre pour $action. $onConfirme est appelé au clic sur le
+   * bouton final (phase « action ») : à lui de faire le travail et de
+   * fermer la fenêtre en cas de succès (fermerConfirmation) ; toute erreur
+   * qu'il laisse remonter — délai, identité expirée ou déjà servie — est
+   * traitée ici, de la même façon pour les quatre actions.
+   */
+  function demanderConfirmation(titre, texte, libelle, action, onConfirme, destructif) {
     $confirmTitle.textContent = titre;
-    $confirmText.textContent = "⚠️ " + texte;
+    if (texte) {
+      $confirmText.textContent = "⚠️ " + texte;
+      $confirmText.classList.remove("hidden");
+    } else {
+      $confirmText.classList.add("hidden");
+    }
+    $confirmText.classList.toggle("alert-error", !!destructif);
+    $confirmText.classList.toggle("alert-info", !destructif);
     $confirmOk.textContent = libelle;
-    // Rien à sauvegarder dans une bibliothèque vide.
-    $confirmExport.classList.toggle("hidden", NB_SERIES === 0);
+    $confirmOk.classList.toggle("btn-danger", !!destructif);
+    $confirmOk.classList.toggle("btn-primary", !destructif);
+    // Rien à sauvegarder dans une bibliothèque vide, et rien à sauvegarder
+    // du tout pour le Profil ou le mot de passe.
+    $confirmExport.classList.toggle("hidden", !destructif || NB_SERIES === 0);
     $confirmPwd.value = "";
     L.effacerErreur($confirmPwd);
-    if (PAR_GOOGLE) preparerGoogle(action);
     actionEnAttente = action;
+    finirAction = onConfirme;
     elementDeclencheur = document.activeElement;
     $confirmOverlay.classList.remove("hidden");
-    /* Jamais sur le bouton qui efface : une touche Entrée ou un second
-       appui suffisait alors à tout supprimer. */
-    if (!PAR_GOOGLE) $confirmPwd.focus();
-    else document.getElementById("confirm-cancel").focus();
+    preparerPhase(action);
   }
 
   function fermerConfirmation() {
+    if (arreterDelai) { arreterDelai(); arreterDelai = null; }
     $confirmOverlay.classList.add("hidden");
     $confirmPwd.value = "";
     actionEnAttente = null;
+    finirAction = null;
     // Le focus revient là où il était : sans ça, la navigation au clavier
     // repart du début de la page après chaque fermeture.
     if (elementDeclencheur && elementDeclencheur.focus) elementDeclencheur.focus();
     elementDeclencheur = null;
   }
 
-  /* Annuler (bouton, clic à côté, Échap) : pour un compte Google qui s'était
-     reconnecté pour cette action, le délai s'arrête là. La refaire
-     demandera de se reconnecter — une fenêtre refermée ne doit pas laisser
-     derrière elle une suppression prête à partir. */
+  /* Annuler (bouton, clic à côté, Échap) : pour un compte qui venait de
+     confirmer son identité pour CETTE action (Google ou mot de passe), le
+     délai s'arrête là. La refaire demandera de prouver à nouveau son
+     identité — une fenêtre refermée ne doit pas laisser derrière elle une
+     action prête à partir. */
   function annulerConfirmation() {
-    if (PAR_GOOGLE && CONFIRME.action && CONFIRME.action === actionEnAttente) {
+    if (CONFIRME.action && CONFIRME.action === actionEnAttente) {
       CONFIRME.action = "";
-      if (arreterDelai) { arreterDelai(); arreterDelai = null; }
       L.api("compte.annuler_confirmation", {}).catch(() => {});
     }
     fermerConfirmation();
@@ -485,80 +565,118 @@ window.Parametres = (() => {
     else if (e.key === "Escape") annulerConfirmation();
   });
 
-  async function lancerAction() {
-    if (!actionEnAttente) return;
+  /** Le compte à rebours d'un blocage (« attente »), dans la fenêtre. */
+  function afficherAttente(secondes) {
+    $confirmText.textContent = "Trop de tentatives. Réessayez dans ";
+    $confirmText.classList.remove("hidden");
+    const compteur = document.createElement("b");
+    compteur.className = "delai";
+    $confirmText.appendChild(compteur);
+    $confirmText.appendChild(document.createTextNode("."));
+    compteur.addEventListener("delai-termine", () => { $confirmOk.disabled = false; });
+    window.Delai.lancer(compteur, secondes);
+  }
+
+  /* Phase « identité », compte e-mail : retape son mot de passe, sans que
+     rien ne soit encore fait — seule la confirmation est notée. Absent
+     pour un compte Google (il n'y a pas de bouton : le lien Google fait
+     tout le travail, via une vraie navigation). */
+  async function confirmerIdentite() {
+    if (!actionEnAttente || !$confirmIdentiteOk) return;
     const action = actionEnAttente;
     const motDePasse = $confirmPwd.value;
-    if (!motDePasse && !PAR_GOOGLE) {
+    if (!motDePasse) {
       L.erreurChamp($confirmPwd, "Saisissez votre mot de passe pour confirmer.");
       $confirmPwd.focus();
       return;
     }
-    $confirmOk.disabled = true;
+    $confirmIdentiteOk.disabled = true;
     try {
-      const r = await L.api(action, { mot_de_passe: motDePasse });
-      L.toast(r.message);
-      fermerConfirmation();
-      // Les filtres mémorisés de ce compte ne serviront plus à personne.
-      if (action === "compte.supprimer") L.oublierFiltres(document.body.dataset.compte);
-      if (r.redirection) {
-        /* replace() et non une navigation ordinaire : la page du compte
-           supprimé quitte l'historique, « Précédent » ne peut plus y
-           ramener. */
-        setTimeout(() => window.location.replace(r.redirection), 900);
-      } else {
-        setTimeout(() => window.location.reload(), 900);
-      }
+      const r = await L.api("compte.authentifier", { pour: action, mot_de_passe: motDePasse });
+      CONFIRME.action = action;
+      CONFIRME.echeance = Date.now() + r.restant * 1000;
+      preparerPhase(action);
     } catch (err) {
-      // Mot de passe refusé : la modale reste ouverte pour réessayer.
       if (err.attente) {
-        /* Une notification disparaît en trois secondes, or l'attente en
-           dure soixante : elle s'affiche donc sous le champ, où elle
-           reste visible aussi longtemps qu'elle s'applique. */
-        $confirmText.textContent = "Trop de tentatives. Réessayez dans ";
-        const compteur = document.createElement("b");
-        compteur.className = "delai";
-        $confirmText.appendChild(compteur);
-        $confirmText.appendChild(document.createTextNode("."));
-        $confirmOk.disabled = true;
-        compteur.addEventListener("delai-termine", () => { $confirmOk.disabled = false; });
-        window.Delai.lancer(compteur, err.attente);
-        return;
-      }
-      // Sous le champ du mot de passe, là où l'on corrige.
-      if (PAR_GOOGLE) {
-        // Confirmation expirée ou déjà servie : il faut se reconnecter.
-        L.toast(err.message);
-        CONFIRME.action = "";
-        preparerGoogle(action);
+        L.erreurChamp($confirmPwd, "Trop de tentatives. Réessayez dans " + err.attente + " secondes.");
         return;
       }
       if (err.champ === "mot_de_passe") L.erreurChamp($confirmPwd, err.message);
       else L.toast(err.message);
       $confirmPwd.select();
-      /* Réactivé ici, et seulement ici. L'ancien « finally » testait
-         « s'il n'est pas désactivé » — il l'était toujours à ce stade :
-         après un mot de passe refusé, le bouton restait grisé et seule
-         la touche Entrée permettait de réessayer. Pendant un compte à
-         rebours (plus haut), c'est la fin du délai qui le rend. */
-      $confirmOk.disabled = false;
+    } finally {
+      $confirmIdentiteOk.disabled = false;
     }
   }
 
-  $confirmOk.addEventListener("click", lancerAction);
-  $confirmPwd.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      lancerAction();
+  if ($confirmIdentiteOk) {
+    $confirmIdentiteOk.addEventListener("click", confirmerIdentite);
+    $confirmPwd.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmerIdentite();
+      }
+    });
+  }
+
+  /* Phase « action » : identité confirmée, on fait le travail réel. */
+  async function lancerAction() {
+    if (!actionEnAttente || !finirAction) return;
+    const action = actionEnAttente;
+    $confirmOk.disabled = true;
+    try {
+      await finirAction();
+    } catch (err) {
+      if (err.attente) {
+        afficherAttente(err.attente);
+        return; // le bouton reste désactivé, le compte à rebours le réactivera
+      }
+      // L'identité s'est périmée (ou a déjà servi) pendant l'attente : il
+      // faut la reconfirmer, la fenêtre reste ouverte pour ça.
+      L.toast(err.message);
+      CONFIRME.action = "";
+      preparerPhase(action);
+      $confirmOk.disabled = false;
+      return;
     }
-  });
+    $confirmOk.disabled = false;
+  }
+
+  $confirmOk.addEventListener("click", lancerAction);
+
+  /* ---------------- Vider / Supprimer ---------------- */
+
+  async function finirVider() {
+    const r = await L.api("donnees.vider", {});
+    fermerConfirmation();
+    L.toast(r.message);
+    setTimeout(() => window.location.reload(), 900);
+  }
+
+  async function finirSupprimer() {
+    const r = await L.api("compte.supprimer", {});
+    fermerConfirmation();
+    L.toast(r.message);
+    // Les filtres mémorisés de ce compte ne serviront plus à personne.
+    L.oublierFiltres(document.body.dataset.compte);
+    if (r.redirection) {
+      /* replace() et non une navigation ordinaire : la page du compte
+         supprimé quitte l'historique, « Précédent » ne peut plus y
+         ramener. */
+      setTimeout(() => window.location.replace(r.redirection), 900);
+    } else {
+      setTimeout(() => window.location.reload(), 900);
+    }
+  }
 
   document.getElementById("btn-clear-library").addEventListener("click", () => {
     demanderConfirmation(
       "Vider la bibliothèque ?",
       "Toutes vos séries seront supprimées. Votre compte et votre profil sont conservés.",
       "Tout vider",
-      "donnees.vider"
+      "donnees.vider",
+      finirVider,
+      true
     );
   });
 
@@ -567,17 +685,23 @@ window.Parametres = (() => {
       "Supprimer le compte ?",
       P.texteSuppressionCompte(NB_SERIES, document.body.dataset.forfait),
       "Supprimer définitivement",
-      "compte.supprimer"
+      "compte.supprimer",
+      finirSupprimer,
+      true
     );
   });
 
   /* Retour de Google pour vider ou supprimer : la fenêtre se rouvre
-     d'elle-même, avec le temps qui reste pour cliquer « Confirmer ». */
+     d'elle-même, avec le temps qui reste pour cliquer « Confirmer ». Pas
+     pour le Profil ni le mot de passe : la page vient de recharger, leurs
+     champs sont vides — rouvrir la fenêtre n'aiderait pas, la confirmation
+     reste simplement disponible pour la prochaine tentative, dans le délai. */
   const BOUTON_ACTION = { "donnees.vider": "btn-clear-library", "compte.supprimer": "btn-delete-account" };
   if (PAR_GOOGLE && BOUTON_ACTION[CONFIRME.action]) document.getElementById(BOUTON_ACTION[CONFIRME.action]).click();
 
-  /* Délai écoulé sur un bloc « Identité confirmée » de la page : on
-     recharge, et le bouton « Se reconnecter » revient à sa place. */
+  /* Délai écoulé sur un bloc « Identité confirmée » de la page (Supprimer
+     le mot de passe, seul endroit qui en garde un — voir parametres.php) :
+     on recharge, et le bouton « Se reconnecter » revient à sa place. */
   document.addEventListener("delai-termine", (e) => {
     if (e.target.closest("[data-fin-confirmation]")) window.location.reload();
   });

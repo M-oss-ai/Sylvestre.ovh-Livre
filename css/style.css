@@ -676,7 +676,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .bloc-confirme { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .bloc-confirme .hint { flex: 1 1 200px; margin: 0; }
 .intro-securite { margin-bottom: 12px; }
-.confirmation-google { color: var(--termine); }
+.confirmation-active { color: var(--termine); }
 .settings-card .btn-google { margin-top: 8px; }
 .modal .btn-google { margin: 8px 0 4px; }
 

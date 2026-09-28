@@ -3,7 +3,7 @@
    Seconde étape d'une connexion avec Google : le mot de passe.
 
    Sert aussi à CONFIRMER une action à risque (« action » dans l'étape,
-   voir GOOGLE_ACTIONS) : la personne, déjà connectée, vient de se
+   voir ACTIONS_SENSIBLES) : la personne, déjà connectée, vient de se
    reconnecter avec Google ; son mot de passe suit, puis elle a
    GOOGLE_CONFIRMATION_DUREE secondes pour valider cette action-là.
 
@@ -30,7 +30,7 @@ header('Cache-Control: no-store, private');
 
 $moi    = utilisateur_actuel();
 $action = (string) ($_SESSION['google_mdp']['action'] ?? '');
-$action = isset(GOOGLE_ACTIONS[$action]) ? $action : '';
+$action = isset(ACTIONS_SENSIBLES[$action]) ? $action : '';
 $id     = google_etape_mdp($_SESSION['google_mdp'] ?? null, time());
 
 /* Connecté : seulement pour confirmer une action de CE compte. Pas
@@ -68,10 +68,10 @@ function google_mdp_ouvrir(int $id, string $action): never
     $destination = (string) ($_SESSION['google_mdp']['destination'] ?? 'index.php');
     unset($_SESSION['google_mdp']);
     if ($action !== '') {
-        google_noter_confirmation($id, $action);
+        noter_confirmation($id, $action);
         journal_securite('google_confirmation', ['utilisateur' => $id, 'action' => $action]);
         flash('Identité confirmée ✅ — vous avez ' . intdiv(GOOGLE_CONFIRMATION_DUREE, 60)
-            . ' minutes pour ' . GOOGLE_ACTIONS[$action] . '.');
+            . ' minutes pour ' . ACTIONS_SENSIBLES[$action] . '.');
     } else {
         connecter($id);   // sans confirmation : chaque action à risque demande de se reconnecter
         journal_securite('connexion_google', ['utilisateur' => $id]);
@@ -133,7 +133,7 @@ $csrf = jeton_csrf();
     <div class="auth-head">
       <p class="auth-logo" aria-hidden="true">📚</p>
       <h1><?= $action !== '' ? 'Confirmez votre identité' : 'Bonjour ' . e($u['identifiant']) ?></h1>
-      <p class="hint">Google a confirmé votre identité. Saisissez maintenant votre mot de passe<?= $action !== '' ? ' pour ' . e(GOOGLE_ACTIONS[$action]) : '' ?>.</p>
+      <p class="hint">Google a confirmé votre identité. Saisissez maintenant votre mot de passe<?= $action !== '' ? ' pour ' . e(ACTIONS_SENSIBLES[$action]) : '' ?>.</p>
     </div>
 
     <form method="post" action="google-mot-de-passe.php" autocomplete="on" novalidate>

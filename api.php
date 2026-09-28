@@ -170,6 +170,22 @@ switch ($action) {
         reponse_json(['ok' => true]);
     }
 
+    /* ---------------- Confirmer son identité pour une action ----------------
+       Première moitié du parcours en deux temps d'un compte e-mail : entrer
+       son mot de passe SANS agir encore, pour que la page montre ensuite
+       « Identité confirmée : il vous reste N secondes », exactement comme un
+       compte Google au retour de sa reconnexion. exiger_mot_de_passe() note
+       la confirmation elle-même (verifier_mot_de_passe_limite()) ; l'action
+       demandée la consomme au moment où elle a lieu, un peu plus tard. */
+    case 'compte.authentifier': {
+        $pour = (string) ($_POST['pour'] ?? '');
+        if (!isset(ACTIONS_SENSIBLES[$pour])) {
+            reponse_json(['ok' => false, 'erreur' => 'Action inconnue.'], 422);
+        }
+        exiger_mot_de_passe($mon_id, $pour);
+        reponse_json(['ok' => true, 'restant' => GOOGLE_CONFIRMATION_DUREE]);
+    }
+
     /* ---------------- Ajout / modification ---------------- */
     case 'serie.enregistrer': {
         $id     = (int) ($_POST['id'] ?? 0);
@@ -405,7 +421,7 @@ switch ($action) {
         );
         $req->execute([$identifiant, $photo, $mon_id]);
         if ($email_change || $identifiant_change) {
-            google_oublier_confirmation();   // elle ne sert qu'une fois
+            oublier_confirmation();   // elle ne sert qu'une fois
         }
 
         if ($ancienne !== '' && $ancienne !== $photo) {
@@ -498,7 +514,7 @@ switch ($action) {
            soi-même de la page en cours. */
         invalider_sessions($mon_id);
         connecter($mon_id);
-        google_oublier_confirmation();   // elle ne sert qu'une fois
+        oublier_confirmation();   // elle ne sert qu'une fois
         journal_securite('mot_de_passe_change', ['utilisateur' => $mon_id]);
         avertir_mot_de_passe_change((string) $moi['email'], (string) $moi['identifiant'], acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
 
@@ -515,7 +531,7 @@ switch ($action) {
        « Annuler » dans la fenêtre de confirmation d'un compte Google :
        le délai s'arrête là, et la refaire demandera de se reconnecter. */
     case 'compte.annuler_confirmation': {
-        google_oublier_confirmation();
+        oublier_confirmation();
         reponse_json(['ok' => true]);
     }
 
@@ -715,7 +731,7 @@ switch ($action) {
     /* ---------------- Vider la bibliothèque ---------------- */
     case 'donnees.vider': {
         exiger_mot_de_passe($mon_id, 'donnees.vider');
-        google_oublier_confirmation();   // elle ne sert qu'une fois
+        oublier_confirmation();   // elle ne sert qu'une fois
 
         $req = $pdo->prepare('SELECT couverture FROM serie WHERE utilisateur_id = ?');
         $req->execute([$mon_id]);

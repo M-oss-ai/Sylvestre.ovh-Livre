@@ -144,11 +144,15 @@ define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
 define('GOOGLE_CLIENT_ID', trim(env('GOOGLE_CLIENT_ID', '')));
 define('GOOGLE_CLIENT_SECRET', trim(env('GOOGLE_CLIENT_SECRET', '')));
 
-/* Un compte créé par Google confirme chaque action à risque en se
-   reconnectant avec Google (et son mot de passe, s'il en a un). Il a
-   ensuite GOOGLE_CONFIRMATION_DUREE secondes pour valider CETTE action,
-   une seule fois. Entre 1 minute et 1 heure : au-delà, une session volée
-   suffirait de nouveau. */
+/* Chaque action à risque, e-mail ou Google, demande de prouver son
+   identité (mot de passe retapé, ou reconnexion à Google puis son mot de
+   passe s'il en a un). Il reste ensuite GOOGLE_CONFIRMATION_DUREE
+   secondes pour valider CETTE action, une seule fois. Entre 1 minute et
+   1 heure : au-delà, une session volée suffirait de nouveau. Le nom garde
+   « GOOGLE » : c'est pour Google que ce délai existe (un compte e-mail
+   pourrait retaper son mot de passe indéfiniment, une session volée mise
+   à part), mais la même constante borne les deux depuis que la fenêtre de
+   confirmation leur est commune (voir parametres.php, js/settings.js). */
 define('GOOGLE_CONFIRMATION_DUREE', min(3600, max(60, (int) env('GOOGLE_CONFIRMATION_DUREE', '600'))));
 
 /* ---------------------------------------------------------------------

@@ -185,37 +185,37 @@ test('le début de l adresse, dans les règles de l inscription', function () {
     egale('abc', identifiant_depuis_google('.abc.@exemple.test'), 'sans ponctuation aux bords');
 });
 
-groupe('google_confirmation_recente() — se reconnecter pour UNE action');
+groupe('confirmation_recente() — se reconnecter pour UNE action');
 
 test('valable une minute, pour ce compte et cette action seulement', function () {
-    $session = ['google_confirme' => ['id' => 5, 'action' => 'compte.supprimer', 'le' => 1000]];
-    vrai(google_confirmation_recente(5, 'compte.supprimer', $session, 1059), 'dans la minute');
-    faux(google_confirmation_recente(5, 'compte.supprimer', $session, 1060), 'passé le délai');
-    faux(google_confirmation_recente(5, 'donnees.vider', $session, 1001),
+    $session = ['confirme' => ['id' => 5, 'action' => 'compte.supprimer', 'le' => 1000]];
+    vrai(confirmation_recente(5, 'compte.supprimer', $session, 1059), 'dans la minute');
+    faux(confirmation_recente(5, 'compte.supprimer', $session, 1060), 'passé le délai');
+    faux(confirmation_recente(5, 'donnees.vider', $session, 1001),
         'une autre action à risque demande de se reconnecter');
-    faux(google_confirmation_recente(6, 'compte.supprimer', $session, 1001), 'pour un autre compte');
-    faux(google_confirmation_recente(5, 'compte.supprimer', [], 1001), 'sans confirmation');
-    faux(google_confirmation_recente(0, 'compte.supprimer',
-        ['google_confirme' => ['id' => 0, 'action' => 'compte.supprimer', 'le' => 1000]], 1001), 'jamais pour « personne »');
+    faux(confirmation_recente(6, 'compte.supprimer', $session, 1001), 'pour un autre compte');
+    faux(confirmation_recente(5, 'compte.supprimer', [], 1001), 'sans confirmation');
+    faux(confirmation_recente(0, 'compte.supprimer',
+        ['confirme' => ['id' => 0, 'action' => 'compte.supprimer', 'le' => 1000]], 1001), 'jamais pour « personne »');
 });
 
 test('une confirmation sans action (celle d une connexion) ne vaut rien', function () {
-    $session = ['google_confirme' => ['id' => 5, 'le' => 1000]];
-    estNul(google_confirmation_en_cours(5, $session, 1001), 'se connecter ne confirme aucune action');
-    estNul(google_confirmation_en_cours(5, ['google_confirme' => ['id' => 5, 'action' => 'inconnue', 'le' => 1000]], 1001),
+    $session = ['confirme' => ['id' => 5, 'le' => 1000]];
+    estNul(confirmation_en_cours(5, $session, 1001), 'se connecter ne confirme aucune action');
+    estNul(confirmation_en_cours(5, ['confirme' => ['id' => 5, 'action' => 'inconnue', 'le' => 1000]], 1001),
         'une action hors de la liste');
 });
 
-test('google_confirmation_en_cours() dit l action et le temps qui reste', function () {
-    $session = ['google_confirme' => ['id' => 5, 'action' => 'compte.motdepasse', 'le' => 1000]];
-    egale(['action' => 'compte.motdepasse', 'restant' => 45], google_confirmation_en_cours(5, $session, 1015), '45 s sur 60');
+test('confirmation_en_cours() dit l action et le temps qui reste', function () {
+    $session = ['confirme' => ['id' => 5, 'action' => 'compte.motdepasse', 'le' => 1000]];
+    egale(['action' => 'compte.motdepasse', 'restant' => 45], confirmation_en_cours(5, $session, 1015), '45 s sur 60');
 });
 
 test('noter, puis oublier : elle ne sert qu une fois', function () {
-    google_noter_confirmation(9, 'donnees.vider');
-    vrai(google_confirmation_recente(9, 'donnees.vider'), 'aussitôt valable');
-    google_oublier_confirmation();
-    faux(google_confirmation_recente(9, 'donnees.vider'), 'l action faite, elle a disparu');
+    noter_confirmation(9, 'donnees.vider');
+    vrai(confirmation_recente(9, 'donnees.vider'), 'aussitôt valable');
+    oublier_confirmation();
+    faux(confirmation_recente(9, 'donnees.vider'), 'l action faite, elle a disparu');
 });
 
 test('chaque action à risque a son message', function () {

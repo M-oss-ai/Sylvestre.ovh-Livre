@@ -181,26 +181,46 @@ La suppression du compte s'en sert aussi : `api.php` vide la session et
 la renouvelle (`session_regenerate_id`) au lieu de la détruire, pour que
 `connexion.php` puisse dire que c'est fait.
 
-**Un compte Google se reconnecte pour CHAQUE action à risque** (choix de
-l'utilisateur) : changer d'identifiant ou d'adresse, définir, changer ou
-supprimer son mot de passe, vider, supprimer le compte — la liste fermée
-`GOOGLE_ACTIONS`. Le bouton part chez Google avec l'action
-(`google.php?action=…`), son mot de passe suit s'il en a un
-(`google-mot-de-passe.php`), puis il a `GOOGLE_CONFIRMATION_DUREE`
-secondes pour cliquer « Confirmer ». La confirmation vaut pour UN compte,
-UNE action et UNE fois (`google_confirmation_en_cours()`,
-`google_oublier_confirmation()` dès l'action faite) ; se connecter n'en
-donne aucune, et « Annuler » l'efface (`compte.annuler_confirmation`,
-ou le formulaire `annuler_confirmation` des Paramètres). `verifier_mot_de_passe_limite($id, $mdp, $attente, $action)`
-le sait : toute nouvelle action sensible passe par elle avec sa clé de
-`GOOGLE_ACTIONS`, jamais par `password_verify()` directement — et doit
-consommer la confirmation une fois faite. Un compte e-mail, lui, retape
-son mot de passe.
+**Chaque action à risque prouve l'identité, dans la MÊME fenêtre pour un
+compte e-mail et un compte Google** (choix de l'utilisateur, qui trouvait
+les deux cartes trop différentes) : changer d'identifiant ou d'adresse,
+définir ou changer le mot de passe, vider, supprimer le compte — la liste
+fermée `ACTIONS_SENSIBLES`. Rien ne se voit sur la page au repos (pas de
+bouton Google, pas de champ mot de passe) : cliquer « Enregistrer » (ou
+« Vider »/« Supprimer ») ouvre une fenêtre à deux phases (`js/settings.js`,
+`#confirm-phase-identite` puis `#confirm-phase-action`) :
+1. **Identité** — un compte e-mail retape son mot de passe et clique
+   « Confirmer mon identité » : l'action `compte.authentifier` (api.php)
+   le vérifie et NOTE une confirmation, sans rien faire d'autre. Un compte
+   Google se reconnecte (`google.php?action=…`), son mot de passe suit
+   s'il en a un (`google-mot-de-passe.php`) : une vraie navigation, qui
+   revient sur la page — la fenêtre s'y rouvre d'elle-même pour Vider et
+   Supprimer (`BOUTON_ACTION`), déjà à la phase suivante ; pour le Profil
+   et le mot de passe, la page a rechargé et ses champs sont vides, la
+   confirmation reste simplement disponible pour la prochaine tentative.
+2. **Action** — `GOOGLE_CONFIRMATION_DUREE` secondes pour cliquer le
+   bouton final, qui fait le travail réel.
+
+La confirmation vaut pour UN compte, UNE action et UNE fois
+(`confirmation_en_cours()`, `oublier_confirmation()` dès l'action faite) ;
+se connecter n'en donne aucune, et « Annuler » l'efface
+(`compte.annuler_confirmation`, ou le formulaire `annuler_confirmation`
+des Paramètres — qui ne reste, en HTML, que pour « Supprimer le mot de
+passe », seule section encore propre à Google : ajouter ou retirer un mot
+de passe n'a pas d'équivalent côté e-mail, rien à y unifier).
+`verifier_mot_de_passe_limite($id, $mdp, $attente, $action)` porte tout
+ça : elle regarde d'abord `confirmation_recente()` (peu importe qui l'a
+obtenue), et NOTE elle-même une confirmation quand un compte e-mail
+retape son mot de passe avec succès — c'est ce qui fait marcher, sans
+JavaScript, les formulaires restés dans le HTML (Profil, Sécurité) : ils
+gardent leur champ ou leur bouton Google, JavaScript les cache et les
+remplace par la fenêtre. Toute nouvelle action sensible passe par elle
+avec sa clé de `ACTIONS_SENSIBLES`, jamais par `password_verify()`
+directement — et doit consommer la confirmation une fois faite.
 
 **La fenêtre qui efface ne donne jamais le focus à son bouton** : une
-touche Entrée suffisait à tout supprimer. Pour un compte Google, ce
-bouton reste grisé tant que la reconnexion n'a pas eu lieu, et la
-fenêtre se rouvre d'elle-même au retour de Google.
+touche Entrée suffisait à tout supprimer. Le bouton final reste grisé
+tant que l'identité n'a pas été confirmée.
 
 **Le mot de passe d'un compte Google est une seconde clé, jamais une
 porte.** Facultatif (`mot_de_passe` vaut `''` sans lui), il est demandé
