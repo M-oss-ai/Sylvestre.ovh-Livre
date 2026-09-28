@@ -532,11 +532,8 @@ define('TOME_MAX', max(1, (int) env('TOME_MAX', '9999')));
 /* Délai accordé au serveur SMTP, en secondes. L'envoi immobilise un
    processus PHP et un mutualisé n'en a qu'une poignée : au-delà de
    quelques secondes, quelques inscriptions simultanées figent le site.
-   Un envoi trop lent n'est pas perdu, il part en file. */
+   Un envoi trop lent échoue, et l'utilisateur en est averti. */
 define('SMTP_TIMEOUT', max(1, (int) env('SMTP_TIMEOUT', '5')));
-
-/* Nombre d'échecs après lequel un message en file est abandonné. */
-define('MAIL_FILE_MAX_ESSAIS', max(1, (int) env('MAIL_FILE_MAX_ESSAIS', '3')));
 
 /* ---------------------------------------------------------------------
    Accès à la tâche planifiée (purger.php)

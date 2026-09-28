@@ -225,26 +225,11 @@ CREATE TABLE IF NOT EXISTS `session_persistante` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
---  File de rattrapage des e-mails
---
---  L'envoi reste immédiat : c'est ce qui permet à un lien de
---  confirmation d'arriver en quelques secondes. Mais quand le serveur
---  SMTP ne répond pas, l'ancienne version perdait le message pour de
---  bon — l'utilisateur attendait un e-mail qui ne viendrait jamais.
---  Les envois ratés atterrissent ici, et purger.php les repasse.
---
---  Seuls les échecs y passent : cette table reste normalement vide.
+--  Ancienne file de rattrapage des e-mails, retirée : un envoi raté
+--  n'est plus retenté (un message à une adresse fausse, bloqué en tête,
+--  empêchait tous les suivants de partir). La table disparaît.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `mail_file` (
-  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `destinataire`   VARCHAR(190) NOT NULL,
-  `sujet`          VARCHAR(255) NOT NULL,
-  `corps`          TEXT NOT NULL,
-  `essais`         TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  `cree_le`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_mail_file_cree` (`cree_le`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `mail_file`;
 
 -- ---------------------------------------------------------------------
 --  Migrations — bases déjà installées

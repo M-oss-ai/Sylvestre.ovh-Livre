@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (607 tests : 542 PHP en 43 fichiers, 65 JavaScript)
+php tests/lancer.php              # toute la suite (606 tests : 541 PHP en 43 fichiers, 65 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -44,7 +44,7 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 |---|---|
 | `includes/config.php` | **Le seul endroit** où le `.env` devient des constantes. Ouvre aussi la connexion PDO (`$pdo` global), et porte `erreur_fatale()`, `ip_client()`, `taille_lisible()` et les règles d'accès du cron |
 | `includes/fonctions.php` | Bibliothèque partagée **des pages** : CSRF, sessions, limiteur, `STATUTS`, `actif()`. Envoie les en-têtes de sécurité et démarre la session **dès l'inclusion** |
-| `includes/mailer.php` | Envoi SMTP direct + file de rattrapage (`mail_file`). Chaque e-mail part en texte ET en HTML (`composer_message()`) |
+| `includes/mailer.php` | Envoi SMTP direct, une seule tentative (pas de file : un envoi raté est perdu, l'appelant le dit). Chaque e-mail part en texte ET en HTML (`composer_message()`) |
 | `includes/images.php` | Chaîne GD : type déduit du contenu, ré-encodage WebP, nom = empreinte salée |
 | `includes/carte.php` | Le HTML d'une carte de série |
 | `includes/google.php` | « Continuer avec Google » (OpenID Connect) : l'adresse de départ, la lecture et la vérification du jeton, `google_decision()`. Pur, sauf `google_echanger_code()` |
@@ -65,8 +65,7 @@ d'une connexion Google, quand le compte a un mot de passe).
 `$_POST['action']`. Chaque branche vérifie le CSRF et cloisonne par
 `utilisateur_id`.
 
-`purger.php` est la tâche planifiée : ménage des tables, rattrapage des
-e-mails, et rapport d'activité envoyé à `ADMIN_EMAIL`.
+`purger.php` est la tâche planifiée : ménage des tables et rapport d'activité envoyé à `ADMIN_EMAIL`.
 
 ### Le client
 
@@ -115,7 +114,7 @@ ils s'affichent dans la pastille posée sur la couverture.
 `fonctions.php`, qui enverrait des en-têtes HTTP et démarrerait une
 session — ce qu'une tâche planifiée n'a pas à faire. Toute fonction dont
 le cron a besoin va donc dans `config.php`. `mailer.php` compris : il
-compose les e-mails que le cron rejoue, et ne peut appeler ni `e()` ni
+compose le rapport que le cron envoie, et ne peut appeler ni `e()` ni
 rien d'autre de `fonctions.php` (d'où son propre `htmlspecialchars`).
 
 **Dans un e-mail, seules les adresses du site deviennent des liens.**
@@ -297,8 +296,8 @@ recommencer.
 
 ## Base de données
 
-Huit tables (`utilisateur.google_sub` relie un compte Google) : `utilisateur`, `serie`, `jeton_action`,
-`session_persistante`, `tentative_ip`, `mail_file`,
+Sept tables (`utilisateur.google_sub` relie un compte Google) : `utilisateur`, `serie`, `jeton_action`,
+`session_persistante`, `tentative_ip`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
 dernier rapport du cron).
 

@@ -8,9 +8,8 @@
 declare(strict_types=1);
 
 /**
- * Envoi SMTP brut. Ne passe par AUCUN quota et ne rattrape rien :
- * appelez envoyer_email(), pas cette fonction — sauf depuis le
- * dépileur de la file (traiter_file_mail()).
+ * Envoi SMTP brut. Appelez envoyer_email(), pas cette fonction — sauf
+ * pour le rapport du cron, qui n'a pas de destinataire à revalider.
  *
  * Ne lève jamais d'exception : un envoi qui échoue est consigné
  * (error_log) et renvoie false, pour ne jamais casser une page.
@@ -309,11 +308,13 @@ function corps_html(string $texte, string $sujet = ''): string
 }
 
 /* ---------------------------------------------------------------------
-   File de rattrapage
+   Envoi
 
-   Un envoi raté était autrefois perdu pour de bon : l'utilisateur
-   attendait un lien de confirmation qui ne viendrait jamais. Les échecs
-   atterrissent désormais ici et purger.php les repasse.
+   Un envoi raté n'est PAS retenté (choix de l'utilisateur) : l'ancienne
+   file de rattrapage (mail_file, rejouée par purger.php) gardait
+   indéfiniment en tête un message à une adresse fausse, et ceux qui
+   suivaient ne partaient jamais. L'appelant reçoit false et le dit à
+   l'utilisateur, qui recommence.
 
    ⚠️ Il n'y a AUCUN plafond d'envoi applicatif. Le seul frein restant est
    le limiteur par IP des pages qui déclenchent un envoi (inscription,
@@ -324,83 +325,18 @@ function corps_html(string $texte, string $sujet = ''): string
    ni avis de sécurité. Surveillez le journal d'erreurs.
    --------------------------------------------------------------------- */
 
-/** Dépose un message dans la file, pour que le cron le repasse. */
-function empiler_mail(string $destinataire, string $sujet, string $corps): void
-{
-    global $pdo;
-    try {
-        $pdo->prepare('INSERT INTO mail_file (destinataire, sujet, corps) VALUES (?, ?, ?)')
-            ->execute([$destinataire, mb_substr($sujet, 0, 255, 'UTF-8'), $corps]);
-    } catch (Throwable $e) {
-        error_log('empiler_mail: ' . $e->getMessage());
-    }
-}
-
 /**
  * Envoie un e-mail — c'est CETTE fonction que le reste du site appelle.
  *
- * Déroulé : tentative immédiate (l'utilisateur doit recevoir son lien de
- * confirmation tout de suite, pas à la prochaine heure), et si le serveur
- * SMTP ne répond pas, le message part en file. purger.php la vide au
- * passage suivant du cron.
+ * Une seule tentative, immédiate : false si elle échoue (le détail est
+ * dans le journal d'erreurs, voir envoyer_email_smtp()).
  */
 function envoyer_email(string $destinataire, string $sujet, string $corps): bool
 {
     if (!filter_var($destinataire, FILTER_VALIDATE_EMAIL)) {
         return false;
     }
-
-    if (envoyer_email_smtp($destinataire, $sujet, $corps)) {
-        return true;
-    }
-
-    empiler_mail($destinataire, $sujet, $corps);
-    return false;
-}
-
-/**
- * Rejoue les messages en attente. Appelée par purger.php (cron).
- * Retourne [envoyés, abandonnés].
- *
- * $max borne le travail d'une exécution : la file est censée rester
- * vide, mais si le serveur SMTP a été indisponible une journée entière,
- * il ne faut pas que le cron y passe son temps d'exécution maximum.
- */
-function traiter_file_mail(int $max = 50): array
-{
-    global $pdo;
-
-    $req = $pdo->prepare(
-        'SELECT id, destinataire, sujet, corps, essais
-           FROM mail_file ORDER BY id LIMIT ' . max(1, $max)
-    );
-    $req->execute();
-    $lignes = $req->fetchAll();
-
-    $envoyes = 0;
-    $abandons = 0;
-
-    foreach ($lignes as $m) {
-        if (envoyer_email_smtp($m['destinataire'], $m['sujet'], $m['corps'])) {
-            $pdo->prepare('DELETE FROM mail_file WHERE id = ?')->execute([(int) $m['id']]);
-            $envoyes++;
-            continue;
-        }
-        if ((int) $m['essais'] + 1 >= MAIL_FILE_MAX_ESSAIS) {
-            $pdo->prepare('DELETE FROM mail_file WHERE id = ?')->execute([(int) $m['id']]);
-            error_log('traiter_file_mail: message abandonné après '
-                . MAIL_FILE_MAX_ESSAIS . ' essais (id=' . (int) $m['id'] . ')');
-            $abandons++;
-            continue;
-        }
-        $pdo->prepare('UPDATE mail_file SET essais = essais + 1 WHERE id = ?')
-            ->execute([(int) $m['id']]);
-        // Le serveur SMTP est visiblement en panne : inutile d'insister
-        // sur les suivants dans la même exécution.
-        break;
-    }
-
-    return [$envoyes, $abandons];
+    return envoyer_email_smtp($destinataire, $sujet, $corps);
 }
 
 /**
@@ -515,9 +451,7 @@ function avertir_mot_de_passe_supprime(string $email, string $identifiant): void
  * mot de passe le prévient, demander un changement d'adresse aussi, mais
  * tout effacer se faisait en silence.
  *
- * Envoyé APRÈS la suppression, et seulement si elle a réussi. La file de
- * rattrapage (mail_file) ne référence aucun compte : un envoi différé
- * survit donc à la disparition de celui-ci.
+ * Envoyé APRÈS la suppression, et seulement si elle a réussi.
  *
  * @return array{0: string, 1: string} le sujet et le corps
  */

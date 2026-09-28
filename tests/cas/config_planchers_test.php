@@ -35,7 +35,6 @@ putenv('IMAGE_QUALITE=0');
 putenv('IMAGE_PIXELS_MAX=1');
 putenv('IMPORT_TAILLE_MAX=1');
 putenv('SMTP_TIMEOUT=0');
-putenv('MAIL_FILE_MAX_ESSAIS=0');
 putenv('SESSION_DUREE=-99');
 putenv('REMEMBER_DUREE_VIP=-99');
 putenv('QUOTA_BASE_MO=-5');
@@ -135,10 +134,6 @@ groupe('Divers');
 test('le délai SMTP ne tombe pas à zéro', function () {
     // Un délai de 0 s ferait échouer tout envoi avant même la connexion.
     vrai(SMTP_TIMEOUT >= 1, 'au moins une seconde');
-});
-
-test('un message en file a droit à au moins un essai', function () {
-    vrai(MAIL_FILE_MAX_ESSAIS >= 1, 'sinon tout message serait abandonné d emblée');
 });
 
 test('les durées négatives sont ramenées à zéro', function () {

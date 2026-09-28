@@ -277,8 +277,7 @@ fenêtre glissante), les sessions persistantes (`creer_session_persistante`,
 la rotation des jetons, le plafond d'appareils), les jetons d'action
 (`generer_jeton_action`, `consommer_jeton_action`), les comptes
 (`utilisateur_actuel`, `connecter`, `invalider_sessions`,
-`email_disponible`, `changement_email_en_attente`), la file d'e-mails
-(`empiler_mail`, `traiter_file_mail`), `couverture_consommer`,
+`email_disponible`, `changement_email_en_attente`), `couverture_consommer`,
 `couverture_rendre` et `couverture_restantes` (le quota de recherche par
 compte : le barème est testé, le comptage non), `compter_series`,
 l'import d'une sauvegarde (ce qui distingue une série déjà présente), le cloisonnement par

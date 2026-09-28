@@ -151,11 +151,6 @@ $req = $pdo->prepare(
 $req->execute();
 $resume[] = $req->rowCount() . ' quota(s) de recherche';
 
-/* File de rattrapage : on rejoue ce qui n'était pas parti. Normalement
-   vide — elle ne se remplit que quand le serveur SMTP a refusé. */
-[$mails_envoyes, $mails_abandonnes] = traiter_file_mail();
-$resume[] = $mails_envoyes . ' e-mail(s) rattrapé(s), ' . $mails_abandonnes . ' abandonné(s)';
-
 /* Images orphelines : plus aucune série ni profil ne les référence. Les
    suppressions nettoient au fil de l'eau, mais un plantage au mauvais
    moment peut en laisser — et le disque ne se vide pas tout seul. */
@@ -203,8 +198,8 @@ $resume[] = $temporaires . ' temporaire(s)';
    La tache planifiee d'OVH propose « envoyer un e-mail uniquement en cas
    d'erreur ». Encore faut-il que ce script sache en signaler une : tant
    qu'il se terminait toujours en succes, ce reglage ne produisait jamais
-   le moindre message, et une file d'e-mails bloquee pouvait grossir des
-   semaines sans que personne ne le sache.
+   le moindre message, et un probleme pouvait durer des semaines sans que
+   personne ne le sache.
 
    On separe donc le compte rendu (normal, silencieux) de l'anomalie
    (bruyante). Le silence devient alors une information : tout va bien.
@@ -216,21 +211,6 @@ if (!$etat_lisible) {
     $anomalies[] = 'table rapport_cron absente : rejouez livre.sql'
                  . ' (en attendant, le rapport part à chaque passage)';
 }
-
-if ($mails_abandonnes > 0) {
-    $anomalies[] = $mails_abandonnes . ' e-mail(s) définitivement perdu(s) après '
-                 . MAIL_FILE_MAX_ESSAIS . ' tentatives';
-}
-
-/* Une file encore pleine apres le passage signifie que le serveur SMTP a
-   refuse : plus aucune inscription ni reinitialisation de mot de passe
-   n'aboutit, et rien d'autre ne vous le dirait. */
-$en_attente = (int) $pdo->query('SELECT COUNT(*) FROM mail_file')->fetchColumn();
-if ($en_attente > 0) {
-    $anomalies[] = $en_attente . ' e-mail(s) toujours en attente : le serveur SMTP ne répond pas'
-                 . ' (vérifiez les réglages SMTP_* du .env)';
-}
-$resume[] = $en_attente . ' e-mail(s) en attente';
 
 /* ---------------------------------------------------------------------
    Rapport d'activite
@@ -247,8 +227,7 @@ $resume[] = $en_attente . ' e-mail(s) en attente';
    et str_pad() comptent les octets, si bien que chaque « e » accentue
    decalait sa colonne d'un cran vers la gauche.
    --------------------------------------------------------------------- */
-function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes,
-                       int $perdus, int $en_attente, float $demarre,
+function rapport_texte(PDO $pdo, array $resume, array $anomalies, float $demarre,
                        int $fenetre_minutes): string
 {
     /* La période couverte : depuis le dernier rapport (voir
@@ -335,14 +314,6 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, int $rattrapes
     $t .= $lit('Blocages encore actifs', (int) $bloques[0]);
     $t .= $lit('Appareils mémorisés', (int) $appareils[0]);
 
-    /* Un e-mail n'entre dans la file QUE si son envoi immediat a echoue :
-       une valeur non nulle signifie que quelqu'un attend un lien qui
-       n'est jamais parti, pas qu'un envoi soit en cours. */
-    $t .= "\nE-MAILS\n";
-    $t .= $lit('Bloqués (envoi immédiat échoué)', $en_attente);
-    $t .= $lit('Rattrapés à ce passage', $rattrapes);
-    $t .= $lit('Perdus définitivement', $perdus);
-
     $t .= "\nSTOCKAGE\n";
     $t .= $lit('Base de données', ($base[0] ?? 0) . ' Mo'
              . (QUOTA_BASE_MO > 0 ? ' / ' . QUOTA_BASE_MO . ' Mo' : ''));
@@ -395,18 +366,14 @@ function rapport_noter_envoi(PDO $pdo): void
 }
 
 $fenetre = rapport_fenetre_minutes($depuis_dernier, RAPPORT_HEURES);
-$rapport = rapport_texte($pdo, $resume, $anomalies, $mails_envoyes,
-                         $mails_abandonnes, $en_attente, $demarre, $fenetre);
+$rapport = rapport_texte($pdo, $resume, $anomalies, $demarre, $fenetre);
 
-/* Envoi DIRECT, sans passer par la file de rattrapage : un rapport est
-   perissable, le suivant arrive au prochain passage. L'empiler ferait
-   grossir la file d'un message par execution le jour ou le SMTP tombe,
-   en noyant justement les e-mails d'utilisateurs qu'elle doit rejouer.
-   S'il echoue, le texte reste dans le journal de la tache planifiee.
+/* Envoi DIRECT par envoyer_email_smtp(). S'il echoue, le texte reste dans
+   le journal de la tache planifiee.
 
    Il ne part que lorsqu'il est du (toutes les RAPPORT_HEURES heures),
-   SAUF anomalie : un e-mail perdu ou un SMTP en panne n'attend pas le
-   rapport de la semaine, il part tout de suite.
+   SAUF anomalie : elle n'attend pas le rapport de la semaine, il part
+   tout de suite.
 
    Seul un rapport DU et bien PARTI est note comme envoye :
      - un rapport d'anomalie hors echeance ne decale pas le suivant,

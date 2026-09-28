@@ -4,9 +4,8 @@
 
    Cette fonction revalide le destinataire et le sujet alors que ses
    appelants l ont déjà fait. Ce n est pas une redondance inutile : elle
-   est aussi appelée par traiter_file_mail(), qui dépile des messages
-   écrits en base — donc par un chemin où la validation d origine est
-   loin derrière.
+   est aussi appelée directement (le rapport du cron), sans passer par
+   envoyer_email() et sa validation.
 
    Pour atteindre ce contrôle, il faut que SMTP soit considéré comme
    CONFIGURÉ : sinon la fonction s arrête une étape plus tôt et le test

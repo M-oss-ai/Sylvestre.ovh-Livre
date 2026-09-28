@@ -95,20 +95,13 @@ l'affiche ainsi :
 | 1 à 47 heures | `depuis 1 heure`, `depuis 47 heures` |
 | 48 heures et plus | `depuis 2 jours`, `depuis 7 j et 5 heures` |
 
-**Une anomalie n'attend pas l'échéance** (e-mail perdu, file d'envoi
-bloquée) : le rapport part tout de suite, avec `[ANOMALIE]` dans le
+**Une anomalie n'attend pas l'échéance** : le rapport part tout de suite, avec `[ANOMALIE]` dans le
 sujet, sans décaler le suivant. Un rapport dû mais qui n'a pas pu partir
 (SMTP en panne) est retenté au passage suivant.
 
 Plafond de 720 heures (30 jours) : la purge efface au-delà les compteurs
 de tentatives de connexion, et la rubrique sécurité ne couvrirait plus
 la période annoncée.
-
-Ce rapport part en envoi **direct**, sans passer par la file de
-rattrapage : un rapport est périssable, le suivant arrive au passage
-suivant. L'empiler ferait grossir la file d'un message par exécution
-le jour où le SMTP tombe, en noyant les e-mails d'utilisateurs
-qu'elle doit justement rejouer.
 
 Il est aussi écrit sur la sortie standard. **Réglez l'envoi du journal
 OVH sur « uniquement en cas d'erreur »** : vous disposez ainsi d'un
@@ -119,10 +112,7 @@ quand le rapport ne peut pas vous parvenir autrement.
 Le script se termine avec un code de retour non nul, et écrit sur la
 sortie d'erreur, uniquement quand quelque chose mérite votre attention :
 
-- des e-mails ont été définitivement abandonnés après plusieurs essais ;
-- la file n'est toujours pas vide après le passage, ce qui signifie que
-  le serveur SMTP refuse — donc plus aucune inscription ni
-  réinitialisation n'aboutit ;
+- la table `rapport_cron` manque (`livre.sql` pas rejoué) ;
 - le script n'a pas pu s'exécuter du tout, typiquement parce que la base
   de données est injoignable. Il se terminait auparavant en **succès**
   dans ce cas, après avoir écrit une page d'erreur HTML dans le journal
@@ -132,8 +122,8 @@ sortie d'erreur, uniquement quand quelque chose mérite votre attention :
 
 Le silence devient alors une information : tout va bien. Sans ce code de
 retour, le réglage « uniquement en cas d'erreur » ne produirait jamais
-aucun message, et une file bloquée pourrait grossir des semaines sans
-que personne ne le sache.
+aucun message, et un problème pourrait durer des semaines sans que
+personne ne le sache.
 
 Le silence ne dit en revanche pas si la tâche s'est bien exécutée : pour
 ça, le manager OVH affiche la date du dernier passage de chaque tâche
@@ -504,7 +494,7 @@ configuration.
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
 | `includes/fonctions.php` | En-têtes, session, `e()`, CSRF, limiteur, comptes |
 | `includes/images.php` | Validation, redimension, ré-encodage |
-| `includes/mailer.php` | SMTP, file de rattrapage, jetons |
+| `includes/mailer.php` | SMTP, jetons |
 | `includes/carte.php` | Gabarit d'une carte — **le seul endroit** où ce HTML est écrit |
 | `index.php` | La bibliothèque : grille, recherche, filtres, modales |
 | `api.php` | Actions AJAX + export JSON |
@@ -558,7 +548,7 @@ sous leur champ, la navigation au clavier dans la grille, le défilement
 qui cache et ramène les filtres, les textes des quotas.
 
 Ce qui demande la base de données — limiteur anti force brute, jetons,
-sessions persistantes, file d'e-mails, cloisonnement par compte — n'est
+sessions persistantes, cloisonnement par compte — n'est
 pas couvert. `tests/LISEZMOI.md` en donne la liste exacte.
 
 ---
@@ -660,8 +650,8 @@ passe oublié, renvoi de confirmation) : une attaque distribuée le
 contourne par construction. La limite d'envoi journalière de la boîte OVH
 est donc la seule borne réelle, et une fois atteinte plus rien ne part —
 ni inscription, ni réinitialisation, ni avis de sécurité. Surveillez le
-journal d'erreurs de l'hébergement. Un envoi raté part en file et le cron
-le rejoue.
+journal d'erreurs de l'hébergement. Un envoi raté n'est pas retenté :
+la page le dit, et l'on recommence.
 
 **Liens des e-mails** — l'adresse vient de `APP_URL`, **jamais** de
 l'en-tête `Host`, qui est choisi par le client. Sinon, un attaquant peut
@@ -730,7 +720,7 @@ Chez OVH : Hébergements → Statistiques et logs.
   Levenshtein court-circuitée quand les longueurs sont trop éloignées.
 - Index couvrant `(utilisateur_id, maj_le)` pour l'affichage, et index sur
   `couverture` / `photo` pour le nettoyage des images.
-- L'envoi SMTP est borné à 5 s. Au-delà, le message part en file : un
+- L'envoi SMTP est borné à 5 s. Au-delà, il échoue : un
   serveur de messagerie lent ne doit pas immobiliser les quelques
   processus PHP d'un hébergement mutualisé.
 
