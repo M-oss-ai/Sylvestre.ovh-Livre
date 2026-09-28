@@ -1,6 +1,8 @@
 <?php
 /* =====================================================================
    Mot de passe oublié : demande d'un lien de réinitialisation par e-mail.
+   On se désigne par son identifiant OU son adresse, comme à la connexion ;
+   le lien part toujours à l'adresse du compte, jamais à ce qui a été tapé.
    ===================================================================== */
 
 declare(strict_types=1);
@@ -15,26 +17,34 @@ $moi = utilisateur_actuel();
 
 $info    = '';
 $erreur  = '';
+$erreurs = [];   // par champ : l'erreur de saisie va sous « compte »
 $attente = 0;
+$saisie  = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exiger_csrf();
 
-    $email  = texte($_POST['email'] ?? '', 190);
+    $saisie = texte($_POST['compte'] ?? '', 190);
     $bloque = limiteur_bloque_depuis('mdp_oublie');
 
     if ($bloque > 0) {
         $erreur = 'Trop de demandes. Réessayez dans';
         $attente = $bloque;
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $erreur = "Adresse e-mail invalide.";
+    } elseif ($saisie === '') {
+        $erreurs['compte'] = MESSAGE_CHAMP_OBLIGATOIRE;
+    } elseif (str_contains($saisie, '@') && !filter_var($saisie, FILTER_VALIDATE_EMAIL)) {
+        $erreurs['compte'] = 'Adresse e-mail invalide.';
     } else {
         limiteur_echec('mdp_oublie', MDP_OUBLIE_MAX, MDP_OUBLIE_BLOCAGE);
 
+        /* Un identifiant ne peut pas contenir « @ » (forme_identifiant) :
+           la saisie dit d'elle-même quelle colonne interroger. */
+        $colonne = str_contains($saisie, '@') ? 'email' : 'identifiant';
         $req = $pdo->prepare(
-            "SELECT id, identifiant, google_sub, (mot_de_passe <> '') AS a_mdp FROM utilisateur WHERE email = ?"
+            "SELECT id, identifiant, email, google_sub, (mot_de_passe <> '') AS a_mdp
+               FROM utilisateur WHERE $colonne = ?"
         );
-        $req->execute([$email]);
+        $req->execute([$saisie]);
         $u = $req->fetch();
 
         if ($u) {
@@ -46,12 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : url_publique('reinitialiser-mot-de-passe.php?jeton='
                     . generer_jeton_action((int) $u['id'], 'reinit', 3600)); // 1 h
             [$sujet, $corps] = avis_mot_de_passe_oublie((string) $u['identifiant'], $acces, $lien);
-            envoyer_email($email, $sujet, $corps);
+            envoyer_email((string) $u['email'], $sujet, $corps);
         }
 
         // Même message que le compte existe ou non : on ne révèle jamais
-        // quelles adresses sont enregistrées.
-        $info = "Si un compte existe avec cette adresse, un e-mail de réinitialisation vient d'être envoyé.";
+        // quels identifiants ni quelles adresses sont enregistrés.
+        $info = "Si ce compte existe, un e-mail de réinitialisation vient d'être envoyé à son adresse.";
     }
 }
 
@@ -87,7 +97,7 @@ $csrf = jeton_csrf();
     <div class="auth-head">
       <p class="auth-logo" aria-hidden="true">📚</p>
       <h1>Mot de passe oublié</h1>
-      <p class="hint">Indiquez votre e-mail pour recevoir un lien de réinitialisation.</p>
+      <p class="hint">Indiquez votre identifiant ou votre e-mail pour recevoir un lien de réinitialisation.</p>
     </div>
 
     <?php if ($info): ?>
@@ -105,9 +115,11 @@ $csrf = jeton_csrf();
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
 
       <div class="field">
-        <label for="email">E-mail</label>
-        <input id="email" name="email" type="email" required autocomplete="email" autofocus
-               value="<?= e($moi ? (string) $moi['email'] : '') ?>">
+        <label for="compte">Identifiant ou e-mail</label>
+        <input id="compte" name="compte" type="text" required autocomplete="username"
+               value="<?= e($saisie !== '' ? $saisie : ($moi ? (string) $moi['identifiant'] : '')) ?>"
+               <?= $erreurs ? champ_aria($erreurs, 'compte', 'compte') : 'autofocus' ?>>
+        <?= champ_erreur($erreurs, 'compte', 'compte') ?>
       </div>
 
       <button type="submit" class="btn btn-primary full">Envoyer le lien</button>

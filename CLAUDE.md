@@ -149,7 +149,9 @@ en définir un demande de se reconnecter avec Google.
 
 **« Mot de passe oublié » s'ouvre aussi connecté.** La fenêtre de
 confirmation des Paramètres y mène (sous « Mot de passe actuel ») :
-`mot-de-passe-oublie.php` pré-remplit alors l'adresse du compte, et
+`mot-de-passe-oublie.php` pré-remplit alors l'identifiant du compte (on
+s'y désigne par identifiant OU adresse, le lien part toujours à l'adresse
+enregistrée), et
 `reinitialiser-mot-de-passe.php` accepte le lien dans le navigateur où
 l'on est connecté — le jeton prouve l'accès à l'adresse, et
 `invalider_sessions()` ferme la session en cours. Les rediriger vers
