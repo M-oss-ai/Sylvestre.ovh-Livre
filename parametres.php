@@ -741,6 +741,7 @@ $nb_series = (int) $req->fetchColumn();
             <input id="confirm-password" type="password" autocomplete="current-password">
             <button type="button" class="icon-btn toggle-password" data-cible="confirm-password" aria-label="Afficher le mot de passe">👁️</button>
           </div>
+          <p class="hint confirm-oubli"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
         </div>
       <?php endif; ?>
     </div>

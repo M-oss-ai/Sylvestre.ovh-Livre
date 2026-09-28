@@ -310,7 +310,7 @@ $csrf = jeton_csrf();
     <?php if (google_actif()): ?>
       <p class="auth-switch"><a href="inscription.php">← Autres façons de s'inscrire</a></p>
     <?php endif; ?>
-    <p class="auth-switch">Déjà un compte ? <a href="connexion.php">Se connecter</a></p>
+    <p class="auth-switch">Déjà un compte&nbsp;? <a href="connexion.php">Se connecter</a></p>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
 
   <?php endif; ?>

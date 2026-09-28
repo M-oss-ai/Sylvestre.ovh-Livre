@@ -6,10 +6,12 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
 
-if (utilisateur_actuel()) {
-    header('Location: index.php');
-    exit;
-}
+/* Ouverte aussi à une personne connectée : les Paramètres y mènent quand
+   la fenêtre de confirmation demande un mot de passe oublié. Rien n'est
+   donné de plus : le lien part à l'adresse saisie, comme pour quiconque,
+   et c'est lui qui prouve qu'on la détient. On pré-remplit seulement la
+   sienne. */
+$moi = utilisateur_actuel();
 
 $info    = '';
 $erreur  = '';
@@ -104,14 +106,19 @@ $csrf = jeton_csrf();
 
       <div class="field">
         <label for="email">E-mail</label>
-        <input id="email" name="email" type="email" required autocomplete="email" autofocus>
+        <input id="email" name="email" type="email" required autocomplete="email" autofocus
+               value="<?= e($moi ? (string) $moi['email'] : '') ?>">
       </div>
 
       <button type="submit" class="btn btn-primary full">Envoyer le lien</button>
     </form>
     <?php endif; ?>
 
-    <p class="auth-switch"><a href="connexion.php">Retour à la connexion</a></p>
+    <?php if ($moi): ?>
+      <p class="auth-switch"><a href="parametres.php">Retour aux paramètres</a></p>
+    <?php else: ?>
+      <p class="auth-switch"><a href="connexion.php">Retour à la connexion</a></p>
+    <?php endif; ?>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
   </section>
 </main>

@@ -25,13 +25,12 @@ foreach (['reinit', 'blocage_email'] as $candidat) {
 }
 $bloquer = ($type === 'blocage_email');
 
-/* Une session ouverte n'écarte pas le lien de blocage : la victime peut
-   très bien être encore connectée, et c'est justement l'attaquant qu'on
-   veut déconnecter. */
-if (!$bloquer && utilisateur_actuel()) {
-    header('Location: index.php');
-    exit;
-}
+/* Une session ouverte n'écarte aucun lien. Celui de blocage : la victime
+   peut très bien être encore connectée, et c'est justement l'attaquant
+   qu'on veut déconnecter. Celui de « Mot de passe oublié » : il se demande
+   aussi depuis les Paramètres, et s'ouvre alors le plus souvent dans le
+   navigateur où l'on est connecté — le jeton suffit à prouver l'accès à
+   l'adresse, et invalider_sessions() ferme ensuite la session en cours. */
 
 $erreurs      = [];
 $reussi       = false;

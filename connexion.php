@@ -265,6 +265,7 @@ $csrf = jeton_csrf();
         <a class="btn btn-primary full" href="connexion.php?avec=email">✉️ Continuer avec une adresse e-mail</a>
         <?= bouton_google('Continuer avec Google') ?>
       </div>
+      <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
     <?php else: ?>
 
     <form method="post" action="connexion.php" autocomplete="on" novalidate>
@@ -297,7 +298,7 @@ $csrf = jeton_csrf();
     <?php if (google_actif()): ?>
       <p class="auth-switch"><a href="connexion.php">← Autres façons de se connecter</a></p>
     <?php endif; ?>
-      <p class="auth-switch">Pas encore de compte ? <a href="inscription.php">Créer un compte</a></p>
+      <p class="auth-switch">Pas encore de compte&nbsp;? <a href="inscription.php">Créer un compte</a></p>
     <?php endif; ?>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
   </section>

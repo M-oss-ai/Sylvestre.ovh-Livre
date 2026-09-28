@@ -162,9 +162,7 @@ $csrf = jeton_csrf();
       <button type="submit" class="btn btn-primary full"><?= $action !== '' ? 'Confirmer' : 'Se connecter' ?></button>
     </form>
 
-    <?php if (!$moi): ?>
-      <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
-    <?php endif; ?>
+    <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
     <p class="auth-switch"><a href="google-mot-de-passe.php?annuler=1">Annuler</a></p>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
   </section>

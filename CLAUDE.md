@@ -147,6 +147,14 @@ dans les fonctions pures `avis_*()` de `mailer.php`, testées. « Mot de
 passe oublié » n'envoie aucun lien à un compte Google sans mot de passe :
 en définir un demande de se reconnecter avec Google.
 
+**« Mot de passe oublié » s'ouvre aussi connecté.** La fenêtre de
+confirmation des Paramètres y mène (sous « Mot de passe actuel ») :
+`mot-de-passe-oublie.php` pré-remplit alors l'adresse du compte, et
+`reinitialiser-mot-de-passe.php` accepte le lien dans le navigateur où
+l'on est connecté — le jeton prouve l'accès à l'adresse, et
+`invalider_sessions()` ferme la session en cours. Les rediriger vers
+l'accueil rendait le lien inutilisable depuis là.
+
 **Aucune consigne d'avance dans un formulaire.** Pas de « * », pas de
 « obligatoire » : un champ requis laissé vide le dit à l'envoi
 (`MESSAGE_CHAMP_OBLIGATOIRE`, via `forme_identifiant()` /
