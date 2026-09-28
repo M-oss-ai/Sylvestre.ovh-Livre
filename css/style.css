@@ -657,17 +657,18 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .btn-ghost { background: transparent; color: var(--text); }
 
-/* « Continuer avec Google » : le « G » en couleurs, qu'on reconnaît d'un
-   site à l'autre, sur un fond clair. Crème plutôt que blanc pur : le blanc
-   éblouissait sur le fond sombre du site. */
+/* « Continuer avec Google » : volontairement en retrait de l'adresse e-mail
+   (méthode mise en avant) — fond discret comme .btn-ghost, et le « G » en
+   couleurs légèrement désaturé pour qu'il ne rivalise pas avec le bouton
+   principal. */
 .btn-google {
-  background: var(--gold-light);
-  color: #1a1410;
-  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+  border-color: var(--border);
   gap: 10px;
 }
-.btn-google:hover { background: #faeedf; border-color: transparent; }
-.google-g { width: 18px; height: 18px; flex: none; }
+.btn-google:hover { border-color: var(--border-strong); color: var(--text); }
+.google-g { width: 18px; height: 18px; flex: none; filter: saturate(0.55); }
 
 /* Paramètres › Sécurité : revenir à Google seul, sous le formulaire du mot de passe. */
 .form-supprimer-mdp { margin-top: 18px; }

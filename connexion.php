@@ -262,8 +262,8 @@ $csrf = jeton_csrf();
       <!-- Étape 1 : COMMENT se connecter. Google authentifie la personne chez
            lui (google.php fait le reste) ; l'adresse e-mail mène au formulaire. -->
       <div class="choix-methode">
+        <a class="btn btn-primary full" href="connexion.php?avec=email">✉️ Continuer avec une adresse e-mail</a>
         <?= bouton_google('Continuer avec Google') ?>
-        <a class="btn btn-ghost full" href="connexion.php?avec=email">✉️ Continuer avec une adresse e-mail</a>
       </div>
     <?php else: ?>
 

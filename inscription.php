@@ -235,8 +235,8 @@ $csrf = jeton_csrf();
     </div>
 
     <div class="choix-methode">
+      <a class="btn btn-primary full" href="inscription.php?avec=email">✉️ S'inscrire avec une adresse e-mail</a>
       <?= bouton_google("S'inscrire avec Google") ?>
-      <a class="btn btn-ghost full" href="inscription.php?avec=email">✉️ S'inscrire avec une adresse e-mail</a>
     </div>
 
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
