@@ -220,6 +220,14 @@ $csrf = jeton_csrf();
 
 <main class="auth-wrap">
   <section class="auth-card">
+    <?php if (!$avec_email): ?>
+      <!-- Où l'on est, d'un coup d'œil : au choix de la méthode, les deux pages
+           se ressemblent (voir inscription.php). -->
+      <nav class="auth-onglets" aria-label="Compte">
+        <a href="connexion.php" aria-current="page">Se connecter</a>
+        <a href="inscription.php">Créer un compte</a>
+      </nav>
+    <?php endif; ?>
     <div class="auth-head">
       <p class="auth-logo" aria-hidden="true">📚</p>
       <h1>Ma Bibliothèque</h1>
@@ -289,8 +297,8 @@ $csrf = jeton_csrf();
     <?php if (google_actif()): ?>
       <p class="auth-switch"><a href="connexion.php">← Autres façons de se connecter</a></p>
     <?php endif; ?>
+      <p class="auth-switch">Pas encore de compte ? <a href="inscription.php">Créer un compte</a></p>
     <?php endif; ?>
-    <p class="auth-switch">Pas encore de compte ? <a href="inscription.php">Créer un compte</a></p>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
   </section>
 </main>

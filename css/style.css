@@ -657,15 +657,16 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .btn-ghost { background: transparent; color: var(--text); }
 
-/* « Continuer avec Google » : fond blanc et « G » en couleurs, l'aspect
-   que Google demande et que l'on reconnaît d'un site à l'autre. */
+/* « Continuer avec Google » : le « G » en couleurs, qu'on reconnaît d'un
+   site à l'autre, sur un fond clair. Crème plutôt que blanc pur : le blanc
+   éblouissait sur le fond sombre du site. */
 .btn-google {
-  background: #fff;
-  color: #1f1f1f;
-  border-color: #dadce0;
+  background: var(--gold-light);
+  color: #1a1410;
+  border-color: transparent;
   gap: 10px;
 }
-.btn-google:hover { background: #f7f8f8; border-color: #c4c7c5; }
+.btn-google:hover { background: #faeedf; border-color: transparent; }
 .google-g { width: 18px; height: 18px; flex: none; }
 
 /* Paramètres › Sécurité : revenir à Google seul, sous le formulaire du mot de passe. */
@@ -1261,6 +1262,35 @@ html.verification-session body { visibility: hidden; }
 .auth-head .hint { margin-top: 0; }
 
 .auth-logo { font-size: 40px; margin-bottom: 6px; }
+
+/* « Se connecter | Créer un compte » en tête de carte, au choix de la
+   méthode : la page ouverte est pleine, l'autre est un simple lien. */
+.auth-onglets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 22px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.auth-onglets a {
+  padding: 9px 8px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.auth-onglets a:hover { color: var(--gold-light); background: rgba(201, 168, 124, 0.1); }
+.auth-onglets a[aria-current="page"] {
+  background: linear-gradient(135deg, var(--gold), #a9835a);
+  color: #1a1410;
+}
+.auth-onglets a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
 .auth-switch {
   margin-top: 18px;

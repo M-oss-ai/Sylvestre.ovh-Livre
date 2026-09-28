@@ -231,8 +231,12 @@ $csrf = jeton_csrf();
   <?php elseif (!$avec_email): ?>
 
     <!-- Étape 1 : COMMENT s'inscrire. Le formulaire ne vient qu'après. -->
+    <nav class="auth-onglets" aria-label="Compte">
+      <a href="connexion.php">Se connecter</a>
+      <a href="inscription.php" aria-current="page">Créer un compte</a>
+    </nav>
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📚</p>
+      <p class="auth-logo" aria-hidden="true">✨</p>
       <h1>Créer un compte</h1>
       <p class="hint">Votre bibliothèque vous suit d'un appareil à l'autre.</p>
     </div>
@@ -242,7 +246,6 @@ $csrf = jeton_csrf();
       <a class="btn btn-ghost full" href="inscription.php?avec=email">✉️ S'inscrire avec une adresse e-mail</a>
     </div>
 
-    <p class="auth-switch">Déjà un compte ? <a href="connexion.php">Se connecter</a></p>
     <p class="auth-legal"><a href="mentions-legales.php">Mentions légales et confidentialité</a></p>
 
   <?php else: ?>
