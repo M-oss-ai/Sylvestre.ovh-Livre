@@ -1217,6 +1217,7 @@ window.Bibliotheque = (() => {
     const tome = Math.max(1, statutFini ? volumeActuel : volumeActuel + 1);
 
     $coverStatus.textContent = "Recherche du tome " + tome + "…";
+    const focusAuDepart = document.activeElement; // voir montrerResultats()
     $coverResults.classList.add("hidden");
     $coverResults.replaceChildren();
     document.querySelectorAll(".majorite").forEach((n) => n.remove());
@@ -1277,6 +1278,7 @@ window.Bibliotheque = (() => {
          l'absence se remarque : proposé en permanence, il ne serait
          qu'une invitation sans objet. */
       if (r.filtre) mentionnerFiltre();
+      montrerResultats(focusAuDepart);
     } catch (err) {
       if (err.attente) {
         /* Deux attentes différentes : la limite du COMPTE, que la page
@@ -1323,6 +1325,43 @@ window.Bibliotheque = (() => {
     bloc.appendChild(lien);
     bloc.appendChild(document.createTextNode("."));
     $coverResults.after(bloc);
+  }
+
+  /* Les vignettes arrivent sous la ligne de flottaison : sur téléphone,
+     tout le formulaire les précède, et il fallait deviner qu'elles étaient
+     là pour aller les chercher. La fiche descend donc d'elle-même jusqu'au
+     message « Choisissez la couverture… », posé juste sous la barre du
+     haut, les vignettes à sa suite. Pas tout en bas : une recherche en
+     renvoie souvent plus qu'un écran n'en montre, de la plus probable à
+     la moins probable, et le bas montrerait les dernières. Quand elles
+     tiennent à l'écran, la butée fait qu'on arrive en bas de toute façon.
+
+     Seule la fiche défile (scrollBy sur elle, pas scrollIntoView) : la
+     liste derrière ne doit pas bouger. Rien ne bouge si les vignettes se
+     voient déjà en entier, ni si l'on s'est mis à écrire dans un autre
+     champ PENDANT la recherche : on n'arrache pas une saisie en cours. Le
+     champ qui avait déjà le focus au départ ne compte pas : Safari ne le
+     donne pas au bouton cliqué, le Titre le garde. */
+  const $modale = $overlay.querySelector(".modal");
+  const $teteModale = $overlay.querySelector(".modal-head");
+
+  function montrerResultats(focusAuDepart) {
+    if ($overlay.classList.contains("hidden")) return;
+    const actif = document.activeElement;
+    if (actif !== focusAuDepart && $form.contains(actif)
+        && actif.matches("input:not([type=file]), textarea")) return;
+
+    const cadre = $modale.getBoundingClientRect();
+    // Sur téléphone, la barre « ✕ Titre ✓ » colle en haut et masque ce
+    // qui passe dessous.
+    const tete = getComputedStyle($teteModale).position === "sticky" ? $teteModale.offsetHeight : 0;
+    const haut = cadre.top + $modale.clientTop + tete;
+    const bas = cadre.top + $modale.clientTop + $modale.clientHeight;
+    const statut = $coverStatus.getBoundingClientRect();
+    if (statut.top >= haut && $coverResults.getBoundingClientRect().bottom <= bas) return;
+
+    const doux = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $modale.scrollBy({ top: statut.top - haut - 8, behavior: doux ? "smooth" : "auto" });
   }
 
   document.getElementById("btn-search-cover").addEventListener("click", chercherCouverture);

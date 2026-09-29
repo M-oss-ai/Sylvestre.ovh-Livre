@@ -457,7 +457,12 @@ page n'a pas le focus système (`document.hasFocus()` à `false`). Un
 banc qui s'en contente rate tout le code branché sur ces évènements. Il
 faut focaliser par un vrai clic. Le clavier se simule en remplaçant
 `window.visualViewport` (attribut `[Replaceable]`) par un objet dont on
-réduit `height` avant d'envoyer `resize`.
+réduit `height` avant d'envoyer `resize`. De même, un défilement doux
+(`behavior: "smooth"`) ne progresse pas tant que la page est masquée
+(`document.visibilityState` à `hidden`) : on croirait qu'il n'a pas eu
+lieu. `montrerResultats()` (`js/app.js`, la fiche qui descend jusqu'aux
+couvertures trouvées) se vérifie donc en faisant répondre
+`window.matchMedia` « réduire les animations », ce qui défile d'un bond.
 
 **Les grilles CSS étirent leurs lignes par défaut.** Avec un `max-height`
 sur le conteneur, les lignes sont dimensionnées contre la hauteur
