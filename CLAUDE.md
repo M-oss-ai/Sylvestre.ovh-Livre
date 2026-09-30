@@ -17,10 +17,20 @@ d'étape de compilation. Ce n'est pas un accident, c'est le parti pris du
 projet — un hébergement mutualisé n'offre ni terminal ni gestionnaire de
 paquets, et le code doit rester déployable par simple copie de fichiers.
 
+## Instructions
+à chaques taches terminée : 
+- résumé des solutions et des résultats réelles
+- fait les testes unitaires `php tests/lancer.php`
+- commit avec un petit message
+- push, intègre aussi mes propres modifications sauf en cas d'erreurs
+- dit moi "x tests fait x erreurs, je commite, je push"
+- dit moi quelles fichier mettre dans le serveur et quelle mofifications du .env
+- donne moi le sql pour modifier la base sans perdre mes données
+
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (608 tests : 541 PHP en 43 fichiers, 67 JavaScript)
+php tests/lancer.php              # toute la suite (610 tests : 541 PHP en 43 fichiers, 69 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -188,6 +198,13 @@ suppression, la sélection passe à la voisine. Le cadre, c'est
 le focus si l'on annule : le lire dans `activeElement` donnait `<body>`,
 parce que `commun.js` sort d'un champ au moindre clic ailleurs et que
 Safari ne focalise pas le bouton cliqué.
+
+Suppr fait de même dans la fiche d'une série existante (demande de
+l'utilisateur), hors d'un champ où la touche efface du texte
+(`champDeSaisie()`). Sur ordinateur, cette fiche s'ouvre donc sur son
+`<h2>` (`tabindex="-1"`, sans cadre), plus dans le Titre : le curseur
+dans le champ rendait Suppr inopérant à l'ouverture. Une nouvelle série
+garde le Titre.
 
 **Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
 `js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se

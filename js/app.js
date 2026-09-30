@@ -146,9 +146,22 @@ window.Bibliotheque = (() => {
       && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
   }
 
+  // Les <input> qu'on ne remplit pas au clavier.
+  const SANS_TEXTE = ["button", "submit", "reset", "checkbox", "radio", "file", "image", "color", "range", "hidden"];
+
+  /**
+   * L'élément reçoit-il du texte ? Suppr et Retour arrière y effacent un
+   * caractère : là, ils ne suppriment jamais la série.
+   */
+  function champDeSaisie(el) {
+    if (!el || !el.tagName) return false;
+    if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+    return el.tagName === "INPUT" && !SANS_TEXTE.includes(el.type);
+  }
+
   return {
     voisine, suiviDefilement, annonceQuota, texteQuotaRecherche,
-    signatureCouverture, ficheModifiee, toucheSuppression,
+    signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
   };
 })();
 
@@ -952,8 +965,11 @@ window.Bibliotheque = (() => {
     /* Pas de focus automatique sur un ecran tactile : il ouvre le clavier,
        qui recouvre aussitot l'apercu de la couverture — precisement ce qu'on
        vient d'ouvrir la fenetre pour regarder. Au clavier physique, donner le
-       focus reste le bon comportement. */
-    if (!window.matchMedia("(pointer: coarse)").matches) $fTitle.focus();
+       focus reste le bon comportement : au Titre d'une nouvelle serie, au
+       titre de la fenetre pour une serie existante. Suppr l'y supprime, comme
+       sur sa carte ; dans le champ, la touche n'efface que du texte. Tab mene
+       au Titre. */
+    if (!window.matchMedia("(pointer: coarse)").matches) (edition ? $modalTitle : $fTitle).focus();
   }
 
   function fermerModale() {
@@ -1103,7 +1119,8 @@ window.Bibliotheque = (() => {
 
   let focusAvantConfirmation = null;
 
-  /** « Supprimer cette série ? » — depuis la fiche, ou Suppr sur une carte.
+  /** « Supprimer cette série ? » — depuis la fiche (son bouton, ou Suppr),
+      ou Suppr sur une carte.
       `retour` reprend le focus si l'on annule. Nommé par l'appelant, pas
       lu dans activeElement : commun.js sort d'un champ au moindre clic
       ailleurs, et Safari ne donne pas le focus au bouton cliqué — on
@@ -1172,6 +1189,18 @@ window.Bibliotheque = (() => {
       else if (abandonOuvert) L.piegerFocus($abandonOverlay, e);
       else if (confirmOuverte) L.piegerFocus($confirmOverlay, e);
       else if (modaleOuverte) L.piegerFocus($overlay, e);
+      return;
+    }
+    /* Suppr dans la fiche d'une série existante : la même confirmation que
+       sur sa carte. Jamais dans un champ, où la touche efface du texte, ni
+       sous une question posée par-dessus la fiche. */
+    if (B.toucheSuppression(e) && modaleOuverte && idEnEdition
+        && !confirmOuverte && !abandonOuvert && !quotaOuvert && !B.champDeSaisie(e.target)) {
+      e.preventDefault();
+      /* Un clic dans le vide de la fiche rend le focus à la page : « Annuler »
+         le ramène alors au titre de la fiche, pas derrière elle. */
+      const retour = $overlay.contains(e.target) ? e.target : $modalTitle;
+      demanderSuppression(idEnEdition, $fTitle.value, retour);
       return;
     }
     if (e.key !== "Escape") return;

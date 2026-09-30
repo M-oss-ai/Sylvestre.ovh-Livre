@@ -151,7 +151,9 @@ $flash = flash_prendre();
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-head">
       <button id="btn-close" class="icon-btn" type="button" aria-label="Fermer">✕</button>
-      <h2 id="modal-title">Nouvelle série</h2>
+      <!-- tabindex : le focus s'y pose à l'ouverture d'une série existante
+           (voir ouvrirModale dans js/app.js). -->
+      <h2 id="modal-title" tabindex="-1">Nouvelle série</h2>
       <!-- Hors du <form>, d'où l'attribut « form » : il suffit à en faire
            le bouton d'envoi. Caché sur grand écran, où celui du bas est
            tout de suite visible ; sur téléphone il prend sa place, parce

@@ -3,7 +3,8 @@
 
    Ce qui se décide sans toucher à la page : la carte voisine au clavier,
    le suivi du défilement qui cache et ramène les filtres, les textes des
-   quotas, la touche qui supprime. Le reste d'app.js branche ces décisions sur la page ; il se
+   quotas, la touche qui supprime et les champs où elle efface du texte.
+   Le reste d'app.js branche ces décisions sur la page ; il se
    vérifie dans un navigateur, sur une vraie bibliothèque.
    ===================================================================== */
 
@@ -231,4 +232,39 @@ test("ni une autre touche, ni un raccourci", () => {
   faux(B.toucheSuppression({ key: "Delete", shiftKey: true }), "Maj+Suppr");
   faux(B.toucheSuppression({ key: "Backspace", altKey: true }), "Alt+Retour arrière");
   faux(B.toucheSuppression({ key: "Backspace", metaKey: true }), "Cmd+Retour arrière");
+});
+
+groupe("Bibliotheque.champDeSaisie() — dans la fiche, Suppr y efface du texte");
+
+/** Un élément de la balise voulue ; `type` pour un <input>. */
+function element(balise, type) {
+  const el = document.createElement(balise);
+  if (type) el.type = type;
+  return el;
+}
+
+test("un champ où l on écrit : la touche y efface un caractère", () => {
+  vrai(B.champDeSaisie(element("input", "text")), "le Titre");
+  vrai(B.champDeSaisie(element("input", "number")), "le tome lu");
+  vrai(B.champDeSaisie(element("input", "url")), "l adresse de l image");
+  vrai(B.champDeSaisie(element("input")), "un input sans type");
+  vrai(B.champDeSaisie(element("textarea")), "une zone de texte");
+  // Rattaché à la page : hors d elle, Chrome ne le dit pas modifiable.
+  const editable = document.body.appendChild(element("div"));
+  editable.contentEditable = "true";
+  try {
+    vrai(B.champDeSaisie(editable), "un contenu modifiable");
+  } finally {
+    editable.remove();
+  }
+});
+
+test("partout ailleurs, elle supprime la série", () => {
+  faux(B.champDeSaisie(element("h2")), "le titre de la fiche, focalisé à l ouverture");
+  faux(B.champDeSaisie(element("button")), "un bouton");
+  faux(B.champDeSaisie(element("select")), "le statut");
+  faux(B.champDeSaisie(element("input", "file")), "le choix d un fichier");
+  faux(B.champDeSaisie(element("input", "checkbox")), "une case");
+  faux(B.champDeSaisie(document.body), "le focus rendu à la page");
+  faux(B.champDeSaisie(null), "aucun élément");
 });

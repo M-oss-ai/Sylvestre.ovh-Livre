@@ -785,6 +785,11 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .modal-head h2 { order: 0; flex: 1; margin: 0; }
 #btn-close { order: 1; }
 
+/* Le focus se pose sur le titre de la fiche d'une serie existante, pour que
+   Suppr la supprime (js/app.js). Il ne s'actionne pas : un cadre n'y dirait
+   rien. */
+#modal-title:focus { outline: none; }
+
 /* Le bouton de validation du haut n'existe que sur telephone. */
 #btn-save-top { display: none; }
 

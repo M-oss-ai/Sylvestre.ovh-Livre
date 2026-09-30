@@ -305,6 +305,11 @@ carte sélectionnée — celle aussi qu'on a atteinte aux flèches — dans la
 même fenêtre de confirmation que la fiche, « Annuler » en premier. La
 sélection passe ensuite à la carte voisine.
 
+Suppr fait de même dans la fiche d'une série, sauf dans un champ, où la
+touche efface du texte. Sur ordinateur, cette fiche s'ouvre donc sur son
+titre, et non plus dans le champ Titre : Tab y mène. Une nouvelle série
+garde le curseur dans le Titre.
+
 `carte.php` pose `tabindex="-1"` partout, `js/app.js` rend le sien à la
 carte active — et le garde à la carte qui la remplace après une action.
 
