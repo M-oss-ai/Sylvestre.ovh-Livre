@@ -279,8 +279,8 @@ la rotation des jetons, le plafond d'appareils), les jetons d'action
 (`utilisateur_actuel`, `connecter`, `invalider_sessions`,
 `email_disponible`, `changement_email_en_attente`), `couverture_consommer`,
 `couverture_rendre` et `couverture_restantes` (le quota de recherche par
-compte : le barème est testé, le comptage non), `compter_series`,
-l'import d'une sauvegarde (ce qui distingue une série déjà présente), le cloisonnement par
+compte : le barème est testé, le comptage non), la lecture de
+`compter_series` (son comptage, `compter_lignes`, est testé), l'import d'une sauvegarde (ce qui distingue une série déjà présente), le cloisonnement par
 `utilisateur_id` d'`api.php` et le contenu chiffré du rapport de
 `purger.php` et la date de son dernier envoi (`rapport_etat`,
 `rapport_noter_envoi` : ses requêtes. Quand il part et sur quelle

@@ -113,7 +113,7 @@ $flash = flash_prendre();
        pas un réglage du quotidien. -->
   <div class="filters filters-image hidden" id="filtres-image" aria-label="Filtrer par type d'image">
     <?php foreach (IMAGES_TYPES as $cle => $libelle): ?>
-      <button class="filter-btn" data-image="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?></button>
+      <button class="filter-btn" data-image="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?><span class="count" id="count-image-<?= e($cle) ?>"><?= (int) $compte['image-' . $cle] ?></span></button>
     <?php endforeach; ?>
   </div>
   </div>

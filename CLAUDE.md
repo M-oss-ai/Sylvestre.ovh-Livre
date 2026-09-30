@@ -25,12 +25,12 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 - push, intègre aussi mes propres modifications sauf en cas d'erreurs
 - dit moi "x tests fait x erreurs, je commite, je push"
 - dit moi quelles fichier mettre dans le serveur et quelle mofifications du .env
-- donne moi le sql pour modifier la base sans perdre mes données
+- donne moi le sql pour modifier la base sans perdre mes données ( uniquement si nécessaire )
 
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (610 tests : 541 PHP en 43 fichiers, 69 JavaScript)
+php tests/lancer.php              # toute la suite (615 tests : 544 PHP en 43 fichiers, 71 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -205,6 +205,22 @@ l'utilisateur), hors d'un champ où la touche efface du texte
 `<h2>` (`tabindex="-1"`, sans cadre), plus dans le Titre : le curseur
 dans le champ rendait Suppr inopérant à l'ouverture. Une nouvelle série
 garde le Titre.
+
+**Les quatre filtres d'image portent leur nombre, comme les statuts.**
+`compter_series()` lit `statut`, `favori` et `couverture` en UNE requête
+et range chaque série avec `type_image()` (`compter_lignes()`, pure,
+testée) : refaire le classement en SQL le ferait diverger du filtre. Les
+clés sont `image-<type>` et les identifiants `count-image-<type>`, remis
+à jour par `majCompteurs()` avec le `compte` que chaque réponse d'`api.php`
+renvoie. L'ordre des boutons est celui d'`IMAGES_TYPES` (MangaDex, Lien,
+Importée, Pas d'image), que `index.php` parcourt.
+
+**L'œil du mot de passe est hors de la tabulation** (demande de
+l'utilisateur) : `tabindex="-1"` sur chaque `.toggle-password`, pour
+qu'un seul Tab mène du mot de passe au champ suivant. Tout nouvel œil le
+porte, et `piegerFocus()` (`js/commun.js`) ignore les `tabindex="-1"` :
+sinon l'œil comptait comme dernier arrêt d'une fenêtre, et Tab s'en
+échappait.
 
 **Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
 `js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se

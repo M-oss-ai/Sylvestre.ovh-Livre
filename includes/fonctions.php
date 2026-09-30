@@ -534,12 +534,14 @@ function verifier_mot_de_passe_limite(int $utilisateur_id, string $mdp, ?int &$a
    La classification vit ICI, en PHP, et voyage jusqu'au navigateur
    dans un attribut « data-image » : le JavaScript n'a pas à
    redécouvrir ce qu'une URL veut dire, et la règle ne peut pas
-   diverger entre les deux. */
+   diverger entre les deux.
+
+   L'ordre est celui des boutons du filtre (index.php les parcourt). */
 const IMAGES_TYPES = [
-    'aucune'   => 'Pas d\'image',
     'mangadex' => 'MangaDex',
-    'importee' => 'Importée',
     'lien'     => 'Lien',
+    'importee' => 'Importée',
+    'aucune'   => 'Pas d\'image',
 ];
 
 /**

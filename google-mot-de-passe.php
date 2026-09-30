@@ -148,7 +148,7 @@ $csrf = jeton_csrf();
         <div class="password-wrap">
           <input id="mot_de_passe" name="mot_de_passe" type="password" required autocomplete="current-password"
                  <?= $erreurs ? champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe') : 'autofocus' ?>>
-          <button type="button" class="icon-btn toggle-password" data-cible="mot_de_passe"
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="mot_de_passe"
                   aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?php if ($attente > 0): ?>

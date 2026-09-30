@@ -525,10 +525,13 @@ window.Lib = (() => {
   function piegerFocus(conteneur, e) {
     if (e.key !== "Tab") return;
     const focusables = conteneur.querySelectorAll(
-      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
     );
-    // offsetParent === null : élément masqué, donc non atteignable.
-    const visibles = Array.from(focusables).filter((el) => el.offsetParent !== null);
+    /* offsetParent === null : élément masqué, donc non atteignable. Le
+       tabindex -1 en fait autant : l'œil du mot de passe en porte un, et
+       comptait sinon comme dernier arrêt de la fenêtre. */
+    const atteignable = (el) => el.offsetParent !== null && el.getAttribute("tabindex") !== "-1";
+    const visibles = Array.from(focusables).filter(atteignable);
     if (!visibles.length) return;
     const premier = visibles[0];
     const dernier = visibles[visibles.length - 1];

@@ -38,7 +38,7 @@ test('les quatre clés existent dans IMAGES_TYPES', function () {
        liste : une clé rendue par type_image() mais absente d IMAGES_TYPES
        serait un état impossible à filtrer, donc des séries invisibles
        quel que soit le filtre choisi. */
-    egale(['aucune', 'mangadex', 'importee', 'lien'], array_keys(IMAGES_TYPES),
+    egale(['mangadex', 'lien', 'importee', 'aucune'], array_keys(IMAGES_TYPES),
         'les clés attendues, dans l ordre d affichage');
 
     foreach (IMAGES_TYPES as $cle => $libelle) {
@@ -74,4 +74,53 @@ test('la casse de l adresse ne change pas le classement', function () {
         'HTTPS://UPLOADS.MANGADEX.ORG/covers/801513ba-a712-498c-8f57-cae55b38cc92/x.jpg'
     ), 'en majuscules');
     egale('importee', type_image('UPLOADS/photo.webp'), 'chemin en majuscules');
+});
+
+groupe('compter_lignes() — les nombres des pastilles');
+
+test('chaque type d image a son compteur, à zéro pour une bibliothèque vide', function () {
+    $c = compter_lignes([]);
+    egale(0, $c['all'], 'aucune série');
+    foreach (IMAGES_TYPES as $cle => $libelle) {
+        egale(0, $c['image-' . $cle], "le compteur « {$cle} » existe");
+    }
+});
+
+test('les séries se rangent par type d image, une seule fois chacune', function () {
+    $serie = fn (string $couverture, string $statut = 'cours', int $favori = 0) =>
+        ['statut' => $statut, 'favori' => $favori, 'couverture' => $couverture];
+
+    $c = compter_lignes([
+        $serie(''),
+        $serie('   '),
+        $serie('uploads/a.webp'),
+        $serie('https://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/x.jpg'),
+        $serie('https://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/y.jpg'),
+        $serie('https://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/z.jpg'),
+        $serie('https://ailleurs.test/x.png'),
+        $serie('https://ailleurs.test/y.png'),
+    ]);
+
+    egale(2, $c['image-aucune'], 'sans image (vide et espaces)');
+    egale(1, $c['image-importee'], 'importée');
+    egale(3, $c['image-mangadex'], 'MangaDex');
+    egale(2, $c['image-lien'], 'lien');
+    egale(8, $c['all'], 'le total');
+    egale($c['all'], $c['image-aucune'] + $c['image-importee'] + $c['image-mangadex'] + $c['image-lien'],
+        'chaque série compte dans un seul type');
+});
+
+test('les statuts et les favoris se comptent comme avant', function () {
+    $c = compter_lignes([
+        ['statut' => 'cours',   'favori' => 1, 'couverture' => ''],
+        ['statut' => 'cours',   'favori' => '0', 'couverture' => ''],
+        ['statut' => 'envie',   'favori' => '1', 'couverture' => ''],
+        ['statut' => 'termine', 'favori' => 0, 'couverture' => ''],
+    ]);
+    egale(4, $c['all'], 'tout');
+    egale(2, $c['cours'], 'en cours');
+    egale(1, $c['envie'], 'envie');
+    egale(1, $c['termine'], 'terminée');
+    egale(0, $c['abandon'], 'abandonnée');
+    egale(2, $c['favori'], 'les favoris traversent les statuts');
 });

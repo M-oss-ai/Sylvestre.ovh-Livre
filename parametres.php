@@ -432,7 +432,7 @@ $nb_series = (int) $req->fetchColumn();
           <span class="hint">(requis si vous changez d'identifiant ou d'adresse)</span></label>
         <div class="password-wrap">
           <input id="a-email-password" name="mot_de_passe" type="password" autocomplete="current-password"<?= champ_aria($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>>
-          <button type="button" class="icon-btn toggle-password" data-cible="a-email-password" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-email-password" aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?php endif; ?>
         <?= champ_erreur($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>
@@ -524,7 +524,7 @@ $nb_series = (int) $req->fetchColumn();
         <label for="a-current">Mot de passe actuel</label>
         <div class="password-wrap">
           <input id="a-current" name="mot_de_passe_actuel" type="password" autocomplete="current-password" required<?= champ_aria($erreurs_mdp, 'actuel', 'a-current') ?>>
-          <button type="button" class="icon-btn toggle-password" data-cible="a-current" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-current" aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'actuel', 'a-current') ?>
       </div>
@@ -537,7 +537,7 @@ $nb_series = (int) $req->fetchColumn();
                  maxlength="<?= MDP_MAX ?>"
                  data-regles-mdp data-mdp-min="<?= MDP_MIN ?>" data-mdp-max="<?= MDP_MAX ?>"
                  data-identifiant-valeur="<?= e($moi['identifiant']) ?>"<?= champ_aria($erreurs_mdp, 'nouveau', 'a-new') ?>>
-          <button type="button" class="icon-btn toggle-password" data-cible="a-new" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-new" aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'nouveau', 'a-new') ?>
       </div>
@@ -547,7 +547,7 @@ $nb_series = (int) $req->fetchColumn();
         <div class="password-wrap">
           <input id="a-new2" name="mot_de_passe_confirmation" type="password" autocomplete="new-password" required
                  maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs_mdp, 'confirmation', 'a-new2') ?>>
-          <button type="button" class="icon-btn toggle-password" data-cible="a-new2" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-new2" aria-label="Afficher le mot de passe">👁️</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'confirmation', 'a-new2') ?>
       </div>
@@ -739,7 +739,7 @@ $nb_series = (int) $req->fetchColumn();
           <label for="confirm-password">Mot de passe actuel</label>
           <div class="password-wrap">
             <input id="confirm-password" type="password" autocomplete="current-password">
-            <button type="button" class="icon-btn toggle-password" data-cible="confirm-password" aria-label="Afficher le mot de passe">👁️</button>
+            <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="confirm-password" aria-label="Afficher le mot de passe">👁️</button>
           </div>
           <p class="hint confirm-oubli"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
         </div>

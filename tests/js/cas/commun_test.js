@@ -216,3 +216,28 @@ test("oublierFiltres() efface ceux d un compte supprimé, et eux seuls", () => {
   egale("{}", localStorage.getItem(Lib.cleFiltres(902)), "l autre compte garde les siens");
   localStorage.removeItem(Lib.cleFiltres(902));
 });
+
+groupe("Lib.piegerFocus() — l œil du mot de passe n est pas un arrêt");
+
+test("un bouton en tabindex -1 n est jamais le dernier arrêt de la fenêtre", () => {
+  /* L'œil sort de la tabulation (tabindex -1) : s'il restait compté, il
+     serait « le dernier » quand il clôt la fenêtre, et Tab depuis le vrai
+     dernier bouton s'échapperait vers la page derrière. */
+  terrain('<div id="m"><input id="m-champ"><button id="m-ok" type="button">Confirmer</button>'
+    + '<button id="m-oeil" type="button" tabindex="-1">👁️</button></div>');
+  let empeche = false;
+  document.getElementById("m-ok").focus();
+  Lib.piegerFocus(document.getElementById("m"), { key: "Tab", shiftKey: false, preventDefault() { empeche = true; } });
+  vrai(empeche, "Tab depuis le dernier bouton réel est retenu dans la fenêtre");
+  egale("m-champ", document.activeElement.id, "et boucle vers le premier champ");
+});
+
+test("un bouton en tabindex -1 n est jamais le premier arrêt non plus", () => {
+  terrain('<div id="m"><button id="m-oeil" type="button" tabindex="-1">👁️</button>'
+    + '<input id="m-champ"><button id="m-ok" type="button">Confirmer</button></div>');
+  let empeche = false;
+  document.getElementById("m-champ").focus();
+  Lib.piegerFocus(document.getElementById("m"), { key: "Tab", shiftKey: true, preventDefault() { empeche = true; } });
+  vrai(empeche, "Maj+Tab depuis le premier champ réel est retenu");
+  egale("m-ok", document.activeElement.id, "et boucle vers le dernier bouton");
+});

@@ -105,28 +105,42 @@ function carte_html(array $s): string
       </article>';
 }
 
-/** Compte des séries par statut, pour les pastilles des filtres. */
+/**
+ * Compte des séries pour les pastilles des filtres : « all », un nombre
+ * par statut, « favori », et « image-<type> » pour chaque type de
+ * couverture (les clés d'IMAGES_TYPES). Ces clés sont aussi les
+ * identifiants « count-<clé> » que js/app.js remet à jour.
+ */
 function compter_series(PDO $pdo, int $utilisateur_id): array
 {
-    $c = ['all' => 0, 'cours' => 0, 'envie' => 0, 'termine' => 0, 'abandon' => 0, 'favori' => 0];
-    $req = $pdo->prepare('SELECT statut, COUNT(*) AS n FROM serie WHERE utilisateur_id = ? GROUP BY statut');
+    /* Une seule lecture, comptée en PHP : le type d'une image ne se
+       déduit que de type_image(), la règle unique. La refaire en SQL
+       (LIKE sur les préfixes) la ferait diverger du filtre lui-même. */
+    $req = $pdo->prepare('SELECT statut, favori, couverture FROM serie WHERE utilisateur_id = ?');
     $req->execute([$utilisateur_id]);
-    foreach ($req->fetchAll() as $ligne) {
-        $c[$ligne['statut']] = (int) $ligne['n'];
-        $c['all'] += (int) $ligne['n'];
+    return compter_lignes($req->fetchAll());
+}
+
+/** Le comptage de compter_series(), sur des lignes déjà lues (testable sans base). */
+function compter_lignes(array $lignes): array
+{
+    $c = ['all' => 0, 'cours' => 0, 'envie' => 0, 'termine' => 0, 'abandon' => 0, 'favori' => 0];
+    foreach (IMAGES_TYPES as $cle => $libelle) {
+        $c['image-' . $cle] = 0;
     }
 
-    /* Les favoris TRAVERSENT les statuts : une série peut être à la fois
-       « en cours » et en favori. Ils ne peuvent donc pas sortir du
-       regroupement ci-dessus, d'où ce second comptage.
-
-       Une requête de plus à chaque chargement, sur une table déjà
-       parcourue : le coût est celui d'un COUNT sur l'index de
-       utilisateur_id, et le chiffre est attendu à côté du filtre comme
-       pour les autres. */
-    $req = $pdo->prepare('SELECT COUNT(*) FROM serie WHERE utilisateur_id = ? AND favori = 1');
-    $req->execute([$utilisateur_id]);
-    $c['favori'] = (int) $req->fetchColumn();
-
+    foreach ($lignes as $ligne) {
+        $c['all']++;
+        $statut = (string) $ligne['statut'];
+        if (isset(STATUTS[$statut])) {
+            $c[$statut]++;
+        }
+        // Les favoris TRAVERSENT les statuts : une série peut être à la
+        // fois « en cours » et en favori.
+        if ((int) $ligne['favori'] === 1) {
+            $c['favori']++;
+        }
+        $c['image-' . type_image((string) $ligne['couverture'])]++;
+    }
     return $c;
 }
