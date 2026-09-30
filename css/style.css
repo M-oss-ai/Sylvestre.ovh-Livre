@@ -469,8 +469,11 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .btn-favori:disabled { opacity: 0.5; cursor: default; }
 
-/* Seconde rangee de filtres, repliable. */
-.filters-image { margin-top: 8px; }
+/* Seconde rangee de filtres, repliable. Elle passe a la ligne au lieu de
+   defiler : avec leurs nombres, les quatre boutons font 495 px pour 351
+   sur un telephone, et le dernier (« Pas d'image ») sortait de l'ecran
+   sans rien pour le laisser deviner — la barre de defilement est masquee. */
+.filters-image { margin-top: 8px; flex-wrap: wrap; }
 
 /* Pastille sur « Image » quand un filtre y est actif mais replie : sans
    elle, on cherche longtemps pourquoi la liste est si courte. */

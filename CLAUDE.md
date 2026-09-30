@@ -20,6 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Instructions
 à chaques taches terminée : 
 - résumé des solutions et des résultats réelles
+- fait les test unitaire des fonctions que tu crée
 - fait les testes unitaires `php tests/lancer.php`
 - commit avec un petit message
 - push, intègre aussi mes propres modifications sauf en cas d'erreurs
@@ -213,7 +214,11 @@ testée) : refaire le classement en SQL le ferait diverger du filtre. Les
 clés sont `image-<type>` et les identifiants `count-image-<type>`, remis
 à jour par `majCompteurs()` avec le `compte` que chaque réponse d'`api.php`
 renvoie. L'ordre des boutons est celui d'`IMAGES_TYPES` (MangaDex, Lien,
-Importée, Pas d'image), que `index.php` parcourt.
+Importée, Pas d'image), que `index.php` parcourt. Cette rangée PASSE À LA
+LIGNE (`flex-wrap` sur `.filters-image`) au lieu de défiler comme celle
+des statuts : avec les nombres, elle mesure 495 px pour 351 sur un
+téléphone, et le dernier bouton sortait de l'écran sans rien pour le
+laisser deviner (barre de défilement masquée).
 
 **L'œil du mot de passe est hors de la tabulation** (demande de
 l'utilisateur) : `tabindex="-1"` sur chaque `.toggle-password`, pour
