@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (606 tests : 541 PHP en 43 fichiers, 65 JavaScript)
+php tests/lancer.php              # toute la suite (608 tests : 541 PHP en 43 fichiers, 67 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -175,6 +175,19 @@ les deux premières lettres de l'identifiant (`initiales()`).
 `js/app.js` rend le sien à la carte active (`FOCUSABLES_CARTE`). Un
 nouveau bouton de carte qui oublierait l'un ou l'autre ramènerait des
 centaines d'arrêts.
+
+**La carte sélectionnée, c'est celle qui a le focus** — aucun état tenu à
+côté. Sur ordinateur (`pointer: fine`, même condition dans `js/app.js` et
+`css/style.css`), un clic hors de ses boutons la sélectionne en
+focalisant sa couverture ; un second clic, ou un clic ailleurs, la
+désélectionne (le navigateur retire le focus, on ne le rend pas). Suppr —
+ou Retour arrière, la touche « delete » d'un Mac (`toucheSuppression()`) —
+ouvre la même confirmation que la fiche, focus sur « Annuler » ; après
+suppression, la sélection passe à la voisine. Le cadre, c'est
+`.card:focus-within`. `demanderSuppression()` reçoit l'élément où rendre
+le focus si l'on annule : le lire dans `activeElement` donnait `<body>`,
+parce que `commun.js` sort d'un champ au moindre clic ailleurs et que
+Safari ne focalise pas le bouton cliqué.
 
 **Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
 `js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se

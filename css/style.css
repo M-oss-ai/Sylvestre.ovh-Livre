@@ -386,6 +386,20 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   outline-offset: -3px;
 }
 
+/* La carte sélectionnée, c'est celle qui a le focus : un clic sur son
+   titre la choisit, les flèches la déplacent, Suppr la supprime
+   (js/app.js). Elle doit se voir, qu'on y vienne à la souris ou au
+   clavier. Sur ordinateur seulement — même condition que le script : sur
+   écran tactile, sans touche Suppr, un cadre resté après un toucher ne
+   voudrait rien dire. Un contour et non la bordure, dont le haut porte la
+   couleur du statut. */
+@media (pointer: fine) {
+  .card:focus-within {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+}
+
 .card-cover,
 .card-actions button {
   scroll-margin-top: calc(var(--hauteur-topbar, 130px) + var(--hauteur-filtres, 0px) + 16px);

@@ -3,7 +3,7 @@
 
    Ce qui se décide sans toucher à la page : la carte voisine au clavier,
    le suivi du défilement qui cache et ramène les filtres, les textes des
-   quotas. Le reste d'app.js branche ces décisions sur la page ; il se
+   quotas, la touche qui supprime. Le reste d'app.js branche ces décisions sur la page ; il se
    vérifie dans un navigateur, sur une vraie bibliothèque.
    ===================================================================== */
 
@@ -215,4 +215,20 @@ test("la même adresse, qu elle vienne de la base ou d une recherche", () => {
   // une fiche ne doit rien demander.
   egale(B.signatureCouverture({ type: "url", value: "https://x/a.jpg", existante: true }),
     B.signatureCouverture({ type: "url", value: "https://x/a.jpg" }), "même signature");
+});
+
+groupe("Bibliotheque.toucheSuppression() — Suppr sur la carte sélectionnée");
+
+test("Suppr, et Retour arrière (la touche « delete » d un Mac)", () => {
+  vrai(B.toucheSuppression({ key: "Delete" }), "Suppr");
+  vrai(B.toucheSuppression({ key: "Backspace" }), "Retour arrière");
+});
+
+test("ni une autre touche, ni un raccourci", () => {
+  faux(B.toucheSuppression({ key: "Enter" }), "Entrée ouvre la fiche");
+  faux(B.toucheSuppression({ key: "d" }), "une lettre");
+  faux(B.toucheSuppression({ key: "Delete", ctrlKey: true }), "Ctrl+Suppr");
+  faux(B.toucheSuppression({ key: "Delete", shiftKey: true }), "Maj+Suppr");
+  faux(B.toucheSuppression({ key: "Backspace", altKey: true }), "Alt+Retour arrière");
+  faux(B.toucheSuppression({ key: "Backspace", metaKey: true }), "Cmd+Retour arrière");
 });

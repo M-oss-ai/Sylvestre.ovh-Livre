@@ -298,6 +298,13 @@ carte puis sort de la grille. Chaque carte en ajoutait cinq : il
 fallait 780 appuis pour traverser 150 séries. Un lien « Aller aux
 séries », premier arrêt de la page, évite l'en-tête et les filtres.
 
+Sur ordinateur, un clic sur une carte hors de ses boutons (le titre,
+l'auteur…) la sélectionne, un second clic ou un clic ailleurs la
+désélectionne. **Suppr** (ou Retour arrière) propose de supprimer la
+carte sélectionnée — celle aussi qu'on a atteinte aux flèches — dans la
+même fenêtre de confirmation que la fiche, « Annuler » en premier. La
+sélection passe ensuite à la carte voisine.
+
 `carte.php` pose `tabindex="-1"` partout, `js/app.js` rend le sien à la
 carte active — et le garde à la carte qui la remplace après une action.
 

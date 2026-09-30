@@ -127,7 +127,7 @@ $flash = flash_prendre();
        les flèches passent d'une série à l'autre (voir js/app.js). Chaque
        carte en ajoutait cinq, soit 780 appuis pour traverser 150 séries.
        Le mode d'emploi est lu à l'entrée dans la grille. -->
-  <p id="grille-aide" class="visually-hidden">Flèches pour passer d'une série à l'autre, Tab pour ses boutons.</p>
+  <p id="grille-aide" class="visually-hidden">Flèches pour passer d'une série à l'autre, Tab pour ses boutons, Suppr pour la supprimer.</p>
   <div id="grid" class="grid<?= $series ? '' : ' hidden' ?>"><?php
     foreach ($series as $s) {
         echo carte_html($s);

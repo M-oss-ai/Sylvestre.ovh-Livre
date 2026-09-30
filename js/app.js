@@ -136,9 +136,19 @@ window.Bibliotheque = (() => {
       || avant.couverture !== apres.couverture;
   }
 
+  /**
+   * La touche demande-t-elle de supprimer la carte sélectionnée ? Suppr,
+   * et Retour arrière : c'est la touche « delete » d'un clavier Mac. Seule
+   * — un raccourci (Ctrl+Retour arrière efface un mot) n'y prétend pas.
+   */
+  function toucheSuppression(e) {
+    return (e.key === "Delete" || e.key === "Backspace")
+      && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+  }
+
   return {
     voisine, suiviDefilement, annonceQuota, texteQuotaRecherche,
-    signatureCouverture, ficheModifiee,
+    signatureCouverture, ficheModifiee, toucheSuppression,
   };
 })();
 
@@ -522,6 +532,54 @@ window.Bibliotheque = (() => {
     if (!cover) return;
     e.preventDefault();
     ouvrirModale(e.target.closest(".card"));
+  });
+
+  /* ---------------- Sélection et touche Suppr ----------------
+
+     La carte sélectionnée, c'est celle qui a le focus : pas d'état à
+     tenir à côté, qu'une carte remplacée après une action ferait mentir
+     (poserCarte() lui rend déjà le focus). Sur ordinateur, un clic hors
+     des boutons — le titre, l'auteur… — la sélectionne : il ne faisait
+     rien. Les flèches déplacent la sélection, et Suppr demande la
+     suppression, par la même fenêtre que la fiche. Le cadre qui la montre
+     est dans css/style.css (.card:focus-within), sous la même condition
+     « pointer: fine » que ce clic. Sur écran tactile, rien ne change : pas
+     de touche Suppr, un cadre resté après un toucher ne voudrait rien
+     dire.
+
+     Un clic ailleurs désélectionne, et un second clic sur la carte aussi
+     (demande de l'utilisateur). Dans les deux cas c'est le navigateur qui
+     retire le focus : appuyer sur un texte le rend à la page. Il suffit
+     donc de ne pas le redonner — d'où la carte notée à l'enfoncement du
+     bouton, avant qu'il ne parte. */
+  let selectionAuClic = null;
+
+  $grid.addEventListener("mousedown", () => {
+    const actif = document.activeElement;
+    selectionAuClic = actif && $grid.contains(actif) ? actif.closest(".card") : null;
+  });
+
+  $grid.addEventListener("click", (e) => {
+    if (e.target.closest("[data-action]")) return; // couverture et boutons : leur action
+    const carte = e.target.closest(".card");
+    if (!carte || !window.matchMedia("(pointer: fine)").matches) return;
+    // Un texte qu'on vient de sélectionner (le titre, pour le copier).
+    if (String(window.getSelection())) return;
+    if (carte === selectionAuClic) {
+      const actif = document.activeElement;
+      if (actif && carte.contains(actif)) actif.blur(); // un navigateur qui l'aurait gardé
+      return;
+    }
+    // Sans défilement : on voit ce qu'on vient de cliquer.
+    carte.querySelector(".card-cover").focus({ preventScroll: true });
+  });
+
+  $grid.addEventListener("keydown", (e) => {
+    if (!B.toucheSuppression(e)) return;
+    const carte = e.target.closest(".card");
+    if (!carte) return;
+    e.preventDefault();
+    demanderSuppression(carte.dataset.id, carte.dataset.titre, e.target);
   });
 
   /**
@@ -1043,17 +1101,34 @@ window.Bibliotheque = (() => {
   const $confirmOverlay = document.getElementById("confirm-overlay");
   const $confirmText = document.getElementById("confirm-text");
 
-  $btnDelete.addEventListener("click", () => {
-    if (!idEnEdition) return;
-    idASupprimer = idEnEdition;
-    $confirmText.textContent = "« " + $fTitle.value + " » sera définitivement supprimée.";
+  let focusAvantConfirmation = null;
+
+  /** « Supprimer cette série ? » — depuis la fiche, ou Suppr sur une carte.
+      `retour` reprend le focus si l'on annule. Nommé par l'appelant, pas
+      lu dans activeElement : commun.js sort d'un champ au moindre clic
+      ailleurs, et Safari ne donne pas le focus au bouton cliqué — on
+      n'aurait plus trouvé que <body>. */
+  function demanderSuppression(id, titre, retour) {
+    idASupprimer = id;
+    focusAvantConfirmation = retour;
+    $confirmText.textContent = "« " + titre + " » sera définitivement supprimée.";
     $confirmOverlay.classList.remove("hidden");
+    // « Annuler » d'abord : un Entrée réflexe ne supprime rien.
     document.getElementById("confirm-cancel").focus();
+  }
+
+  $btnDelete.addEventListener("click", () => {
+    if (idEnEdition) demanderSuppression(idEnEdition, $fTitle.value, $btnDelete);
   });
 
   function fermerConfirmation() {
     $confirmOverlay.classList.add("hidden");
     idASupprimer = "";
+    // Le focus revient d'où l'on venait : la carte sélectionnée, ou le
+    // bouton de la fiche. Il restait sur le bouton caché, donc nulle part.
+    const retour = focusAvantConfirmation;
+    focusAvantConfirmation = null;
+    if (retour && retour.isConnected) retour.focus();
   }
 
   document.getElementById("confirm-cancel").addEventListener("click", fermerConfirmation);
@@ -1062,18 +1137,28 @@ window.Bibliotheque = (() => {
   document.getElementById("confirm-ok").addEventListener("click", async () => {
     if (!idASupprimer) return;
     const id = idASupprimer;
+    const carte = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
+    /* La sélection passe à la voisine, comme dans un explorateur de
+       fichiers : le focus serait sinon perdu avec la carte, et le clavier
+       reprendrait en haut de la page. */
+    const suivante = carte && (voisine(carte, "suivante") || voisine(carte, "precedente"));
+    let supprimee = false;
     try {
       const r = await L.api("serie.supprimer", { id });
-      const carte = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
       if (carte) carte.remove();
       majCompteurs(r.compte);
       L.toast(r.message);
+      supprimee = true;
     } catch (err) {
       L.toast(err.message);
     }
     fermerConfirmation();
-    fermerModale();
+    if (!$overlay.classList.contains("hidden")) fermerModale();
     appliquerVue();
+    if (supprimee && suivante && !suivante.classList.contains("hidden")) {
+      rendreActive(suivante);
+      suivante.querySelector(".card-cover").focus();
+    }
   });
 
   document.addEventListener("keydown", (e) => {

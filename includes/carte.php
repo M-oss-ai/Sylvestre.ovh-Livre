@@ -53,9 +53,14 @@ function carte_html(array $s): string
     /* Le même libellé quel que soit le statut : c'est le dernier tome
        TERMINÉ, ce que « Vous en êtes au tome » ne disait pas. À 0, aucun
        tome n'est lu, et « tome 0 » ne voudrait rien dire. */
-    $progression = $tome > 0
-        ? 'Vous avez lu le tome <b>' . $tome . '</b>'
-        : 'Série non commencée';
+    if ($tome === 0 && $statut === 'envie') {
+        $progression = 'Série non commencée';
+    } else if ($tome === 0) {
+        $progression = "Vous n'avez lu aucun tome";
+    }
+    else {
+        $progression = 'Vous avez lu le tome <b>' . $tome . '</b>';
+    }
 
     /* tabindex="-1" partout : au clavier, la grille ne compte qu'UN arrêt,
        la carte « active », que js/app.js remet à 0 (les flèches passent

@@ -71,8 +71,7 @@ const MANGADEX_FORMATS_EXCLUS = [
 
    Le quota par compte, lui, est une autre affaire et vit plus bas. */
 
-/** Fichier témoin de la file. Hors du site : il ne contient qu'une date,
-    il n'a rien à faire dans une sauvegarde ni derrière une URL. */
+/* Fichier témoin de la file. Hors du site : il ne contient qu'une date, il n'a rien à faire dans une sauvegarde ni derrière une URL. */
 function mangadex_fichier_rythme(): string
 {
     return sys_get_temp_dir() . '/mangadex-rythme.lock';
