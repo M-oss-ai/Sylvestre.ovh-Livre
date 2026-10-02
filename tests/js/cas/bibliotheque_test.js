@@ -2,7 +2,8 @@
    js/app.js — la logique pure de la bibliothèque (window.Bibliotheque).
 
    Ce qui se décide sans toucher à la page : la carte voisine au clavier,
-   le suivi du défilement qui cache et ramène les filtres, les textes des
+   le suivi du défilement qui cache et ramène les filtres, le groupe de
+   filtres déplié et le moment où « Toutes » s allume, les textes des
    quotas, la touche qui supprime et les champs où elle efface du texte.
    Le reste d'app.js branche ces décisions sur la page ; il se
    vérifie dans un navigateur, sur une vraie bibliothèque.
@@ -267,4 +268,62 @@ test("partout ailleurs, elle supprime la série", () => {
   faux(B.champDeSaisie(element("input", "checkbox")), "une case");
   faux(B.champDeSaisie(document.body), "le focus rendu à la page");
   faux(B.champDeSaisie(null), "aucun élément");
+});
+
+groupe("Bibliotheque.panneauApres() — un seul groupe de filtres déplié");
+
+test("cliquer un groupe replié l ouvre", () => {
+  egale("statut", B.panneauApres("", "statut"), "Statut s ouvre");
+  egale("image", B.panneauApres("", "image"), "Image s ouvre");
+});
+
+test("cliquer le groupe ouvert le referme", () => {
+  egale("", B.panneauApres("statut", "statut"), "Statut");
+  egale("", B.panneauApres("image", "image"), "Image");
+});
+
+test("ouvrir l autre groupe prend la place du premier", () => {
+  egale("image", B.panneauApres("statut", "image"), "Statut cède à Image");
+  egale("statut", B.panneauApres("image", "statut"), "Image cède à Statut");
+});
+
+test("un nom inconnu ne change rien, et un état inconnu vaut « tout replié »", () => {
+  egale("statut", B.panneauApres("statut", "favori"), "un bouton qui n est pas un groupe");
+  egale("", B.panneauApres("", undefined), "pas de demande");
+  egale("image", B.panneauApres("n importe quoi", "image"), "un état mémorisé qui n existe pas");
+  egale("", B.panneauApres("n importe quoi", "n importe quoi"), "ni l un ni l autre");
+});
+
+groupe("Bibliotheque.panneauMemorise() — le groupe rouvert au rechargement");
+
+test("le groupe mémorisé revient tel quel", () => {
+  egale("statut", B.panneauMemorise({ panneau: "statut" }), "Statut");
+  egale("image", B.panneauMemorise({ panneau: "image" }), "Image");
+  egale("", B.panneauMemorise({ panneau: "" }), "tout replié");
+});
+
+test("l ancienne mémoire (imageOuvert) rouvre Image", () => {
+  egale("image", B.panneauMemorise({ statut: [], imageOuvert: true }), "ouvert");
+  egale("", B.panneauMemorise({ statut: [], imageOuvert: false }), "replié");
+  egale("statut", B.panneauMemorise({ panneau: "statut", imageOuvert: true }), "la nouvelle clé l emporte");
+});
+
+test("une mémoire illisible ou étrangère vaut « tout replié »", () => {
+  egale("", B.panneauMemorise(null), "rien");
+  egale("", B.panneauMemorise("image"), "pas un objet");
+  egale("", B.panneauMemorise({ panneau: "autre" }), "un groupe qui n existe pas");
+  egale("", B.panneauMemorise({ imageOuvert: "oui" }), "un booléen qui n en est pas un");
+});
+
+groupe("Bibliotheque.aucunFiltre() — quand « Toutes » s allume");
+
+test("aucun filtre, de quelque genre que ce soit", () => {
+  vrai(B.aucunFiltre({ statut: new Set(), image: new Set(), favoris: false }), "rien de posé");
+});
+
+test("un seul filtre, d un genre quelconque, l éteint", () => {
+  faux(B.aucunFiltre({ statut: new Set(["cours"]), image: new Set(), favoris: false }), "un statut");
+  faux(B.aucunFiltre({ statut: new Set(), image: new Set(["aucune"]), favoris: false }), "un type d image");
+  faux(B.aucunFiltre({ statut: new Set(), image: new Set(), favoris: true }), "les favoris");
+  faux(B.aucunFiltre({ statut: new Set(["envie"]), image: new Set(["lien"]), favoris: true }), "tous à la fois");
 });

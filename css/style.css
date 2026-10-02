@@ -206,17 +206,17 @@ code {
   background: rgba(0, 0, 0, 0.4);
 }
 
+/* Les rangees de filtres passent a la ligne plutot que de defiler : la
+   barre de defilement etait masquee, et un bouton hors de l'ecran ne
+   laissait rien deviner de son existence. */
 .filters {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
-  scrollbar-width: none;
 }
-
-.filters::-webkit-scrollbar { display: none; }
 
 .filter-btn {
   flex: none;
@@ -469,20 +469,50 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .btn-favori:disabled { opacity: 0.5; cursor: default; }
 
-/* Seconde rangee de filtres, repliable. Elle passe a la ligne au lieu de
-   defiler : avec leurs nombres, les quatre boutons font 495 px pour 351
-   sur un telephone, et le dernier (« Pas d'image ») sortait de l'ecran
-   sans rien pour le laisser deviner — la barre de defilement est masquee. */
-.filters-image { margin-top: 8px; flex-wrap: wrap; }
+/* Les groupes de filtres (Statut, Image), repliables sous la rangee du
+   haut. Avec leurs nombres, les quatre boutons du type d'image font
+   495 px pour 351 sur un telephone : ils passent a la ligne. */
+.filters-groupe { margin-top: 8px; }
 
-/* Pastille sur « Image » quand un filtre y est actif mais replie : sans
-   elle, on cherche longtemps pourquoi la liste est si courte. */
-.filter-plus.a-un-filtre::after {
-  content: "";
-  width: 7px;
-  height: 7px;
+/* La rangee du haut (Toutes, Statut, Favoris, Image) doit tenir sur UNE
+   ligne de telephone au repos : elle faisait 429 px pour 351, et « Image »
+   sortait de l'ecran. D'ou des boutons plus serres, et « Favoris » reduit
+   a l'etoile et son nombre — le mot reste pour les lecteurs d'ecran. Avec
+   des pastilles dorees, elle passe a la ligne (voir .filters). */
+@media (max-width: 480px) {
+  #filters .filter-btn { padding: 9px 10px; }
+  .filter-favori .mot {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+/* Pastille sur « Statut » et « Image » : combien de filtres le groupe
+   porte, replie ou non — sans elle, on cherche longtemps pourquoi la
+   liste est si courte. Doree et pleine, pour ne pas se lire comme le
+   nombre de series des pastilles grises (.count). Posee en surimpression
+   sur le coin du bouton : en rangee, elle l'elargissait de 30 px et
+   faisait passer « Image » a la ligne sur un telephone. */
+.filter-plus { position: relative; }
+
+.nb-actifs {
+  position: absolute;
+  top: -7px;
+  right: -5px;
+  min-width: 18px;
+  padding: 1px 5px;
   border-radius: 999px;
   background: var(--gold);
+  box-shadow: 0 0 0 2px var(--bg-0);
+  color: #1a1410;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
 }
 
 .filter-favori.active { color: var(--gold); }

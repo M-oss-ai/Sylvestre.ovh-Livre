@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (615 tests : 544 PHP en 43 fichiers, 71 JavaScript)
+php tests/lancer.php              # toute la suite (624 tests : 544 PHP en 43 fichiers, 80 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -214,11 +214,32 @@ testée) : refaire le classement en SQL le ferait diverger du filtre. Les
 clés sont `image-<type>` et les identifiants `count-image-<type>`, remis
 à jour par `majCompteurs()` avec le `compte` que chaque réponse d'`api.php`
 renvoie. L'ordre des boutons est celui d'`IMAGES_TYPES` (MangaDex, Lien,
-Importée, Pas d'image), que `index.php` parcourt. Cette rangée PASSE À LA
-LIGNE (`flex-wrap` sur `.filters-image`) au lieu de défiler comme celle
-des statuts : avec les nombres, elle mesure 495 px pour 351 sur un
-téléphone, et le dernier bouton sortait de l'écran sans rien pour le
-laisser deviner (barre de défilement masquée).
+Importée, Pas d'image), que `index.php` parcourt, comme il parcourt
+`STATUTS` pour les statuts.
+
+**Les filtres tiennent sur UNE rangée au repos : « Toutes », « Statut ▾ »,
+« ★ Favoris », « Image ▾ »** (demande de l'utilisateur : la barre était
+trop longue). Statut et Image sont des GROUPES repliés, un seul ouvert à
+la fois (`panneauApres()`, mémorisé par compte sous `panneau` ;
+`panneauMemorise()` relit aussi l'ancien `imageOuvert`). « Favoris » reste
+un interrupteur direct. **« Toutes » remet à zéro les trois genres de
+filtres** (statut, favori, image) et ne s'allume que quand plus rien n'est
+posé (`aucunFiltre()`) : il reste visible groupes repliés, c'est le seul
+moyen de tout effacer d'un geste. Un groupe replié dit ce qu'il porte par
+une pastille dorée en surimpression (`.nb-actifs`) — en surimpression et
+non en rangée : élargissant « Statut » de 30 px, elle faisait passer
+« Image » à la ligne. Les statuts gardent leurs ids `count-<statut>` et
+leurs `data-filter` ; les chips passent de la rangée du haut au groupe.
+
+**Aucune rangée de filtres ne défile** : `.filters` passe à la ligne
+(`flex-wrap`). La barre de défilement était masquée, et un bouton hors de
+l'écran ne laissait rien deviner de son existence — « Pas d'image » a
+déjà été perdu ainsi (495 px pour 351 sur un téléphone). La rangée du
+haut, elle, doit tenir sur UNE ligne dès 360 px : d'où, sous 480 px, des
+boutons plus serrés et le mot « Favoris » réduit à ★ + nombre
+(`.filter-favori .mot`, conservé pour les lecteurs d'écran). Mesuré à
+320, 360, 375 px et en grand écran ; à 320 px elle passe sur deux lignes,
+aucun bouton n'est caché.
 
 **L'œil du mot de passe est hors de la tabulation** (demande de
 l'utilisateur) : `tabindex="-1"` sur chaque `.toggle-password`, pour
@@ -528,7 +549,7 @@ cartes sont en `content-visibility: auto` avec une taille estimée
 (340 px) qui n'est pas la vraie (451 px sur un écran de 1024) : en
 remontant une page rechargée en cours de liste, chaque rangée dessinée
 pour la première fois décale `scrollY` de +111 px, alors qu'on remonte.
-Déplier « Image ▾ » fait de même. Lu comme un geste, ce recalage cachait
+Déplier un groupe de filtres (« Statut ▾ », « Image ▾ ») fait de même. Lu comme un geste, ce recalage cachait
 les filtres au moment précis où on les voulait. `suivreDefilement()`
 (`js/app.js`) ignore donc le mouvement de toute image où la hauteur de
 `<main>` ou de la barre a changé.

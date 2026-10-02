@@ -61,8 +61,8 @@ window.Bibliotheque = (() => {
     /* Bornée : le rebond élastique d'iOS, en haut comme en bas de page,
        ferait croire à un changement de sens. */
     const y = Math.min(Math.max(mesure.y, 0), Math.max(0, mesure.max));
-    /* Une hauteur a changé depuis le relevé précédent (« Image ▾ »
-       déplié, liste filtrée, cartes dessinées pour la première fois en
+    /* Une hauteur a changé depuis le relevé précédent (un groupe de
+       filtres déplié, liste filtrée, cartes dessinées pour la première fois en
        remontant) : le navigateur a pu décaler le défilement d'autant,
        pour garder sous les yeux ce qu'on regardait. Ce décalage n'est pas
        un geste — pris pour une descente, il cachait les filtres qu'on
@@ -159,9 +159,44 @@ window.Bibliotheque = (() => {
     return el.tagName === "INPUT" && !SANS_TEXTE.includes(el.type);
   }
 
+  // Les groupes de filtres qui se déplient, par le nom de leur data-panneau.
+  const PANNEAUX = ["statut", "image"];
+
+  /**
+   * Le groupe ouvert après un clic sur le bouton de `demande` : le même
+   * groupe se referme, un autre prend la place de celui qui était ouvert
+   * (un seul à la fois, pour que la barre ne dépasse jamais sa rangée plus
+   * une). `ouvert` : "statut", "image", ou "" quand tout est replié.
+   */
+  function panneauApres(ouvert, demande) {
+    const courant = PANNEAUX.includes(ouvert) ? ouvert : "";
+    if (!PANNEAUX.includes(demande)) return courant;
+    return courant === demande ? "" : demande;
+  }
+
+  /**
+   * Le groupe ouvert d'après ce que le navigateur avait mémorisé. Les
+   * versions d'avant ne gardaient que « imageOuvert » ; une valeur
+   * inconnue ou illisible vaut « tout replié », le bon défaut.
+   */
+  function panneauMemorise(memoire) {
+    if (!memoire || typeof memoire !== "object") return "";
+    if (PANNEAUX.includes(memoire.panneau)) return memoire.panneau;
+    return memoire.imageOuvert === true ? "image" : "";
+  }
+
+  /**
+   * « Toutes » s'allume quand AUCUN filtre n'est posé, de quelque genre
+   * que ce soit. `etat` : { statut, image } (des Set) et { favoris }.
+   */
+  function aucunFiltre(etat) {
+    return etat.statut.size === 0 && etat.image.size === 0 && !etat.favoris;
+  }
+
   return {
     voisine, suiviDefilement, annonceQuota, texteQuotaRecherche,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
+    panneauApres, panneauMemorise, aucunFiltre,
   };
 })();
 
@@ -178,10 +213,16 @@ window.Bibliotheque = (() => {
   const $emptyCollection = document.getElementById("empty-collection");
   const $emptySearch = document.getElementById("empty-search");
   const $search = document.getElementById("search");
+  const $filtresStatut = document.getElementById("filtres-statut");
   const $filtresImage = document.getElementById("filtres-image");
+  const $btnToutes = document.getElementById("btn-filtre-toutes");
   const $btnFiltreFavori = document.getElementById("btn-filtre-favori");
-  const $btnFiltresPlus = document.getElementById("btn-filtres-plus");
   const $filters = document.getElementById("filters");
+  // Chaque groupe de filtres : son nom (data-panneau), sa rangée et son bouton.
+  const GROUPES = [
+    ["statut", $filtresStatut, document.getElementById("btn-filtres-statut")],
+    ["image", $filtresImage, document.getElementById("btn-filtres-image")],
+  ];
 
   /* Les filtres se CUMULENT, et se conservent d'une visite à l'autre.
      Un ensemble vide veut dire « aucun filtre de ce genre », ce qui est
@@ -189,7 +230,7 @@ window.Bibliotheque = (() => {
   const filtresStatut = new Set();
   const filtresImage = new Set();
   let favorisSeuls = false;
-  let imageOuvert = false;
+  let panneauOuvert = ""; // "statut", "image", ou "" : un seul groupe déplié
   let recherche = "";
   // La grille est-elle actuellement rangée par pertinence plutôt que
   // dans l'ordre du serveur ? Voir appliquerVue().
@@ -696,7 +737,7 @@ window.Bibliotheque = (() => {
       (Array.isArray(f.statut) ? f.statut : []).forEach((v) => filtresStatut.add(v));
       (Array.isArray(f.image) ? f.image : []).forEach((v) => filtresImage.add(v));
       favorisSeuls = !!f.favoris;
-      imageOuvert = !!f.imageOuvert;
+      panneauOuvert = B.panneauMemorise(f);
     } catch (e) {
       /* Illisible ou indisponible : on repart sans filtre. */
     }
@@ -708,7 +749,7 @@ window.Bibliotheque = (() => {
         statut: [...filtresStatut],
         image: [...filtresImage],
         favoris: favorisSeuls,
-        imageOuvert,
+        panneau: panneauOuvert,
       }));
     } catch (e) {
       /* Sans mémoire, les filtres ne valent que pour cette visite. */
@@ -717,28 +758,33 @@ window.Bibliotheque = (() => {
 
   /** Met les boutons au diapason de l'état. */
   function refleterFiltres() {
-    $filters.querySelectorAll(".filter-btn[data-filter]").forEach((b) => {
-      const cle = b.dataset.filter;
-      // « Toutes » s'allume quand aucun statut n'est retenu.
-      const actif = cle === "all" ? filtresStatut.size === 0 : filtresStatut.has(cle);
+    const allumer = (b, actif) => {
       b.classList.toggle("active", actif);
       b.setAttribute("aria-pressed", actif ? "true" : "false");
-    });
+    };
 
+    $filtresStatut.querySelectorAll(".filter-btn[data-filter]").forEach((b) => {
+      allumer(b, filtresStatut.has(b.dataset.filter));
+    });
     $filtresImage.querySelectorAll(".filter-btn[data-image]").forEach((b) => {
-      const actif = filtresImage.has(b.dataset.image);
-      b.classList.toggle("active", actif);
-      b.setAttribute("aria-pressed", actif ? "true" : "false");
+      allumer(b, filtresImage.has(b.dataset.image));
     });
+    allumer($btnFiltreFavori, favorisSeuls);
+    // « Toutes » s'allume quand aucun filtre, de quelque genre que ce soit, n'est posé.
+    allumer($btnToutes, B.aucunFiltre({ statut: filtresStatut, image: filtresImage, favoris: favorisSeuls }));
 
-    $btnFiltreFavori.classList.toggle("active", favorisSeuls);
-    $btnFiltreFavori.setAttribute("aria-pressed", favorisSeuls ? "true" : "false");
-
-    $filtresImage.classList.toggle("hidden", !imageOuvert);
-    $btnFiltresPlus.setAttribute("aria-expanded", imageOuvert ? "true" : "false");
-    /* Une pastille quand un filtre d'image est actif mais replié : sans
-       elle on cherche longtemps pourquoi la liste est si courte. */
-    $btnFiltresPlus.classList.toggle("a-un-filtre", filtresImage.size > 0);
+    GROUPES.forEach(([nom, rangee, bouton]) => {
+      const ouvert = panneauOuvert === nom;
+      rangee.classList.toggle("hidden", !ouvert);
+      bouton.setAttribute("aria-expanded", ouvert ? "true" : "false");
+      /* Une pastille dorée dit combien de filtres le groupe porte, même
+         replié : sans elle on cherche longtemps pourquoi la liste est si
+         courte. */
+      const actifs = (nom === "statut" ? filtresStatut : filtresImage).size;
+      const pastille = bouton.querySelector(".nb-actifs");
+      pastille.textContent = actifs;
+      pastille.classList.toggle("hidden", actifs === 0);
+    });
   }
 
   function basculer(ensemble, valeur) {
@@ -773,25 +819,37 @@ window.Bibliotheque = (() => {
     const btn = e.target.closest(".filter-btn");
     if (!btn) return;
 
-    if (btn === $btnFiltresPlus) {
-      // Ouvrir ou fermer le panneau n'est pas une décision de filtrage :
+    if (btn.dataset.panneau) {
+      // Ouvrir ou fermer un groupe n'est pas une décision de filtrage :
       // aucune exception n'a de raison de s'effacer pour autant.
-      imageOuvert = !imageOuvert;
-    } else if (btn === $btnFiltreFavori) {
+      panneauOuvert = B.panneauApres(panneauOuvert, btn.dataset.panneau);
+      filtresChanges();
+      return;
+    }
+    if (btn === $btnFiltreFavori) {
       favorisSeuls = !favorisSeuls;
       oublierExceptions("favori");
-    } else if (btn.dataset.filter === "all") {
-      // « Toutes » n'est pas un filtre de plus : c'est leur remise à zéro.
+    } else if (btn === $btnToutes) {
+      // « Toutes » n'est pas un filtre de plus : c'est la remise à zéro de
+      // tous, statut, favori et image, que leurs groupes soient ouverts ou non.
       filtresStatut.clear();
-      oublierExceptions("statut");
-    } else if (btn.dataset.filter) {
-      basculer(filtresStatut, btn.dataset.filter);
-      oublierExceptions("statut");
+      filtresImage.clear();
+      favorisSeuls = false;
+      ["statut", "image", "favori"].forEach(oublierExceptions);
     } else {
       return;
     }
     filtresChanges();
-    if (btn !== $btnFiltresPlus) revenirEnHaut();
+    revenirEnHaut();
+  });
+
+  $filtresStatut.addEventListener("click", (e) => {
+    const btn = e.target.closest(".filter-btn[data-filter]");
+    if (!btn) return;
+    basculer(filtresStatut, btn.dataset.filter);
+    oublierExceptions("statut");
+    filtresChanges();
+    revenirEnHaut();
   });
 
   $filtresImage.addEventListener("click", (e) => {

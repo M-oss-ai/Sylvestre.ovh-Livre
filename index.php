@@ -88,30 +88,41 @@ $flash = flash_prendre();
 </header>
 
 <main class="bibliotheque">
-  <!-- Les deux rangées de filtres, collées sous la barre du haut : elles
+  <!-- Les filtres, collés sous la barre du haut : ils
        s'effacent derrière elle quand on descend et reviennent dès qu'on
        remonte, sans devoir retourner en haut de la page (js/app.js).
        Doit rester le PREMIER élément de <main> : c'est ce qui les fait se
        coller dès le premier pixel de défilement. -->
   <div class="barre-filtres" id="barre-filtres">
-  <!-- Les statuts se cumulent : cliquer « En cours » puis « Envie » montre
-       les deux. « Toutes » n'est pas un filtre de plus, c'est leur remise
-       à zéro — d'où son data-filter particulier. -->
+  <!-- Une seule rangée au repos : « Toutes », deux groupes qui se
+       déplient (Statut, Image) et l'interrupteur « Favoris ».
+       « Toutes » n'est pas un filtre de plus : c'est la remise à zéro de
+       TOUS les filtres, d'où sa place ici, toujours visible, groupes
+       repliés ou non. Les groupes ne s'ouvrent qu'un à la fois (voir
+       panneauApres dans js/app.js). La pastille dorée dit combien de
+       filtres un groupe porte, replié ou non. -->
   <nav class="filters" id="filters" aria-label="Filtrer">
-    <button class="filter-btn active" data-filter="all" type="button" aria-pressed="true">Toutes<span class="count" id="count-all"><?= (int) $compte['all'] ?></span></button>
-    <button class="filter-btn status-cours" data-filter="cours" type="button" aria-pressed="false">En cours<span class="count" id="count-cours"><?= (int) $compte['cours'] ?></span></button>
-    <button class="filter-btn status-envie" data-filter="envie" type="button" aria-pressed="false">Envie<span class="count" id="count-envie"><?= (int) $compte['envie'] ?></span></button>
-    <button class="filter-btn status-termine" data-filter="termine" type="button" aria-pressed="false">Terminée<span class="count" id="count-termine"><?= (int) $compte['termine'] ?></span></button>
-    <button class="filter-btn status-abandon" data-filter="abandon" type="button" aria-pressed="false">Abandonnée<span class="count" id="count-abandon"><?= (int) $compte['abandon'] ?></span></button>
-    <button class="filter-btn filter-favori" id="btn-filtre-favori" data-favori="1" type="button" aria-pressed="false">★ Favoris<span class="count" id="count-favori"><?= (int) $compte['favori'] ?></span></button>
-    <button class="filter-btn filter-plus" id="btn-filtres-plus" type="button"
-            aria-expanded="false" aria-controls="filtres-image">Image ▾</button>
+    <button class="filter-btn active" id="btn-filtre-toutes" type="button" aria-pressed="true">Toutes<span class="count" id="count-all"><?= (int) $compte['all'] ?></span></button>
+    <button class="filter-btn filter-plus" id="btn-filtres-statut" data-panneau="statut" type="button"
+            aria-expanded="false" aria-controls="filtres-statut">Statut ▾<span class="nb-actifs hidden" title="Filtres actifs"></span></button>
+    <button class="filter-btn filter-favori" id="btn-filtre-favori" data-favori="1" type="button" aria-pressed="false">★<span class="mot"> Favoris</span><span class="count" id="count-favori"><?= (int) $compte['favori'] ?></span></button>
+    <button class="filter-btn filter-plus" id="btn-filtres-image" data-panneau="image" type="button"
+            aria-expanded="false" aria-controls="filtres-image">Image ▾<span class="nb-actifs hidden" title="Filtres actifs"></span></button>
   </nav>
 
-  <!-- Le type d'image est replié par défaut : c'est un filtre qu'on sort
-       pour faire le ménage (« lesquelles n'ont pas de couverture ? »),
-       pas un réglage du quotidien. -->
-  <div class="filters filters-image hidden" id="filtres-image" aria-label="Filtrer par type d'image">
+  <!-- Les statuts se cumulent : cliquer « En cours » puis « Envie » montre
+       les deux. Repliés par défaut, comme le type d'image : la barre ne
+       doit pas manger l'écran d'un téléphone. -->
+  <div class="filters filters-groupe hidden" id="filtres-statut" aria-label="Filtrer par statut">
+    <?php foreach (STATUTS as $cle => $libelle): ?>
+      <button class="filter-btn status-<?= e($cle) ?>" data-filter="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?><span class="count" id="count-<?= e($cle) ?>"><?= (int) $compte[$cle] ?></span></button>
+    <?php endforeach; ?>
+  </div>
+
+  <!-- Le type d'image est un filtre qu'on sort pour faire le ménage
+       (« lesquelles n'ont pas de couverture ? »), pas un réglage du
+       quotidien. -->
+  <div class="filters filters-groupe hidden" id="filtres-image" aria-label="Filtrer par type d'image">
     <?php foreach (IMAGES_TYPES as $cle => $libelle): ?>
       <button class="filter-btn" data-image="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?><span class="count" id="count-image-<?= e($cle) ?>"><?= (int) $compte['image-' . $cle] ?></span></button>
     <?php endforeach; ?>

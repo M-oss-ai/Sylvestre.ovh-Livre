@@ -296,7 +296,7 @@ effacée dès qu'on le corrige), `Lib.urlImageAcceptee`, `Lib.dureeToast`,
 `Bibliotheque.voisine` (les flèches dans la grille),
 `Bibliotheque.suiviDefilement` (les filtres qui s'effacent et reviennent,
 rebonds et recalages du navigateur compris), `Bibliotheque.annonceQuota`
-et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Bibliotheque.toucheSuppression` (Suppr sur la carte sélectionnée, pas un raccourci) et `champDeSaisie` (dans la fiche, les champs où la touche efface du texte au lieu de supprimer la série), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`, `ReglesMdp.manques` et `brancher` (les règles du mot de passe non respectées, et quand les dire — mêmes messages que `valider_mot_de_passe`).
+et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Bibliotheque.toucheSuppression` (Suppr sur la carte sélectionnée, pas un raccourci) et `champDeSaisie` (dans la fiche, les champs où la touche efface du texte au lieu de supprimer la série), `Bibliotheque.panneauApres`, `panneauMemorise` et `aucunFiltre` (le groupe de filtres déplié, un seul à la fois, sa mémoire d'avant comprise, et le moment où « Toutes » s'allume), `Lib.piegerFocus` (l'œil du mot de passe n'est pas un arrêt), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`, `ReglesMdp.manques` et `brancher` (les règles du mot de passe non respectées, et quand les dire — mêmes messages que `valider_mot_de_passe`).
 
 **Non couvert, côté navigateur** — le branchement sur la page : les
 écouteurs d'`app.js` et de `settings.js`, les appels à l'API, les
