@@ -42,6 +42,7 @@ putenv('CRON_HEURES=0');                  // 0 h : aucun passage ne serait jamai
 putenv('RAPPORT_HEURES=-3');
 putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait muette sans le dire
 putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
+putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait mort avant d'être lu
 putenv('APP_URL=https://exemple.test/bibliotheque/');   // avec un / final
 
 require __DIR__ . '/../lanceur.php';
@@ -168,4 +169,10 @@ test('CLE_ACCES_MAX ne descend jamais sous 1', function () {
 
 test('CLE_ACCES_DEFI_DUREE ne descend jamais sous une minute', function () {
     egale(60, CLE_ACCES_DEFI_DUREE, 'le .env demandait 1 seconde');
+});
+
+groupe('Administration');
+
+test('ADMIN_SUPPRESSION_DUREE ne descend jamais sous 5 minutes', function () {
+    egale(300, ADMIN_SUPPRESSION_DUREE, 'le .env demandait 1 seconde : le temps d\'ouvrir sa boîte mail');
 });

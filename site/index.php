@@ -140,6 +140,9 @@ $flash = flash_prendre();
        la page cesse seulement de les proposer. -->
   <p class="alert alert-info compte-bloque" role="status">
     <b>Consultation seule.</b> Votre compte ne permet plus d'ajouter ni de modifier de séries.
+    <?php if (trim((string) $moi['raison_blocage']) !== ''): ?>
+      Raison : <?= e(trim((string) $moi['raison_blocage'])) ?>
+    <?php endif; ?>
     Pour le rétablir, contactez l'administrateur :
     <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a>.
   </p>
@@ -324,6 +327,10 @@ $flash = flash_prendre();
   Connecté en tant que <b><?= e($moi['identifiant']) ?></b>
   <span class="sep">·</span>
   <a href="parametres.php">Paramètres</a>
+  <?php if (est_admin($moi)): ?>
+    <span class="sep">·</span>
+    <a href="admin.php">Administration</a>
+  <?php endif; ?>
   <span class="sep">·</span>
   <a href="mentions-legales.php">Mentions légales</a>
 </footer>

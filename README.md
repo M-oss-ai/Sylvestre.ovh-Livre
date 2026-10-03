@@ -183,6 +183,7 @@ importantes :
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
 | `CLE_ACCES_MAX` · `CLE_ACCES_DEFI_DUREE` | Clés d'accès : nombre par compte (10, plafond 50) et validité du défi envoyé au navigateur (300 s, entre 60 et 900) |
 | `CONFIRMATION_DUREE` | Temps laissé, après avoir prouvé son identité (Google, ou mot de passe pour un compte e-mail), pour valider l'action à risque choisie (une seule) |
+| `ADMIN_SUPPRESSION_DUREE` | Validité du lien de confirmation envoyé à `ADMIN_EMAIL` quand on demande la suppression d'un compte depuis l'administration (3600 s, entre 300 et 86400) |
 
 ---
 
@@ -370,6 +371,39 @@ L'import **n'ajoute que les séries absentes** : une série déjà présente
 elle récupère seulement l'image ou l'étoile qui lui manquent. Réimporter
 le même fichier ne change donc rien. Le résultat reste affiché dans la
 page.
+
+---
+
+## Administration
+
+Une page réservée aux comptes **administrateurs** : `admin.php`. Elle liste tous
+les comptes (identifiant, adresse et si elle est confirmée, photo, forfait, date
+d'inscription, nombre de séries), avec une recherche et des colonnes triables.
+Les mots « admin », « Google », « non confirmé », « bloqué », « sans photo » et
+« sans série » tiennent lieu de filtres : taper « non confirmé » suffit.
+
+**Le premier administrateur se nomme à la main**, une fois la migration 11 de
+`livre.sql` rejouée :
+
+```sql
+UPDATE utilisateur SET admin = 1 WHERE identifiant = 'votre_identifiant';
+```
+
+Les suivants se nomment depuis la page. Être administrateur est **indépendant du
+forfait** : on peut être bloqué et administrateur.
+
+- **Changer le forfait** d'un compte envoie un e-mail à la personne.
+  *Bloqué* demande une raison, qui figure dans l'e-mail, sur sa bibliothèque et dans
+  ses Paramètres, et qui est conservée avec le compte. *Illimité* envoie un message
+  pour des amis (la dynastie sylvestrique). Pas d'e-mail à une adresse jamais
+  confirmée ; un envoi raté ne défait pas le changement, la page le dit.
+- **Nommer ou révoquer** un administrateur. Jamais soi-même : un autre doit le faire,
+  il en reste donc toujours un.
+- **Supprimer un compte** n'efface rien tout de suite : un e-mail part vers
+  `ADMIN_EMAIL`, avec un lien valable `ADMIN_SUPPRESSION_DUREE` secondes. Le lien ouvre
+  une page de confirmation ; le compte, sa bibliothèque et ses images ne sont effacés
+  qu'au bouton « Supprimer définitivement ». Pas son propre compte, ni celui d'un
+  administrateur (lui retirer d'abord ses droits).
 
 ---
 
@@ -561,6 +595,7 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 | `connexion-cle.php` · `includes/cle_acces.php` · `js/cle-acces.js` | Clés d'accès : l'appel de la connexion, la vérification (CBOR, signature), le bouton |
 | `mot-de-passe-oublie.php` · `reinitialiser-mot-de-passe.php` · `verifier-email.php` | Récupération et confirmation |
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
+| `admin.php` · `includes/admin.php` · `js/admin.js` | Administration (comptes `admin` seulement) : la liste, les forfaits, les droits, la suppression confirmée par e-mail |
 | `mentions-legales.php` | Mentions légales et confidentialité |
 | `purger.php` | Entretien de la base, lancé par le cron |
 | `js/*.js` · `css/style.css` | Navigateur (`js/double-appui.js` : un clic posé sur le document, qui empêche Safari de zoomer au double-appui ; chargé par toutes les pages) |

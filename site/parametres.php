@@ -642,6 +642,9 @@ $nb_series = (int) $req->fetchColumn();
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🎫</span> Forfait</h2>
     <?php if ($bloque): ?>
       <p class="hint"><b>Bloqué 🔒</b> — consultation seule (<?= $nb_series ?> série(s)).</p>
+      <?php if (trim((string) $moi['raison_blocage']) !== ''): ?>
+        <p class="hint">Raison : <b><?= e(trim((string) $moi['raison_blocage'])) ?></b></p>
+      <?php endif; ?>
       <p class="hint">
         Ce compte ne permet plus d'ajouter, de modifier ni de supprimer de séries, ni d'importer
         une sauvegarde. Vous pouvez toujours consulter votre bibliothèque, l'exporter et gérer
@@ -763,6 +766,15 @@ $nb_series = (int) $req->fetchColumn();
     <button id="btn-delete-account" type="button" class="btn btn-danger full">⚠️ Supprimer mon compte</button>
     <p class="hint">Supprime définitivement le compte et l'intégralité de la bibliothèque associée.</p>
   </section>
+
+  <?php if (est_admin($moi)): ?>
+  <!-- ---------------- Administration (comptes `admin` seulement) ---------------- -->
+  <section class="settings-card">
+    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🛠️</span> Administration</h2>
+    <p class="hint">Vous êtes administrateur : la liste des comptes, leurs forfaits, les blocages.</p>
+    <a class="btn btn-primary full" href="admin.php">Ouvrir l'administration</a>
+  </section>
+  <?php endif; ?>
 
   <!-- ---------------- À propos ---------------- -->
   <section class="settings-card about-card">

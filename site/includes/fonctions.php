@@ -589,7 +589,7 @@ function utilisateur_actuel(): ?array
     }
 
     $req = $pdo->prepare(
-        'SELECT id, identifiant, email, email_verifie, photo, forfait,
+        'SELECT id, identifiant, email, email_verifie, photo, forfait, admin, raison_blocage,
                 session_version, adulte_confirme, filtre_sensible, cree_le, google_sub,
                 (mot_de_passe = \'\') AS sans_mot_de_passe
            FROM utilisateur WHERE id = ?'
@@ -971,11 +971,61 @@ function action_bloquee(array $utilisateur, string $action): bool
     return compte_bloque($utilisateur) && in_array($action, ACTIONS_BLOQUEES, true);
 }
 
-/** Ce qu'un compte bloqué lit, à la page comme dans la réponse de l'API. */
-function message_compte_bloque(): string
+/**
+ * Ce qu'un compte bloqué lit, à la page comme dans la réponse de l'API.
+ * `$raison` : le motif saisi par l'administrateur en bloquant le compte
+ * (vide pour un blocage posé à la main en base, qui n'en a pas).
+ */
+function message_compte_bloque(string $raison = ''): string
 {
+    $raison = trim($raison);
     return 'Votre compte est en consultation seule : la bibliothèque ne peut plus être modifiée. '
+        . ($raison !== '' ? 'Raison : ' . $raison . ' ' : '')
         . "Pour le rétablir, contactez l'administrateur à " . ADMIN_EMAIL . '.';
+}
+
+/* ---------------- L'administrateur ----------------
+   `utilisateur.admin` ouvre admin.php et les actions `admin.*` d'api.php.
+   Une colonne à part du forfait, exprès : on peut être bloqué ET admin — le
+   forfait dit ce qu'on fait de sa propre bibliothèque, `admin` ce qu'on fait
+   des autres comptes. Ces actions sont donc libres pour un compte bloqué
+   (voir ACTIONS_LIBRES_DU_BLOQUE dans tests/cas/forfait_bloque_test.php).
+
+   Le serveur est le seul juge, ici comme pour le forfait : la colonne est
+   relue à chaque requête (utilisateur_actuel), donc un droit retiré prend
+   effet à l'appel suivant, sans attendre la fin de la session. */
+const ACTIONS_ADMIN = [
+    'admin.forfait',    // changer le forfait d'un compte (et le prévenir par e-mail)
+    'admin.admin',      // nommer ou révoquer un administrateur
+    'admin.supprimer',  // DEMANDER la suppression d'un compte (la confirmation passe par ADMIN_EMAIL)
+];
+
+/** Ce compte est-il administrateur ? `$utilisateur` : la ligne de la table, au moins `admin`. */
+function est_admin(array $utilisateur): bool
+{
+    return (int) ($utilisateur['admin'] ?? 0) === 1;
+}
+
+/** Cette action d'api.php est-elle réservée aux administrateurs ? */
+function action_admin(string $action): bool
+{
+    return in_array($action, ACTIONS_ADMIN, true);
+}
+
+/**
+ * Pages réservées aux administrateurs : connexion exigée, puis « page
+ * introuvable » pour tous les autres. Un 404 et non un 403 : refuser avec
+ * « interdit » confirme que la page existe.
+ */
+function exiger_admin(): array
+{
+    $u = exiger_connexion();
+    if (!est_admin($u)) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('Page introuvable.');
+    }
+    return $u;
 }
 
 /**

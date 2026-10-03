@@ -64,6 +64,13 @@ const ACTIONS_LIBRES_DU_BLOQUE = [
     'compte.renvoyer_verification' => 'confirmer son adresse',
     'compte.supprimer'             => 'quitter le site : un droit, pas une faveur',
     'compte.filtre_sensible'       => 'une préférence de recherche, sans effet sur la bibliothèque',
+    /* Les actions d'administration portent sur d'AUTRES comptes : on peut être
+       bloqué ET administrateur (colonne `admin`, distincte du forfait). Elles
+       sont gardées par ACTIONS_ADMIN, pas par le forfait ; admin_test.php
+       vérifie que cette liste et ACTIONS_ADMIN se recouvrent. */
+    'admin.forfait'                => 'administrer les autres comptes : un administrateur bloqué le reste',
+    'admin.admin'                  => 'administrer les autres comptes : un administrateur bloqué le reste',
+    'admin.supprimer'              => 'administrer les autres comptes : un administrateur bloqué le reste',
 ];
 
 groupe('compte_bloque() — qui est en consultation seule');
@@ -178,8 +185,9 @@ test('le refus est posé après le CSRF et avant l\'export comme avant le switch
 test('le refus est un 403 qui dit pourquoi, sans rien faire d\'autre', function () {
     $api = source('api.php');
     $debut = (int) strpos($api, 'action_bloquee($moi, $action)');
-    $garde = substr($api, $debut, 220);
-    contient('message_compte_bloque()', $garde, 'le message est celui de la fonction');
+    $garde = substr($api, $debut, 320);
+    contient('message_compte_bloque(', $garde, 'le message est celui de la fonction');
+    contient('raison_blocage', $garde, 'et il porte la raison saisie par l\'administrateur');
     contient('403', $garde, 'interdit, pas « introuvable »');
     contient("'bloque' => true", $garde, 'le navigateur peut le reconnaître');
 });
@@ -188,6 +196,14 @@ test('le message nomme la situation et un recours', function () {
     $message = message_compte_bloque();
     contient('consultation seule', $message, 'dit ce qui se passe');
     contient(ADMIN_EMAIL, $message, 'donne le moyen de le rétablir');
+    sans('Raison', $message, 'sans motif noté (blocage posé à la main en base), aucune « Raison : » creuse');
+});
+
+test('le message porte la raison saisie par l\'administrateur', function () {
+    $message = message_compte_bloque("  Publicité en série dans les titres.\n");
+    contient('Raison : Publicité en série dans les titres.', $message, 'la raison, sans ses espaces de bord');
+    contient(ADMIN_EMAIL, $message, 'le recours reste donné');
+    sans('Raison', message_compte_bloque('   '), 'une raison faite d\'espaces n\'en est pas une');
 });
 
 groupe('carte_html($s, true) — la carte d\'un compte bloqué');

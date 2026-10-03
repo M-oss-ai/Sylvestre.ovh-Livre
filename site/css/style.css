@@ -1813,3 +1813,176 @@ html.verification-session body { visibility: hidden; }
   font-size: 0.82rem;
   opacity: 0.7;
 }
+
+/* ---------- Administration (admin.php) ----------
+   Une page de travail, pas une vitrine : plus large que les Paramètres, avec
+   un tableau qui défile sur le côté quand l'écran manque de place — il n'a
+   pas à être beau sur un téléphone, il doit rester utilisable. */
+.admin-main {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 22px 20px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.admin-chiffres {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.admin-chiffres > div {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.admin-chiffres dt {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.admin-chiffres dd { margin: 4px 0 0; font-size: 22px; font-weight: 700; color: var(--gold-light); }
+.admin-chiffres dd small { font-size: 13px; color: var(--text-dim); font-weight: 600; }
+.admin-sous { display: block; font-size: 12px; font-weight: 400; color: var(--text-dim); }
+/* Plus spécifique que « .admin-chiffres dd » : sans cela, « n place(s) restante(s) »
+   s'affichait en gros chiffres, comme la valeur qu'il accompagne. */
+.admin-chiffres dd.admin-sous { margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--text-dim); }
+
+.admin-outils {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.admin-recherche { flex: 1 1 260px; margin-bottom: 0; }
+.admin-compte { margin: 0 0 10px; }
+
+.admin-tableau {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.admin-tableau:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.admin-table th,
+.admin-table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.admin-table thead th { background: rgba(0, 0, 0, 0.25); }
+.admin-table tbody tr:last-child td { border-bottom: 0; }
+.admin-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
+.admin-table .c-email { white-space: normal; overflow-wrap: anywhere; min-width: 180px; }
+.admin-table .c-id,
+.admin-table .c-series { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-table th:first-child,
+.admin-table th:nth-child(8) { text-align: right; }
+
+.admin-tri {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.admin-tri:hover,
+.admin-tri:focus-visible { color: var(--gold-light); }
+th[aria-sort="ascending"] .admin-tri::after { content: " ▲"; }
+th[aria-sort="descending"] .admin-tri::after { content: " ▼"; }
+th[aria-sort] .admin-tri { color: var(--gold-light); }
+th[aria-sort="none"] .admin-tri { color: var(--text-dim); }
+
+.admin-oui { color: var(--termine); font-weight: 700; }
+.admin-non { color: var(--text-dim); }
+
+.admin-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold-light);
+}
+.admin-badge-admin { background: rgba(201, 168, 124, 0.18); }
+.admin-badge-moi { color: var(--text-dim); }
+.admin-badge-google { color: var(--cours); }
+
+/* 16 px : en dessous, iOS agrandit la page dès qu'on touche le menu. */
+.admin-forfait {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  color-scheme: dark;
+}
+.admin-forfait:focus { outline: none; border-color: var(--gold); }
+
+.admin-raison {
+  margin: 6px 0 0;
+  max-width: 260px;
+  font-size: 12px;
+  color: var(--abandon);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.admin-table .c-actions .btn { padding: 6px 10px; font-size: 13px; }
+.admin-table .c-actions .btn + .btn { margin-left: 6px; }
+
+.admin-confirmer { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.admin-confirmer form { margin: 0; }
+
+/* Le motif d'un blocage : même habillage que les champs, un champ de texte
+   multiligne n'en avait pas. */
+#admin-modal-raison { margin-top: 14px; }
+/* Un peu plus large que les autres fenêtres : « Envoyer le lien de confirmation » tient sur une ligne. */
+#admin-overlay .modal.small { max-width: 460px; }
+
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 84px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  resize: vertical;
+  color-scheme: dark;
+}
+.field textarea::placeholder { color: var(--text-dim); }
+.field textarea:focus { outline: none; border-color: var(--gold); background: rgba(0, 0, 0, 0.4); }
+.field textarea[aria-invalid="true"] { border-color: var(--abandon); }
+
+@media (max-width: 560px) {
+  .admin-main { padding: 16px 12px 50px; }
+}

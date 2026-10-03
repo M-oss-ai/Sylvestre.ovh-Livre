@@ -47,12 +47,20 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   -- consultation seule (ni création, ni modification, ni favori, ni tome,
   -- ni import, ni suppression : voir ACTIONS_BLOQUEES dans fonctions.php).
   -- Pas de paiement en ligne dans l'appli : un changement de forfait se fait
-  -- manuellement en base (l'utilisateur doit contacter l'administrateur,
-  -- voir ADMIN_EMAIL) :
+  -- depuis admin.php (qui prévient l'intéressé par e-mail), ou à la main en
+  -- base (l'utilisateur doit contacter l'administrateur, voir ADMIN_EMAIL) :
   --     UPDATE utilisateur SET forfait = 'illimite' WHERE identifiant = '...';
   --     UPDATE utilisateur SET forfait = 'bloque'   WHERE identifiant = '...';
   --     UPDATE utilisateur SET forfait = 'standard' WHERE identifiant = '...';
   `forfait`      ENUM('standard','illimite','bloque') NOT NULL DEFAULT 'standard',
+  -- Administrateur : peut ouvrir admin.php. Une colonne à part du forfait :
+  -- on peut être bloqué ET administrateur. Le premier se pose à la main :
+  --     UPDATE utilisateur SET admin = 1 WHERE identifiant = '...';
+  `admin`        TINYINT(1)   NOT NULL DEFAULT 0,
+  -- Le motif saisi en bloquant le compte (repris dans l'e-mail), et la date.
+  -- Vides quand le compte n'est pas bloqué.
+  `raison_blocage` VARCHAR(500) NOT NULL DEFAULT '',
+  `bloque_le`    DATETIME     NULL DEFAULT NULL,
   -- Incrémenté à chaque changement de mot de passe. Une session PHP porte
   -- la valeur qu'elle a vue à la connexion : dès qu'elles diffèrent, la
   -- session est rejetée. C'est ce qui déconnecte RÉELLEMENT les autres
@@ -116,7 +124,7 @@ CREATE TABLE IF NOT EXISTS `jeton_action` (
   `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `utilisateur_id` INT UNSIGNED NOT NULL,
   `jeton_hash`     CHAR(64) NOT NULL,
-  `type`           ENUM('verification','reinit','changement_email','blocage_email') NOT NULL,
+  `type`           ENUM('verification','reinit','changement_email','blocage_email','suppression_admin') NOT NULL,
   `donnee`         VARCHAR(190) NULL,
   `expire`         DATETIME NOT NULL,
   `cree_le`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -473,4 +481,56 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
               AND COLUMN_TYPE LIKE '%''bloque''%');
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `utilisateur` MODIFY COLUMN `forfait` ENUM(''standard'',''illimite'',''bloque'') NOT NULL DEFAULT ''standard''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  11. Page d'administration (admin.php).
+--
+--      `admin`          : le compte peut ouvrir admin.php. Une colonne à part
+--                         du forfait, exprès : on peut être bloqué ET admin
+--                         (le forfait dit ce qu'on fait de sa bibliothèque,
+--                         `admin` ce qu'on fait des autres comptes). À poser
+--                         À LA MAIN pour le premier administrateur :
+--                           UPDATE utilisateur SET admin = 1 WHERE identifiant = '...';
+--                         Les suivants se nomment depuis la page elle-même.
+--      `raison_blocage` : le motif saisi en bloquant le compte, repris dans
+--                         l'e-mail envoyé. Vide quand le compte n'est pas
+--                         bloqué.
+--      `bloque_le`      : depuis quand. NULL quand le compte n'est pas bloqué.
+--      jeton_action.type « suppression_admin » : le lien envoyé à ADMIN_EMAIL
+--                         pour CONFIRMER la suppression d'un compte depuis
+--                         admin.php (voir api.php, « admin.supprimer »).
+--
+--      Aucune donnée n'est touchée : chaque compte garde son forfait, et
+--      personne n'est administrateur tant qu'on ne l'a pas décidé.
+--      À exécuter AVANT d'ouvrir admin.php (même piège que la migration 10 :
+--      hors mode strict, une valeur absente d'un ENUM est rangée en '').
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'admin');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `admin` TINYINT(1) NOT NULL DEFAULT 0 AFTER `forfait`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'raison_blocage');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `raison_blocage` VARCHAR(500) NOT NULL DEFAULT '''' AFTER `admin`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'bloque_le');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `bloque_le` DATETIME NULL DEFAULT NULL AFTER `raison_blocage`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'jeton_action' AND COLUMN_NAME = 'type'
+              AND COLUMN_TYPE LIKE '%''suppression_admin''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `jeton_action` MODIFY COLUMN `type` ENUM(''verification'',''reinit'',''changement_email'',''blocage_email'',''suppression_admin'') NOT NULL');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

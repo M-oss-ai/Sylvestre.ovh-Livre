@@ -764,3 +764,141 @@ function consommer_jeton_action(int $jeton_id): void
     global $pdo;
     $pdo->prepare('DELETE FROM jeton_action WHERE id = ?')->execute([$jeton_id]);
 }
+
+/* ---------------------------------------------------------------------
+   Avis de l'administration (admin.php)
+
+   Chaque avis est une fonction PURE qui rend [sujet, corps], testée comme
+   les avis de sécurité ; les avertir_*() qui suivent ne font qu'envoyer.
+
+   Le motif d'un blocage est du texte tapé par un humain : corps_html() ne
+   le rend jamais en lien (seules les adresses du site le deviennent), même
+   s'il contient une adresse. Rien ici ne dit « cliquez » vers autre chose
+   que le site.
+   --------------------------------------------------------------------- */
+
+/**
+ * Le compte passe en consultation seule. Le motif est dit tel quel : c'est
+ * ce que l'administrateur a écrit POUR la personne, et ce qu'elle lira aussi
+ * sur sa bibliothèque.
+ *
+ * @return array{0: string, 1: string} le sujet et le corps
+ */
+function avis_compte_bloque(string $identifiant, string $raison): array
+{
+    return ['Votre compte est passé en consultation seule', "Bonjour {$identifiant},\n\n"
+        . "L'administrateur a placé votre compte Ma Bibliothèque Manga en consultation seule.\n\n"
+        . 'Raison : ' . trim($raison) . "\n\n"
+        . "Ce que cela change : vous pouvez toujours vous connecter, consulter votre "
+        . "bibliothèque, l'exporter et gérer votre compte. Vous ne pouvez plus ajouter, "
+        . "modifier ni supprimer de séries, ni importer de sauvegarde, ni chercher de "
+        . "couvertures.\n\n"
+        . "Si vous pensez qu'il s'agit d'une erreur, écrivez à l'administrateur : " . ADMIN_EMAIL];
+}
+
+/**
+ * Le compte devient « illimité ». Un message pour des amis : le ton est
+ * voulu, il ne sert à rien d'y chercher du sérieux.
+ */
+function avis_forfait_illimite(string $identifiant): array
+{
+    return ['Bienvenue dans la dynastie sylvestrique', "Salutations, noble {$identifiant},\n\n"
+        . "Par la présente, vous avez l'honneur d'intégrer la dynastie sylvestrique.\n\n"
+        . "Soyez heureux : ce jour marque le commencement d'une nouvelle ère sylvique. Par la "
+        . "volonté de la grande déesse du Sylve, vous êtes devenu un être supérieur.\n\n"
+        . "Vos privilèges, gravés dans l'écorce du plus ancien des chênes :\n"
+        . "- plus aucune limite de séries : votre bibliothèque s'étendra comme une forêt sans lisière ;\n"
+        . "- le respect éternel de vos tomes en cours, de vos étagères et de vos feuilles mortes.\n\n"
+        . "(Aucun sacrifice n'est exigé. Un petit merci à la déesse suffira.)\n\n"
+        . "Votre bibliothèque vous attend, au pied des grands arbres :\n"
+        . url_publique('index.php') . "\n\n"
+        . "Que la sève vous soit propice,\n"
+        . 'Le Conseil des Anciens du Sylve'];
+}
+
+/**
+ * Retour au forfait standard : soit le compte est rétabli (il était bloqué),
+ * soit il perd l'illimité. $ancien est le forfait d'AVANT.
+ */
+function avis_forfait_standard(string $identifiant, string $ancien): array
+{
+    if ($ancien === 'bloque') {
+        return ['Votre compte est rétabli', "Bonjour {$identifiant},\n\n"
+            . "Bonne nouvelle : l'administrateur a rétabli votre compte Ma Bibliothèque Manga. "
+            . "Vous pouvez de nouveau ajouter, modifier et supprimer des séries, importer une "
+            . "sauvegarde et chercher des couvertures.\n\n"
+            . url_publique('index.php')];
+    }
+    return ['Votre compte repasse au forfait standard', "Bonjour {$identifiant},\n\n"
+        . 'Votre compte Ma Bibliothèque Manga repasse au forfait standard : la limite est de '
+        . MAX_SERIES_PAR_UTILISATEUR . " séries.\n\n"
+        . "Vous conservez toutes celles que vous avez déjà : la limite ne joue que pour les "
+        . "ajouts.\n\n"
+        . "Une question ? Écrivez à l'administrateur : " . ADMIN_EMAIL];
+}
+
+/** L'avis qui correspond au forfait donné ($nouveau), par rapport à celui d'avant ($ancien). */
+function avis_forfait(string $identifiant, string $nouveau, string $ancien, string $raison = ''): array
+{
+    return match ($nouveau) {
+        'bloque'   => avis_compte_bloque($identifiant, $raison),
+        'illimite' => avis_forfait_illimite($identifiant),
+        default    => avis_forfait_standard($identifiant, $ancien),
+    };
+}
+
+/**
+ * Le message envoyé à ADMIN_EMAIL, qui porte le lien de confirmation d'une
+ * suppression demandée depuis admin.php. Rien n'est supprimé avant le clic.
+ *
+ * L'identifiant, l'adresse et le nom de l'administrateur sont des données de
+ * comptes : ils restent du texte (corps_html ne lie que les adresses du site).
+ * Seul $lien — fabriqué par url_publique() — devient cliquable.
+ */
+function avis_suppression_a_confirmer(string $admin, string $identifiant, string $email, int $nb_series, string $lien, int $duree): array
+{
+    return ['Confirmer la suppression du compte ' . $identifiant, "Bonjour,\n\n"
+        . "{$admin} demande la suppression du compte « {$identifiant} » ({$email}, {$nb_series} série(s)) "
+        . "depuis l'administration de Ma Bibliothèque Manga.\n\n"
+        . "Rien n'a encore été supprimé. Pour confirmer, ouvrez ce lien en étant connecté "
+        . "comme administrateur, puis validez la page qui s'affiche :\n"
+        . $lien . "\n\n"
+        . 'Il est valable ' . secondes_lisibles($duree) . " et ne sert qu'une fois. La suppression "
+        . "est définitive : le compte, sa bibliothèque et ses images seront effacés.\n\n"
+        . "Si vous n'êtes pas à l'origine de cette demande, ne cliquez pas : le lien s'éteindra "
+        . "tout seul. Quelqu'un utilise peut-être un compte administrateur qui n'est pas le sien."];
+}
+
+/** Le compte vient d'être supprimé par l'administrateur : on le dit à son titulaire. */
+function avis_compte_supprime_par_admin(string $identifiant): array
+{
+    return ['Votre compte a été supprimé', "Bonjour {$identifiant},\n\n"
+        . "L'administrateur a supprimé votre compte Ma Bibliothèque Manga, ainsi que "
+        . "l'intégralité de la bibliothèque qui lui était rattachée.\n\n"
+        . "Cette suppression est définitive : rien n'a été conservé.\n\n"
+        . "Si vous pensez qu'il s'agit d'une erreur, écrivez à l'administrateur : " . ADMIN_EMAIL];
+}
+
+/** Prévient le titulaire que son forfait change. true si le message est parti. */
+function avertir_forfait_change(string $email, string $identifiant, string $nouveau, string $ancien, string $raison = ''): bool
+{
+    [$sujet, $corps] = avis_forfait($identifiant, $nouveau, $ancien, $raison);
+    return envoyer_email($email, $sujet, $corps);
+}
+
+/** Envoie à ADMIN_EMAIL le lien qui confirme une suppression. true si le message est parti. */
+function demander_confirmation_suppression(string $admin, string $identifiant, string $email, int $nb_series, string $jeton): bool
+{
+    [$sujet, $corps] = avis_suppression_a_confirmer(
+        $admin, $identifiant, $email, $nb_series,
+        url_publique('admin.php?supprimer=' . $jeton), ADMIN_SUPPRESSION_DUREE
+    );
+    return envoyer_email(ADMIN_EMAIL, $sujet, $corps);
+}
+
+/** Prévient le titulaire que l'administrateur a supprimé son compte. true si le message est parti. */
+function avertir_compte_supprime_par_admin(string $email, string $identifiant): bool
+{
+    [$sujet, $corps] = avis_compte_supprime_par_admin($identifiant);
+    return envoyer_email($email, $sujet, $corps);
+}

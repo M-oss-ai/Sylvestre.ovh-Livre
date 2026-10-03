@@ -153,6 +153,12 @@ define('GOOGLE_CLIENT_SECRET', trim(env('GOOGLE_CLIENT_SECRET', '')));
    au-delà, une session volée suffirait de nouveau. */
 define('CONFIRMATION_DUREE', min(3600, max(60, (int) env('CONFIRMATION_DUREE', '600'))));
 
+/* Supprimer un compte depuis admin.php : un lien part vers ADMIN_EMAIL, et
+   rien n'est effacé tant qu'on n'a pas cliqué dessus, dans ce délai (en
+   secondes). Entre 5 minutes (le temps d'ouvrir sa boîte) et 24 heures :
+   au-delà, un lien oublié dans une boîte mail resterait une arme chargée. */
+define('ADMIN_SUPPRESSION_DUREE', min(86400, max(300, (int) env('ADMIN_SUPPRESSION_DUREE', '3600'))));
+
 /* Clés d'accès (voir includes/cle_acces.php et connexion-cle.php).
    CLE_ACCES_MAX : nombre de clés par compte — un téléphone, un
    ordinateur, un gestionnaire de mots de passe… Le plafond (50) borne ce

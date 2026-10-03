@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (743 tests : 637 PHP en 49 fichiers, 106 JavaScript)
+php tests/lancer.php              # toute la suite (839 tests : 706 PHP en 51 fichiers, 133 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -91,6 +91,7 @@ l'amorce, tandis que `CHEMIN_PROJET` est la racine du dépôt.
 | `includes/carte.php` | Le HTML d'une carte de série |
 | `includes/google.php` | « Continuer avec Google » (OpenID Connect) : l'adresse de départ, la lecture et la vérification du jeton, `google_decision()`. Pur, sauf `google_echanger_code()` |
 | `includes/cle_acces.php` | Clés d'accès (WebAuthn) : lecture du CBOR, clé publique COSE → PEM, vérification d'une création et d'une connexion, défi, options. Pur, sauf la session (`cle_defi_*`) et la base (dernière section). Aucune bibliothèque |
+| `includes/admin.php` | La page d'administration : la liste des comptes (`admin_utilisateurs`), les décisions pures (ce qui est permis, la forme du motif d'un blocage, les dates, les chiffres), et les écritures (`admin_changer_forfait`, `admin_changer_droits`, `admin_supprimer_compte`). Inclus par `admin.php` et `api.php`, jamais par `fonctions.php` |
 | `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
 
 ### Les points d'entrée
@@ -103,7 +104,9 @@ Google et retour : ouvre le compte, ou mène à la création),
 `connexion-cle.php` (l'appel JSON de la connexion par clé d'accès : défi, puis vérification),
 `google-inscription.php` (création d'un compte Google : identifiant,
 mot de passe facultatif), `google-mot-de-passe.php` (seconde étape
-d'une connexion Google, quand le compte a un mot de passe).
+d'une connexion Google, quand le compte a un mot de passe), `admin.php`
+(l'administration : les comptes, leurs forfaits, les blocages — réservée aux
+comptes `admin`, voir « Règles tacites »).
 
 `api.php` est le **point d'entrée AJAX unique** : un `switch` sur
 `$_POST['action']`. Chaque branche vérifie le CSRF et cloisonne par
@@ -118,8 +121,9 @@ d'une connexion Google, quand le compte a un mot de passe).
 `window.CleAcces`, testées, et le bouton de la page de connexion), `js/mdp.js` (règles du mot de passe
 pendant la saisie), `js/delai.js` (comptes à rebours des
 attentes), `js/double-appui.js` (un clic posé sur le document, qui ne fait rien :
-chargé par TOUTES les pages, voir « Règles tacites »). `css/style.css` pour tout
-le style.
+chargé par TOUTES les pages, voir « Règles tacites »), `js/admin.js` (la page
+d'administration : recherche, tri, fenêtres de confirmation ; sa logique pure est
+`window.Admin`, testée). `css/style.css` pour tout le style.
 
 `app.js` commence par `window.Bibliotheque` : sa logique pure (carte
 voisine au clavier, suivi du défilement, textes des quotas), testée par
@@ -497,6 +501,48 @@ série, vider la bibliothèque, ni toucher à MangaDex (`couverture.chercher`,
   autre avec une autre adresse — rien n'en empêche, le forfait part avec la
   ligne. Il n'y a pas de liste d'adresses interdites.
 
+**L'administration, c'est une page, une colonne et trois actions** (demande de
+l'utilisateur). `utilisateur.admin` ouvre `admin.php` : une colonne À PART du
+forfait, parce qu'on peut être bloqué ET administrateur (le forfait dit ce qu'on
+fait de sa propre bibliothèque, `admin` ce qu'on fait des autres comptes). Le
+premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant =
+'…'`), les suivants depuis la page.
+- **Le serveur est le seul juge, comme pour le forfait.** `api.php` refuse (403)
+  toute action de `ACTIONS_ADMIN` à un compte qui n'est pas `admin`, AVANT le
+  switch et après le CSRF ; la colonne est relue à chaque requête, donc un droit
+  retiré s'éteint à l'appel suivant, sans attendre la fin de la session. La page,
+  elle, répond **404** (`exiger_admin()`) : « interdit » confirmerait qu'elle existe.
+  Ces actions sont dans `ACTIONS_LIBRES_DU_BLOQUE` (un administrateur bloqué garde
+  la page) ; `tests/cas/admin_test.php` exige que chaque `case 'admin.*'` soit dans
+  `ACTIONS_ADMIN` et inversement.
+- **Changer le forfait envoie un e-mail** (`avis_forfait()`, textes dans
+  `mailer.php`, tous des fonctions pures). Bloquer EXIGE une raison
+  (`admin_raison_erreur()`), rangée dans `raison_blocage` avec la date
+  (`bloque_le`), dite dans l'e-mail ET sur la bibliothèque et les Paramètres de la
+  personne ; tout autre forfait l'efface. « Illimité » est un message pour des amis
+  (la dynastie sylvestrique) : le ton est voulu. **Pas d'e-mail à une adresse
+  jamais confirmée** (personne n'a prouvé qu'elle est à la bonne personne), et un
+  envoi raté ne défait pas le forfait : il se DIT (`mail` : `envoye`, `echec`,
+  `non_confirme`). Le forfait est relu dans la transaction qui l'écrit : hors mode
+  strict, une valeur absente de l'`ENUM` serait rangée en `''` sans erreur.
+- **Nommer ou révoquer un administrateur : jamais soi-même**
+  (`admin_refus_droits()`), si bien qu'il en reste toujours un. Aucune
+  confirmation d'identité ni e-mail d'avis pour l'instant : une session
+  d'administrateur volée peut nommer quelqu'un — voir ce qui est proposé.
+- **Supprimer un compte passe par ADMIN_EMAIL.** `admin.supprimer` n'efface RIEN :
+  il crée un jeton `suppression_admin` (`ADMIN_SUPPRESSION_DUREE`, 1 h par défaut)
+  et envoie le lien `admin.php?supprimer=…` à `ADMIN_EMAIL` ; sans envoi, le jeton
+  est retiré. Le lien ouvre une page de confirmation, et **l'effacement n'a lieu
+  qu'en POST** avec le jeton CSRF : un GET qui supprimait serait déclenché par
+  n'importe quel antivirus de messagerie qui visite les adresses des courriers. La
+  cible est relue avant d'être effacée (elle a pu devenir administrateur entre-temps).
+  Pas son propre compte (par ses Paramètres), pas un administrateur (d'abord lui
+  retirer ses droits). Le titulaire est prévenu APRÈS, s'il a une adresse confirmée.
+- **La page ne fabrique aucun HTML à partir de données** : `js/admin.js` met à jour
+  les lignes déjà rendues par PHP (`textContent`, attributs `data-`), et chaque
+  valeur sort de PHP par `e()`. Un identifiant est du texte choisi par quelqu'un
+  d'autre.
+
 **La signature du jeton Google n'est pas vérifiée, et c'est voulu** : il
 arrive par un appel HTTPS direct du serveur à Google, jamais par le
 navigateur (OpenID Connect Core § 3.1.3.7). Ne jamais désactiver
@@ -534,7 +580,11 @@ publiques des clés d'accès — jamais une clé privée) : `utilisateur`, `seri
 `session_persistante`, `tentative_ip`, `cle_acces`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
 dernier rapport du cron). `utilisateur.forfait` : `standard`, `illimite` ou
-`bloque` (consultation seule, voir « Règles tacites »).
+`bloque` (consultation seule, voir « Règles tacites »). `utilisateur.admin`
+(administrateur, indépendant du forfait), `raison_blocage` et `bloque_le` (le motif
+et la date d'un blocage) : migration 11. **`utilisateur_actuel()` les lit à chaque
+requête : rejouer `livre.sql` AVANT d'envoyer le code**, sans quoi toutes les pages
+tombent sur « colonne inconnue ».
 
 `livre.sql` est **entièrement rejouable**. Pour mettre à jour une base
 existante, on rejoue le fichier **en entier** en retirant seulement les

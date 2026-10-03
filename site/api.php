@@ -17,6 +17,7 @@ require_once __DIR__ . '/includes/carte.php';
 require_once __DIR__ . '/includes/couvertures.php';
 require_once __DIR__ . '/includes/google.php';   // les modifications en attente d'un compte Google
 require_once __DIR__ . '/includes/cle_acces.php';   // les clés d'accès (ajout, retrait)
+require_once __DIR__ . '/includes/admin.php';        // les actions `admin.*`
 
 $moi    = exiger_connexion_api();
 $mon_id = (int) $moi['id'];
@@ -48,7 +49,14 @@ if (!csrf_valide($_POST['csrf'] ?? null)) {
    cachent n'engage que le navigateur. L'export, la gestion du compte et sa
    suppression restent ouverts. */
 if (action_bloquee($moi, $action)) {
-    reponse_json(['ok' => false, 'bloque' => true, 'erreur' => message_compte_bloque()], 403);
+    reponse_json(['ok' => false, 'bloque' => true,
+        'erreur' => message_compte_bloque((string) ($moi['raison_blocage'] ?? ''))], 403);
+}
+/* Actions d'administration : réservées aux comptes `admin`, refusées ICI
+   avant le switch — la page admin.php n'est qu'une politesse. Relu en base à
+   chaque requête (utilisateur_actuel) : un droit retiré s'éteint aussitôt. */
+if (action_admin($action) && !est_admin($moi)) {
+    reponse_json(['ok' => false, 'erreur' => 'Accès réservé aux administrateurs.'], 403);
 }
 
 /**
@@ -1195,6 +1203,116 @@ switch ($action) {
             'message'  => $filtrer
                 ? 'Les images sensibles sont filtrées.'
                 : 'Le filtre est désactivé.',
+        ]);
+    }
+
+    /* ---------------- Administration (admin.php) ----------------
+       Réservé aux comptes `admin` : la garde est plus haut, avant le switch.
+       Ces actions portent sur d'AUTRES comptes, jamais sur la bibliothèque de
+       celui qui les lance : un administrateur bloqué garde donc la page (voir
+       ACTIONS_ADMIN dans fonctions.php). Chacune relit sa cible en base. */
+
+    /* Changer le forfait d'un compte, et le prévenir par e-mail. Bloquer exige
+       une raison : elle est rangée avec le compte et dite dans le message. */
+    case 'admin.forfait': {
+        $cible_id = (int) ($_POST['id'] ?? 0);
+        $forfait  = $_POST['forfait'] ?? '';
+        $cible    = admin_utilisateur($pdo, $cible_id);
+        if (!$cible) {
+            reponse_json(['ok' => false, 'erreur' => 'Compte introuvable.'], 404);
+        }
+        if (!admin_forfait_valide($forfait)) {
+            reponse_json(['ok' => false, 'erreur' => 'Forfait inconnu.'], 422);
+        }
+        if ($forfait === $cible['forfait']) {
+            reponse_json(['ok' => false, 'erreur' => 'Ce compte a déjà ce forfait.'], 422);
+        }
+
+        $raison = '';
+        if ($forfait === FORFAIT_BLOQUE) {
+            $raison = admin_raison($_POST['raison'] ?? '');
+            if ($erreur = admin_raison_erreur($raison)) {
+                reponse_json(['ok' => false, 'champ' => 'raison', 'erreur' => $erreur], 422);
+            }
+        }
+
+        $ancien = $cible['forfait'];
+        admin_changer_forfait($pdo, $cible_id, $forfait, $raison);
+        journal_securite('admin_forfait', ['admin' => $mon_id, 'cible' => $cible_id,
+            'de' => $ancien, 'vers' => $forfait, 'raison' => $raison]);
+
+        /* Le forfait a changé : un envoi raté ne l'annule pas, il se DIT
+           (« un envoi raté est perdu, l'appelant le dit »). Pas de message à
+           une adresse que personne n'a confirmée. */
+        $mail = !$cible['confirme']
+            ? 'non_confirme'
+            : (avertir_forfait_change($cible['email'], $cible['identifiant'], $forfait, $ancien, $raison) ? 'envoye' : 'echec');
+
+        reponse_json([
+            'ok'      => true,
+            'compte'  => admin_compte($pdo, $cible_id, $mon_id),
+            'mail'    => $mail,
+            'message' => admin_message_forfait($cible['identifiant'], $forfait, $mail),
+        ]);
+    }
+
+    /* Nommer ou révoquer un administrateur. Jamais pour soi-même (voir
+       admin_refus_droits) : il en reste donc toujours un, celui qui agit. */
+    case 'admin.admin': {
+        $cible_id = (int) ($_POST['id'] ?? 0);
+        $devient  = ((string) ($_POST['admin'] ?? '')) === '1';
+        $cible    = admin_utilisateur($pdo, $cible_id);
+        if (!$cible) {
+            reponse_json(['ok' => false, 'erreur' => 'Compte introuvable.'], 404);
+        }
+        if ($refus = admin_refus_droits($cible_id, $mon_id)) {
+            reponse_json(['ok' => false, 'erreur' => $refus], 403);
+        }
+        if ($cible['admin'] === $devient) {
+            reponse_json(['ok' => false, 'erreur' => $devient
+                ? 'Ce compte est déjà administrateur.' : "Ce compte n'est pas administrateur."], 422);
+        }
+
+        admin_changer_droits($pdo, $cible_id, $devient);
+        journal_securite($devient ? 'admin_nomme' : 'admin_revoque',
+            ['admin' => $mon_id, 'cible' => $cible_id, 'identifiant' => $cible['identifiant']]);
+
+        reponse_json([
+            'ok'      => true,
+            'compte'  => admin_compte($pdo, $cible_id, $mon_id),
+            'message' => admin_message_droits($cible['identifiant'], $devient),
+        ]);
+    }
+
+    /* DEMANDER la suppression d'un compte. Rien n'est supprimé ici : un lien
+       part vers ADMIN_EMAIL, et c'est la page admin.php qui, au clic puis à la
+       validation, efface. Le courrier est la seconde clé : une session
+       d'administrateur volée ne suffit pas à effacer des comptes. */
+    case 'admin.supprimer': {
+        $cible_id = (int) ($_POST['id'] ?? 0);
+        $cible    = admin_utilisateur($pdo, $cible_id);
+        if (!$cible) {
+            reponse_json(['ok' => false, 'erreur' => 'Compte introuvable.'], 404);
+        }
+        if ($refus = admin_refus_suppression($cible, $mon_id)) {
+            reponse_json(['ok' => false, 'erreur' => $refus], 403);
+        }
+
+        $jeton = generer_jeton_action($cible_id, 'suppression_admin', ADMIN_SUPPRESSION_DUREE, (string) $mon_id);
+        if (!demander_confirmation_suppression((string) $moi['identifiant'], $cible['identifiant'], $cible['email'], $cible['series'], $jeton)) {
+            // Un lien qu'on n'a pas pu envoyer ne doit pas rester valable.
+            $pdo->prepare('DELETE FROM jeton_action WHERE jeton_hash = ?')->execute([hash('sha256', $jeton)]);
+            reponse_json(['ok' => false,
+                'erreur' => "L'e-mail de confirmation n'a pas pu partir : rien n'a été supprimé."], 502);
+        }
+        journal_securite('admin_suppression_demandee', ['admin' => $mon_id, 'cible' => $cible_id,
+            'identifiant' => $cible['identifiant']]);
+
+        reponse_json([
+            'ok'      => true,
+            'message' => 'Un e-mail de confirmation a été envoyé à ' . ADMIN_EMAIL . '. '
+                . "Le compte n'est supprimé qu'après un clic sur le lien (valable "
+                . secondes_lisibles(ADMIN_SUPPRESSION_DUREE) . ').',
         ]);
     }
 

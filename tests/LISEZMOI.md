@@ -299,6 +299,30 @@ lui qui empêche Safari de zoomer au double-appui) et ne bloque pas le zoom. Un
 garde-fou, pas une mesure du navigateur : que le double-appui ne zoome plus
 ne se constate que sur un iPhone.
 
+**Couvert, administration** — `admin_test.php`, `mailer_admin_test.php`,
+`tests/js/cas/admin_test.js`. Les décisions PURES de `includes/admin.php` :
+`est_admin` (seul `1` ouvre la page, colonne absente = personne), un compte bloqué
+ET administrateur, `admin_forfait_valide` (liste fermée, suit l'`ENUM`),
+`admin_raison` (CRLF, lignes vides, caractères de contrôle, UTF-8 invalide) et
+`admin_raison_erreur` (500 caractères, comptés en caractères), qui peut faire quoi à
+qui (pas ses propres droits, pas sa propre suppression d'ici, pas un
+administrateur), les dates « en jour », `admin_ligne`, `admin_pour_acteur`,
+`admin_totaux`, les phrases de la page. Les messages (`avis_compte_bloque`,
+`avis_forfait_illimite`, `avis_forfait_standard`, `avis_suppression_a_confirmer`,
+`avis_compte_supprime_par_admin`) : ce qu'ils disent, et que le motif d'un blocage
+ou un identifiant ne devient jamais un lien ni une balise. Par lecture des sources :
+chaque `case 'admin.*'` d'`api.php` est dans `ACTIONS_ADMIN` et inversement, la
+garde passe après le CSRF et avant le switch, `utilisateur_actuel()` relit la
+colonne, `admin.supprimer` n'efface rien et nettoie son jeton si l'e-mail ne part
+pas, la page est fermée aux non-administrateurs avant tout accès à la base, la
+suppression ne s'exécute qu'en POST sur une cible relue, le schéma neuf et la
+migration 11 (rejouable, sans `IF NOT EXISTS`). Côté navigateur : `Admin.correspond`
+(les mots qui tiennent lieu de filtres), `Admin.trier` (stable, à égalité l'ancienneté),
+`Admin.sensApres`, `Admin.totaux`, `Admin.lireLigne` et les phrases des fenêtres.
+Ce que fait vraiment la page (menus, fenêtres, e-mails réellement envoyés) ne se
+lit pas dans les sources : il se vérifie en HTTP sur un site de test (voir
+CLAUDE.md), et **un e-mail réel ne se vérifie qu'avec un vrai SMTP**.
+
 **Couvert, structure du dépôt** — `structure_test.php`, par lecture des
 sources : `site/` ne contient que ce qui doit monter (ni `tests/`, ni `.md`,
 ni `.sql`, ni `.env`, ni dossier caché — le `.htaccess` de `site/` ne les

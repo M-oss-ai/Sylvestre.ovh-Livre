@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 putenv('CLE_ACCES_MAX=999999');        // un compte n'écrit pas un million de lignes
 putenv('CLE_ACCES_DEFI_DUREE=999999'); // un défi oublié ne traîne pas des jours
+putenv('ADMIN_SUPPRESSION_DUREE=99999999'); // un lien oublié dans une boîte mail ne reste pas une arme
 
 require __DIR__ . '/../lanceur.php';
 
@@ -22,4 +23,10 @@ test('CLE_ACCES_MAX est plafonné à 50', function () {
 
 test('CLE_ACCES_DEFI_DUREE est plafonné à 15 minutes', function () {
     egale(900, CLE_ACCES_DEFI_DUREE, 'le .env demandait 999999 secondes');
+});
+
+groupe('Administration — plafond');
+
+test('ADMIN_SUPPRESSION_DUREE est plafonné à 24 heures', function () {
+    egale(86400, ADMIN_SUPPRESSION_DUREE, 'le .env demandait ~3 ans');
 });
