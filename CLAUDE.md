@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (630 tests : 544 PHP en 43 fichiers, 86 JavaScript)
+php tests/lancer.php              # toute la suite (635 tests : 549 PHP en 44 fichiers, 86 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -254,6 +254,18 @@ qu'un seul Tab mène du mot de passe au champ suivant. Tout nouvel œil le
 porte, et `piegerFocus()` (`js/commun.js`) ignore les `tabindex="-1"` :
 sinon l'œil comptait comme dernier arrêt d'une fenêtre, et Tab s'en
 échappait.
+
+**Le double-appui ne zoome sur AUCUNE page** (demande de l'utilisateur).
+`* { touch-action: manipulation; }` dans `css/style.css`, sur TOUS les
+éléments et non sur une liste : le comportement d'un élément est
+l'intersection du sien et de celui de ses ancêtres, mais seulement
+jusqu'au premier cadre qui défile — une liste de boutons laissait zoomer
+sur le fond de page, un texte, une zone multiligne, et tout ce qui est
+dans une fenêtre ou une rangée de filtres qui défile. Le pincement reste
+permis, exprès : c'est le recours de qui lit mal. Ne jamais y ajouter
+`user-scalable=no` ni `maximum-scale` dans le viewport, ni un
+`touch-action: none` / `pan-*` seul (`tests/cas/tactile_test.php` le
+refuse). Toute nouvelle page HTML charge `css/style.css`, sinon elle zoome.
 
 **Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
 `js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se

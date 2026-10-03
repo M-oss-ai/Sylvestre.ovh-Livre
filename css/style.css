@@ -1549,19 +1549,19 @@ html.verification-session body { visibility: hidden; }
 
 /* ---------- Tactile ---------- */
 
-/* Sans ceci, un double-appui rapide sur une carte ou un bouton zoome la
-   page : le navigateur attend un eventuel second appui avant d agir.
+/* Sans ceci, un double-appui rapide zoome la page (Safari sur iPhone) :
+   le navigateur attend un eventuel second appui avant d agir.
    « manipulation » supprime ce geste-la et garde le pincement, qui reste
-   le moyen d agrandir pour qui en a besoin. */
-button,
-a,
-label,
-input,
-select,
-.card,
-.dropzone,
-.filter-btn,
-.cover-result {
+   le moyen d agrandir pour qui en a besoin.
+
+   Sur TOUS les elements, et non sur une liste : le comportement d un
+   element est l intersection du sien et de celui de ses ancetres, mais
+   seulement jusqu au premier cadre qui defile. Une liste de boutons et de
+   cartes laissait zoomer sur le fond de page, un texte, une zone de saisie
+   multiligne, et tout ce qui se trouve dans une fenetre ou une rangee de
+   filtres qui defile (demande de l utilisateur : sur aucune page). Toutes
+   les pages chargent cette feuille (tests/cas/tactile_test.php). */
+* {
   touch-action: manipulation;
 }
 

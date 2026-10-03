@@ -265,6 +265,13 @@ défaut restrictif de `COUVERTURE_CONTENU_ADULTE` —, et les contrôles de form
 précèdent une requête (`valider_profil`, `jeton_action_valide`,
 `verifier_session_persistante`, `supprimer_images_locales`).
 
+**Couvert par lecture des sources** — `tactile_test.php` : la règle
+`* { touch-action: manipulation }` de `css/style.css` (le double-appui ne
+zoome sur aucune page, le pincement reste possible) et le fait que
+chaque page HTML charge cette feuille et ne bloque pas le zoom. Un
+garde-fou, pas une mesure du navigateur : le style réellement calculé se
+vérifie à la main, page par page.
+
 **Non couvert, faute de réseau** — `mangadex_get`,
 `chercher_couvertures` et le téléchargement fait par
 `mangadex_image_locale`, qui interrogent tous MangaDex. Le classement des
