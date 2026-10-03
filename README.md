@@ -545,7 +545,7 @@ configuration.
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
 | `mentions-legales.php` | Mentions légales et confidentialité |
 | `purger.php` | Entretien de la base, lancé par le cron |
-| `js/*.js` · `css/style.css` | Navigateur (`js/tactile.js` : le double-appui ne zoome pas, chargé par toutes les pages) |
+| `js/*.js` · `css/style.css` | Navigateur (`js/double-appui.js` : un clic posé sur le document, qui empêche Safari de zoomer au double-appui ; chargé par toutes les pages) |
 | `uploads/` | Images envoyées (exécution de code interdite) |
 | `tests/` | Tests unitaires — voir `tests/LISEZMOI.md` |
 

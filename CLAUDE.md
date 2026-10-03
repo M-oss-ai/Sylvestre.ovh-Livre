@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (757 tests : 627 PHP en 48 fichiers, 130 JavaScript)
+php tests/lancer.php              # toute la suite (732 tests : 626 PHP en 48 fichiers, 106 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -102,8 +102,9 @@ d'une connexion Google, quand le compte a un mot de passe).
 `js/auth.js`, `js/settings.js`, `js/cle-acces.js` (clés d'accès : conversions pures
 `window.CleAcces`, testées, et le bouton de la page de connexion), `js/mdp.js` (règles du mot de passe
 pendant la saisie), `js/delai.js` (comptes à rebours des
-attentes), `js/tactile.js` (le double-appui ne zoome pas : chargé par TOUTES
-les pages, voir « Règles tacites »). `css/style.css` pour tout le style.
+attentes), `js/double-appui.js` (un clic posé sur le document, qui ne fait rien :
+chargé par TOUTES les pages, voir « Règles tacites »). `css/style.css` pour tout
+le style.
 
 `app.js` commence par `window.Bibliotheque` : sa logique pure (carte
 voisine au clavier, suivi du défilement, textes des quotas), testée par
@@ -292,20 +293,23 @@ permis, exprès : c'est le recours de qui lit mal. Ne jamais y ajouter
 `touch-action: none` / `pan-*` seul (`tests/cas/tactile_test.php` le
 refuse). Toute nouvelle page HTML charge `css/style.css`, sinon elle zoome.
 
-**La règle CSS ne suffisait pas : `js/tactile.js` la double** (l'utilisateur a
-redemandé la même chose sur son téléphone, la règle étant déjà en ligne).
-Au `touchend` du SECOND appui d'un double-appui — deux appuis de moins de
-350 ms et 45 px —, il appelle `preventDefault()` : l'astuce connue, qui ne
-dépend d'aucun CSS. Son revers est que le navigateur n'envoie plus le
-« click » de ce second appui, et « → » touché deux fois vite ne comptait plus
-qu'une fois : le script REJOUE donc le clic sur le même élément (`detail: 2`).
-Il ne touche ni au pincement (deux doigts ne sont jamais « un appui »), ni à un
-champ de saisie (le double-appui y sélectionne un mot), ni à un geste qui n'est
-pas un appui (défilement, appui long). **Chaque page le charge EN PREMIER**,
-avant ses autres scripts (`tests/cas/tactile_test.php` le vérifie) — une page
-qui l'oublie zoomerait là où l'on s'y attendait le moins. Ce que
-`preventDefault()` empêche réellement n'a été vérifié que par évènements
-simulés : il faut un iPhone pour le constater.
+**La règle CSS ne suffisait pas, et la vraie cause est un gestionnaire de
+clic.** L'utilisateur a redemandé la même chose, la règle étant déjà en ligne :
+le double-appui zoomait encore à côté des champs de `connexion.php`,
+`inscription.php` et `mentions-legales.php`, mais plus sur `index.php` ni
+`parametres.php`. La différence n'est pas le CSS (le même partout) : ces deux-là
+chargent `commun.js`, qui pose un `click` sur `document` (quitter un champ en
+touchant ailleurs). Depuis iOS 13, Safari ne zoome pas au double-appui là où la
+page réagit déjà au clic — il le livre tout de suite et n'attend plus de second
+appui —, et un gestionnaire sur `document` fait réagir TOUTE la page (WebKit,
+bug 205158 ; changement 250780). Les autres pages n'en avaient aucun.
+`js/double-appui.js` en pose un, **qui ne fait rien** : c'est sa présence qui
+compte, ne pas le retirer ni le « nettoyer ». **Chaque page le charge**
+(`tests/cas/tactile_test.php` le vérifie) — une nouvelle page qui l'oublie
+zoomerait à côté de ses champs. Une première version annulait le second appui
+au `touchend` et rejouait son clic : un détour inutile, retiré.
+**Non vérifié sur un iPhone** : le diagnostic repose sur le comportement
+documenté de WebKit et sur ce que l'utilisateur observe, pas sur une mesure.
 
 **Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
 `js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se

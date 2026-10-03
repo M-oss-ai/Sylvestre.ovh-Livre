@@ -240,6 +240,6 @@ $connecte = utilisateur_actuel() !== null;
   <a href="<?= $connecte ? 'index.php' : 'connexion.php' ?>">Retour à l'application</a>
 </footer>
 
-<script src="<?= e(actif('js/tactile.js')) ?>" defer></script>
+<script src="<?= e(actif('js/double-appui.js')) ?>" defer></script>
 </body>
 </html>

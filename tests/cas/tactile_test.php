@@ -8,9 +8,13 @@
    supprime ce geste-là et garde le pincement, le moyen d'agrandir pour qui
    en a besoin.
 
-   La règle CSS ne suffisait pas sur le téléphone de l'utilisateur, qui l'a
-   redemandée : js/tactile.js la double, en neutralisant le second appui
-   d'un double-appui. Chaque page le charge, comme la feuille de style.
+   Ce n'était pas assez, et la vraie cause est ailleurs : depuis iOS 13,
+   Safari ne zoome pas au double-appui là où la page réagit déjà au clic, et
+   un gestionnaire de « click » posé sur `document` fait réagir TOUTE la page
+   (WebKit, bug 205158). index.php et parametres.php en avaient un sans le
+   savoir (celui de commun.js) ; connexion, inscription et mentions légales
+   n'en avaient aucun, et zoomaient à côté des champs. js/double-appui.js en
+   pose un, qui ne fait rien : chaque page le charge.
 
    Ce test lit les SOURCES : c'est un garde-fou, pas une mesure du
    navigateur. Il tient les promesses que rien d'autre ne surveille —
@@ -70,30 +74,24 @@ test('chaque page charge la feuille de style', function () {
     }
 });
 
-test('chaque page charge js/tactile.js, le renfort du double-appui', function () {
+test('chaque page charge js/double-appui.js : un clic posé sur le document', function () {
+    /* C est ce gestionnaire qui empêche Safari de zoomer à côté d un champ.
+       Une page qui l oublie zoome — c était le cas de la connexion, de
+       l inscription et des mentions légales. */
     foreach (pages_html() as $nom => $source) {
-        contient("actif('js/tactile.js')", $source, $nom . ' charge js/tactile.js');
+        contient("actif('js/double-appui.js')", $source, $nom . ' charge js/double-appui.js');
     }
 });
 
-test('js/tactile.js passe avant les autres scripts d une page', function () {
-    /* Les scripts sont « defer » : ils s exécutent dans l ordre de la page.
-       Le premier doit être celui qui surveille les doigts, pour qu un
-       script plus long à charger ou à planter ne le retarde pas. */
-    foreach (pages_html() as $nom => $source) {
-        preg_match_all("/actif\('(js\/[a-z-]+\.js)'\)/", $source, $m);
-        egale('js/tactile.js', $m[1][0] ?? '', $nom . ' : le premier script chargé');
-    }
-});
-
-test('le script ne touche ni au pincement ni aux champs de saisie', function () {
-    $js = (string) file_get_contents(CHEMIN_PROJET . '/js/tactile.js');
-    contient('zoneDeSaisie(e.target)', $js, 'un champ garde son double-appui');
-    contient('e.touches.length === 1', $js, 'un seul doigt posé commence un appui, deux remettent la série à zéro');
-    contient('e.touches.length !== 0', $js, 'un doigt encore posé à la levée : un pincement, pas un appui');
-    contient('rejouerClic(e.target', $js, 'le clic du second appui est rejoué');
-    sans('gesturestart', $js, 'aucun blocage du pincement');
-    sans('user-scalable', $js, 'aucune interdiction de zoomer');
+test('le script pose un gestionnaire de clic sur le document, et ne fait rien d autre', function () {
+    $js = (string) file_get_contents(CHEMIN_PROJET . '/js/double-appui.js');
+    contient('document.addEventListener("click", () => {});', $js, 'un gestionnaire vide, sur le document');
+    /* Le commentaire dit pourquoi : on ne regarde que le code. */
+    $code = preg_replace('~/\*.*?\*/~s', '', $js);
+    sans('preventDefault', $code, 'rien n est annulé : le clic fait son chemin');
+    sans('gesturestart', $code, 'aucun blocage du pincement');
+    sans('user-scalable', $code, 'aucune interdiction de zoomer');
+    egale(1, substr_count($code, 'addEventListener'), 'un seul gestionnaire');
 });
 
 test('aucune page n interdit le zoom au pincement', function () {
