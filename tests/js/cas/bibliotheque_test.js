@@ -3,7 +3,8 @@
 
    Ce qui se décide sans toucher à la page : la carte voisine au clavier,
    le suivi du défilement qui cache et ramène les filtres, le groupe de
-   filtres déplié et le moment où « Toutes » s allume, les textes des
+   filtres déplié, le moment où « Toutes » s allume, les bords qui ont de
+   la suite quand une rangée coulisse, les textes des
    quotas, la touche qui supprime et les champs où elle efface du texte.
    Le reste d'app.js branche ces décisions sur la page ; il se
    vérifie dans un navigateur, sur une vraie bibliothèque.
@@ -326,4 +327,44 @@ test("un seul filtre, d un genre quelconque, l éteint", () => {
   faux(B.aucunFiltre({ statut: new Set(), image: new Set(["aucune"]), favoris: false }), "un type d image");
   faux(B.aucunFiltre({ statut: new Set(), image: new Set(), favoris: true }), "les favoris");
   faux(B.aucunFiltre({ statut: new Set(["envie"]), image: new Set(["lien"]), favoris: true }), "tous à la fois");
+});
+
+groupe("Bibliotheque.bordsDefilement() — le fondu des rangées qui coulissent");
+
+test("une rangée qui tient en entier n a de suite d aucun côté", () => {
+  const b = B.bordsDefilement({ gauche: 0, visible: 351, total: 351 });
+  faux(b.gauche, "gauche");
+  faux(b.droite, "droite");
+  faux(B.bordsDefilement({ gauche: 0, visible: 351, total: 200 }).droite, "bien plus courte que la place");
+});
+
+test("au départ : de la suite à droite seulement", () => {
+  const b = B.bordsDefilement({ gauche: 0, visible: 351, total: 495 });
+  faux(b.gauche, "rien avant");
+  vrai(b.droite, "« Pas d image » est plus loin");
+});
+
+test("au milieu : de la suite des deux côtés", () => {
+  const b = B.bordsDefilement({ gauche: 70, visible: 351, total: 495 });
+  vrai(b.gauche, "gauche");
+  vrai(b.droite, "droite");
+});
+
+test("en butée à droite : de la suite à gauche seulement", () => {
+  const b = B.bordsDefilement({ gauche: 144, visible: 351, total: 495 });
+  vrai(b.gauche, "gauche");
+  faux(b.droite, "plus rien après");
+});
+
+test("un pixel de tolérance : la butée décimale d un écran dense compte comme la butée", () => {
+  faux(B.bordsDefilement({ gauche: 143.4, visible: 351, total: 495 }).droite, "à 0,6 px de la fin");
+  faux(B.bordsDefilement({ gauche: 0.4, visible: 351, total: 495 }).gauche, "à 0,4 px du début");
+  faux(B.bordsDefilement({ gauche: 0, visible: 351, total: 351.6 }).droite, "0,6 px de trop ne fait pas une rangée qui coulisse");
+});
+
+test("une mesure absente ou absurde ne pose aucun fondu", () => {
+  faux(B.bordsDefilement(null).droite, "rien");
+  faux(B.bordsDefilement({}).droite, "objet vide");
+  faux(B.bordsDefilement({ gauche: NaN, visible: 351, total: 495 }).droite, "NaN");
+  faux(B.bordsDefilement({ gauche: -5, visible: 351, total: 495 }).gauche, "rebond élastique négatif");
 });

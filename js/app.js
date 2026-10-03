@@ -193,10 +193,24 @@ window.Bibliotheque = (() => {
     return etat.statut.size === 0 && etat.image.size === 0 && !etat.favoris;
   }
 
+  /**
+   * Une rangée qui coulisse a-t-elle de la suite à gauche, à droite ?
+   * `mesure` : { gauche, visible, total } — son scrollLeft, sa largeur
+   * visible, sa largeur totale. Un pixel de tolérance : les écrans à
+   * densité fractionnaire rendent des positions décimales, et la butée
+   * n'y tombe jamais pile.
+   */
+  function bordsDefilement(mesure) {
+    const gauche = Number(mesure && mesure.gauche);
+    const reste = Number(mesure && mesure.total) - Number(mesure && mesure.visible);
+    if (!(reste > 1) || !(gauche >= 0)) return { gauche: false, droite: false };
+    return { gauche: gauche > 1, droite: gauche < reste - 1 };
+  }
+
   return {
     voisine, suiviDefilement, annonceQuota, texteQuotaRecherche,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
-    panneauApres, panneauMemorise, aucunFiltre,
+    panneauApres, panneauMemorise, aucunFiltre, bordsDefilement,
   };
 })();
 
@@ -859,6 +873,31 @@ window.Bibliotheque = (() => {
     oublierExceptions("image");
     filtresChanges();
     revenirEnHaut();
+  });
+
+  /* ---------------- Rangées qui coulissent : un fondu dit qu'il y a de la suite ----------------
+     Chaque rangée de filtres tient sur UNE ligne et défile sur le côté,
+     barre de défilement masquée. Sans indice, un bouton entièrement hors
+     de l'écran — « Pas d'image » sur un téléphone de 375 px — n'existe
+     pas pour qui ne sait pas qu'il faut glisser. Le fondu (style.css) se
+     pose sur le bord qui a de la suite : c'est bordsDefilement() qui le
+     décide, ici on le relit au défilement et à chaque changement de
+     taille (un groupe qui s'ouvre, un nombre qui change de largeur). */
+  function majBords(rangee) {
+    const bords = B.bordsDefilement({
+      gauche: rangee.scrollLeft, visible: rangee.clientWidth, total: rangee.scrollWidth,
+    });
+    rangee.classList.toggle("bord-gauche", bords.gauche);
+    rangee.classList.toggle("bord-droite", bords.droite);
+  }
+
+  const surveillerBords = new ResizeObserver((entrees) => {
+    entrees.forEach((e) => majBords(e.target.closest(".filters")));
+  });
+  [$filters, $filtresStatut, $filtresImage].forEach((rangee) => {
+    rangee.addEventListener("scroll", () => majBords(rangee), { passive: true });
+    surveillerBords.observe(rangee);
+    rangee.querySelectorAll(".filter-btn").forEach((b) => surveillerBords.observe(b));
   });
 
   /* ---------------- Les filtres reviennent quand on remonte ----------------

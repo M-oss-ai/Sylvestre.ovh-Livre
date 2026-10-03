@@ -105,7 +105,7 @@ $flash = flash_prendre();
     <button class="filter-btn active" id="btn-filtre-toutes" type="button" aria-pressed="true">Toutes<span class="count" id="count-all"><?= (int) $compte['all'] ?></span></button>
     <button class="filter-btn filter-plus" id="btn-filtres-statut" data-panneau="statut" type="button"
             aria-expanded="false" aria-controls="filtres-statut">Statut ▾<span class="nb-actifs hidden" title="Filtres actifs"></span></button>
-    <button class="filter-btn filter-favori" id="btn-filtre-favori" data-favori="1" type="button" aria-pressed="false">★<span class="mot"> Favoris</span><span class="count" id="count-favori"><?= (int) $compte['favori'] ?></span></button>
+    <button class="filter-btn filter-favori" id="btn-filtre-favori" data-favori="1" type="button" aria-pressed="false">★ Favoris<span class="count" id="count-favori"><?= (int) $compte['favori'] ?></span></button>
     <button class="filter-btn filter-plus" id="btn-filtres-image" data-panneau="image" type="button"
             aria-expanded="false" aria-controls="filtres-image">Image ▾<span class="nb-actifs hidden" title="Filtres actifs"></span></button>
   </nav>

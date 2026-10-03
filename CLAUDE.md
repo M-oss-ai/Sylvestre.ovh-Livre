@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (624 tests : 544 PHP en 43 fichiers, 80 JavaScript)
+php tests/lancer.php              # toute la suite (630 tests : 544 PHP en 43 fichiers, 86 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -227,19 +227,26 @@ filtres** (statut, favori, image) et ne s'allume que quand plus rien n'est
 posé (`aucunFiltre()`) : il reste visible groupes repliés, c'est le seul
 moyen de tout effacer d'un geste. Un groupe replié dit ce qu'il porte par
 une pastille dorée en surimpression (`.nb-actifs`) — en surimpression et
-non en rangée : élargissant « Statut » de 30 px, elle faisait passer
-« Image » à la ligne. Les statuts gardent leurs ids `count-<statut>` et
-leurs `data-filter` ; les chips passent de la rangée du haut au groupe.
+non en rangée : élargissant « Statut » de 30 px, elle poussait « Image »
+hors de l'écran. Les statuts gardent leurs ids `count-<statut>` et leurs
+`data-filter` ; les chips passent de la rangée du haut au groupe.
 
-**Aucune rangée de filtres ne défile** : `.filters` passe à la ligne
-(`flex-wrap`). La barre de défilement était masquée, et un bouton hors de
-l'écran ne laissait rien deviner de son existence — « Pas d'image » a
-déjà été perdu ainsi (495 px pour 351 sur un téléphone). La rangée du
-haut, elle, doit tenir sur UNE ligne dès 360 px : d'où, sous 480 px, des
-boutons plus serrés et le mot « Favoris » réduit à ★ + nombre
-(`.filter-favori .mot`, conservé pour les lecteurs d'écran). Mesuré à
-320, 360, 375 px et en grand écran ; à 320 px elle passe sur deux lignes,
-aucun bouton n'est caché.
+**Chaque rangée de filtres tient sur UNE ligne et coulisse sur le côté**
+(demande de l'utilisateur : c'est ce qui garde la barre courte ; « Favoris »
+compte plus qu'« Image », donc c'est « Image », dernier, que le bord coupe
+— le mot « Favoris » reste entier sur téléphone). La barre de défilement
+est masquée, et un bouton ENTIÈREMENT hors de l'écran ne laisse rien
+deviner de son existence : « Pas d'image » est tout entier caché à 375 px
+(495 px pour 351). D'où un **fondu de 28 px sur le bord qui a de la
+suite** : `bordsDefilement()` (pure, testée) décide, `majBords()` pose
+`.bord-gauche` / `.bord-droite` au défilement et à chaque changement de
+taille (`ResizeObserver` sur la rangée ET ses boutons : un groupe qui
+s'ouvre, un nombre qui change de largeur), et `style.css` en fait un
+`mask-image`. La rangée du haut déborde de 30 px à 375 px (48 à 360 px) :
+sous 480 px ses boutons sont resserrés pour réduire ce peu. `#filters`
+garde 8 px de rembourrage haut (et une marge négative qui les rend) : le
+défilement (`overflow-x`) rognerait sinon la pastille `.nb-actifs`, posée
+au-dessus du bouton.
 
 **L'œil du mot de passe est hors de la tabulation** (demande de
 l'utilisateur) : `tabindex="-1"` sur chaque `.toggle-password`, pour

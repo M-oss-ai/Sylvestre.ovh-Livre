@@ -206,17 +206,39 @@ code {
   background: rgba(0, 0, 0, 0.4);
 }
 
-/* Les rangees de filtres passent a la ligne plutot que de defiler : la
-   barre de defilement etait masquee, et un bouton hors de l'ecran ne
+/* Les rangees de filtres coulissent sur le cote, chacune sur UNE ligne :
+   c'est ce qui garde la barre courte sur un telephone. La barre de
+   defilement est masquee ; ce qui dit qu'il y a de la suite, c'est le
+   fondu pose par js/app.js sur le bord concerne (.bord-gauche /
+   .bord-droite) — sans lui, un bouton tout entier hors de l'ecran ne
    laissait rien deviner de son existence. */
 .filters {
+  --fondu-g: 0px;
+  --fondu-d: 0px;
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  overflow-x: auto;
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
+  scrollbar-width: none;
 }
+
+.filters::-webkit-scrollbar { display: none; }
+
+.filters.bord-gauche { --fondu-g: 28px; }
+.filters.bord-droite { --fondu-d: 28px; }
+
+.filters.bord-gauche,
+.filters.bord-droite {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fondu-g), #000 calc(100% - var(--fondu-d)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--fondu-g), #000 calc(100% - var(--fondu-d)), transparent);
+}
+
+/* La rangee du haut garde de la place AU-DESSUS de ses boutons pour la
+   pastille .nb-actifs, que le defilement (overflow) rognerait sinon ; la
+   marge negative rend cette place a la barre, rien ne descend. */
+#filters { padding-top: 8px; margin-top: -8px; }
 
 .filter-btn {
   flex: none;
@@ -470,25 +492,16 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .btn-favori:disabled { opacity: 0.5; cursor: default; }
 
 /* Les groupes de filtres (Statut, Image), repliables sous la rangee du
-   haut. Avec leurs nombres, les quatre boutons du type d'image font
-   495 px pour 351 sur un telephone : ils passent a la ligne. */
+   haut. Chacun tient sur UNE ligne qui coulisse : avec leurs nombres, les
+   quatre boutons du type d'image font 495 px pour 351 sur un telephone. */
 .filters-groupe { margin-top: 8px; }
 
-/* La rangee du haut (Toutes, Statut, Favoris, Image) doit tenir sur UNE
-   ligne de telephone au repos : elle faisait 429 px pour 351, et « Image »
-   sortait de l'ecran. D'ou des boutons plus serres, et « Favoris » reduit
-   a l'etoile et son nombre — le mot reste pour les lecteurs d'ecran. Avec
-   des pastilles dorees, elle passe a la ligne (voir .filters). */
+/* La rangee du haut (Toutes, Statut, Favoris, Image) deborde de 33 px sur
+   un telephone de 375 px : des boutons plus serres la ramenent a ce peu.
+   « Image », le dernier, est celui que le bord coupe — « Favoris » compte
+   plus que lui (demande de l'utilisateur), et passe donc avant. */
 @media (max-width: 480px) {
   #filters .filter-btn { padding: 9px 10px; }
-  .filter-favori .mot {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
 }
 
 /* Pastille sur « Statut » et « Image » : combien de filtres le groupe
