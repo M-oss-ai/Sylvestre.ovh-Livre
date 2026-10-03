@@ -998,6 +998,8 @@ const ACTIONS_ADMIN = [
     'admin.forfait',    // changer le forfait d'un compte (et le prévenir par e-mail)
     'admin.admin',      // nommer ou révoquer un administrateur
     'admin.supprimer',  // DEMANDER la suppression d'un compte (la confirmation passe par ADMIN_EMAIL)
+    'admin.reglage',          // changer un réglage du site (liste fermée, bornes)
+    'admin.reglage_retablir', // revenir à la valeur du .env
 ];
 
 /** Ce compte est-il administrateur ? `$utilisateur` : la ligne de la table, au moins `admin`. */

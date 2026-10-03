@@ -81,6 +81,21 @@ window.Admin = (() => {
     return etat && etat.cle === cle ? { cle, sens: -etat.sens } : { cle, sens: 1 };
   }
 
+  /* ---------- Les réglages ---------- */
+
+  /* D'où vient la valeur affichée : le mot que porte la pastille. */
+  const SOURCES = { base: "modifié ici", env: ".env", defaut: "défaut" };
+
+  function sourceTexte(source) {
+    return source in SOURCES ? SOURCES[source] : "";
+  }
+
+  /** La saisie diffère-t-elle de la valeur enregistrée ? Une case vidée n'est pas une valeur. */
+  function reglageChange(saisie, initiale) {
+    const s = String(saisie == null ? "" : saisie).trim();
+    return s !== "" && s !== String(initiale == null ? "" : initiale).trim();
+  }
+
   /** Les chiffres du bandeau, comptés sur les lignes de la page (même calcul que admin_totaux() côté PHP). */
   function totaux(lignes) {
     const t = { comptes: 0, confirmes: 0, nonConfirmes: 0, bloques: 0, illimites: 0, admins: 0, series: 0 };
@@ -387,7 +402,87 @@ window.Admin = (() => {
     filtrer();
   }
 
-  if (document.getElementById("admin-table")) brancher();
+  /* ---- les réglages : un formulaire par ligne ---- */
+  const CLE_MESSAGE = "livre.admin.message";
 
-  return { FORFAITS, normaliser, correspond, trier, sensApres, totaux, lireLigne, texteForfait, texteDroits, texteSuppression };
+  function brancherReglages() {
+    const L = window.Lib;
+
+    // Le message de « ↩ .env », mis de côté avant le rechargement de la page.
+    try {
+      const message = sessionStorage.getItem(CLE_MESSAGE);
+      if (message) {
+        sessionStorage.removeItem(CLE_MESSAGE);
+        L.toast(message);
+      }
+    } catch (e) {
+      /* Stockage indisponible : rien à montrer. */
+    }
+
+    document.querySelectorAll("form.admin-reglage").forEach((form) => {
+      const champ = form.querySelector("input, select");
+      const enregistrer = form.querySelector(".admin-enregistrer");
+      const revenir = form.querySelector(".admin-revenir");
+      const pastille = form.querySelector(".admin-source");
+      const cle = form.dataset.cle;
+
+      const majBouton = () => {
+        enregistrer.disabled = !reglageChange(champ.value, form.dataset.initial);
+      };
+      champ.addEventListener("input", () => { L.effacerErreur(champ); majBouton(); });
+      champ.addEventListener("change", majBouton);
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (enregistrer.disabled) return;
+        enregistrer.disabled = true;
+        try {
+          const r = await L.api("admin.reglage", { cle, valeur: champ.value });
+          form.dataset.initial = r.saisie;
+          champ.value = r.saisie;
+          pastille.dataset.source = r.source;
+          pastille.textContent = sourceTexte(r.source);
+          revenir.disabled = false;
+          // « En vigueur » ne se recalcule pas ici : seule config.php sait quelle
+          // valeur borne l'autre. La note disparaît, la page la remontrait au rechargement.
+          const note = form.querySelector(".admin-en-vigueur");
+          if (note) note.classList.add("hidden");
+          L.effacerErreur(champ);
+          L.toast(r.message);
+        } catch (err) {
+          majBouton();
+          // Une erreur de réglage va sous SA case, jamais dans une notification.
+          L.erreurChamp(champ, (err && err.message) || "Une erreur est survenue.");
+          champ.focus();
+        }
+      });
+
+      revenir.addEventListener("click", async () => {
+        if (revenir.disabled) return;
+        revenir.disabled = true;
+        try {
+          const r = await L.api("admin.reglage_retablir", { cle });
+          // La valeur réellement en vigueur, config.php est seul à la connaître :
+          // la page se recharge et la montre. Le message attend le rechargement
+          // (sessionStorage) : une notification posée maintenant disparaîtrait avec la page.
+          if (r.recharger) {
+            try {
+              sessionStorage.setItem(CLE_MESSAGE, r.message || "");
+            } catch (e) {
+              /* Stockage indisponible : la pastille « .env » dit déjà ce qui s'est passé. */
+            }
+            window.location.reload();
+          }
+        } catch (err) {
+          revenir.disabled = false;
+          L.erreurChamp(champ, (err && err.message) || "Une erreur est survenue.");
+        }
+      });
+    });
+  }
+
+  if (document.getElementById("admin-table")) brancher();
+  if (document.getElementById("reglages")) brancherReglages();
+
+  return { FORFAITS, normaliser, correspond, trier, sensApres, totaux, lireLigne, texteForfait, texteDroits, texteSuppression, sourceTexte, reglageChange };
 })();

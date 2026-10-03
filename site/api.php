@@ -1316,6 +1316,57 @@ switch ($action) {
         ]);
     }
 
+    /* Changer un réglage du site (table `reglage`, voir includes/reglages.php).
+       La liste est fermée et chaque réglage a ses bornes : reglage_valider() les
+       applique, ici comme la page. Pris en compte à la requête suivante, pour
+       tout le monde — config.php relit la table à chaque fois. */
+    case 'admin.reglage': {
+        if (!reglages_disponibles($pdo)) {
+            reponse_json(['ok' => false,
+                'erreur' => 'La table « reglage » manque : rejouez livre.sql (migration 12).'], 503);
+        }
+        $cle = (string) ($_POST['cle'] ?? '');
+        [$valeur, $erreur] = reglage_valider($cle, $_POST['valeur'] ?? null);
+        if ($valeur === null) {
+            reponse_json(['ok' => false, 'champ' => 'valeur', 'erreur' => $erreur], 422);
+        }
+
+        $avant = constant($cle);
+        reglage_ecrire($pdo, $cle, $valeur, $mon_id);
+        journal_securite('admin_reglage', ['admin' => $mon_id, 'cle' => $cle,
+            'de' => is_bool($avant) ? (int) $avant : $avant, 'vers' => $valeur]);
+
+        reponse_json([
+            'ok'      => true,
+            'cle'     => $cle,
+            'saisie'  => isset(REGLAGES[$cle]['choix']) ? $valeur : reglage_vers_saisie($cle, (int) $valeur),
+            'source'  => 'base',
+            'message' => REGLAGES[$cle]['libelle'] . ' : enregistré. Pris en compte dès la requête suivante.',
+        ]);
+    }
+
+    /* Revenir au .env : la ligne disparaît. La page se recharge pour montrer la
+       valeur réellement en vigueur, que seule config.php sait calculer ; le message
+       suit dans la réponse, et js/admin.js le montre APRÈS le rechargement (un flash
+       s'afficherait en haut de la page, loin des réglages). */
+    case 'admin.reglage_retablir': {
+        if (!reglages_disponibles($pdo)) {
+            reponse_json(['ok' => false,
+                'erreur' => 'La table « reglage » manque : rejouez livre.sql (migration 12).'], 503);
+        }
+        $cle = (string) ($_POST['cle'] ?? '');
+        if (!isset(REGLAGES[$cle])) {
+            reponse_json(['ok' => false, 'erreur' => 'Réglage inconnu.'], 422);
+        }
+        reglage_effacer($pdo, $cle);
+        journal_securite('admin_reglage_retabli', ['admin' => $mon_id, 'cle' => $cle]);
+        reponse_json([
+            'ok'        => true,
+            'recharger' => true,
+            'message'   => REGLAGES[$cle]['libelle'] . ' : revenu à la valeur du .env.',
+        ]);
+    }
+
     default:
         reponse_json(['ok' => false, 'erreur' => 'Action inconnue.'], 400);
 }

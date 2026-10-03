@@ -12,6 +12,8 @@ declare(strict_types=1);
 putenv('CLE_ACCES_MAX=999999');        // un compte n'écrit pas un million de lignes
 putenv('CLE_ACCES_DEFI_DUREE=999999'); // un défi oublié ne traîne pas des jours
 putenv('ADMIN_SUPPRESSION_DUREE=99999999'); // un lien oublié dans une boîte mail ne reste pas une arme
+putenv('CRON_HEURES=99999');           // un cron plus espacé qu'une semaine, .env compris
+putenv('RAPPORT_HEURES=99999');
 
 require __DIR__ . '/../lanceur.php';
 
@@ -29,4 +31,12 @@ groupe('Administration — plafond');
 
 test('ADMIN_SUPPRESSION_DUREE est plafonné à 24 heures', function () {
     egale(86400, ADMIN_SUPPRESSION_DUREE, 'le .env demandait ~3 ans');
+});
+
+test('CRON_HEURES est plafonné à une semaine — dans le .env comme dans la page', function () {
+    egale(168, CRON_HEURES, 'le .env demandait 99 999 h');
+});
+
+test('RAPPORT_HEURES reste plafonné à 30 jours', function () {
+    egale(720, RAPPORT_HEURES, 'le .env demandait 99 999 h');
 });

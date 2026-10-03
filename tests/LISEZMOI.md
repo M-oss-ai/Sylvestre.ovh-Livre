@@ -323,6 +323,24 @@ Ce que fait vraiment la page (menus, fenêtres, e-mails réellement envoyés) ne
 lit pas dans les sources : il se vérifie en HTTP sur un site de test (voir
 CLAUDE.md), et **un e-mail réel ne se vérifie qu'avec un vrai SMTP**.
 
+**Couvert, réglages modifiables** — `reglages_test.php`, et ce que fait
+`tests/outils/afficher-constantes-reglages.php` en sous-processus. La LISTE : ce qui y
+est (les quinze freins en entier, les durées, les quotas, la couverture), ce qui n'y est
+PAS (images et import, secrets, `ADMIN_EMAIL`, mots de passe…), les bornes validées par
+l'utilisateur et les quatre défauts qui restent leur propre plafond. Qu'elle colle à
+`config.php` : chaque clé est une constante lue par `env()`, son défaut annoncé est le
+défaut du code, et **les bornes de la page tiennent dans celles du code** (le
+sous-processus impose à chaque réglage sa borne basse, puis haute, et compare à la
+constante). Les décisions pures : `reglage_valider` (entiers seuls, unités converties en
+valeur NATIVE, menus, clés hors liste), `reglages_filtrer` (ce que la base porte, ramené
+dans ses bornes ou ignoré), les unités (`reglage_vers_saisie`, `reglage_plage_texte`),
+`reglage_source`, `reglage_vue` (ce qui est saisi, et « en vigueur » quand le code en
+déduit autre chose), `env()` contre `env_brut()`. Le branchement : la base s'ouvre avant
+la première constante réglable, `reglages.php` ne dépend de rien, une table absente se
+tait, une autre panne est consignée, la migration 12. Ce qui change réellement à la
+requête suivante (quota de séries, durée du cookie de session, inscriptions fermées,
+freins) se vérifie en HTTP sur un site de test (CLAUDE.md, « Déploiement »).
+
 **Couvert, structure du dépôt** — `structure_test.php`, par lecture des
 sources : `site/` ne contient que ce qui doit monter (ni `tests/`, ni `.md`,
 ni `.sql`, ni `.env`, ni dossier caché — le `.htaccess` de `site/` ne les

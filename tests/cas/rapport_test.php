@@ -43,7 +43,9 @@ test('un rapport ne part pas plus souvent que le cron ne passe', function () {
 test('les valeurs absurdes sont ramenées dans [1, 720]', function () {
     egale([1, 1], cron_reglages(0, 0), 'zéro');
     egale([1, 50], cron_reglages(-5, 50), 'négatif');
-    egale([720, 720], cron_reglages(1000, 1000), 'au-delà de 30 jours');
+    egale([168, 720], cron_reglages(1000, 1000), 'le cron ne dépasse pas une semaine, le rapport 30 jours');
+    egale([168, 168], cron_reglages(168, 0), 'une semaine pile passe');
+    egale([168, 168], cron_reglages(169, 0), 'un cron de 169 h est ramené à une semaine');
 });
 
 groupe('rapport_du() — quand il part');

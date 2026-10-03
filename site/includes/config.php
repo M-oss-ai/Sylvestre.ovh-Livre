@@ -9,6 +9,10 @@ declare(strict_types=1);
 /** Racine du site : le dossier qui monte sur le serveur (site/ en local, www/ chez OVH), un niveau au-dessus de includes/. */
 define('CHEMIN_RACINE', dirname(__DIR__));
 
+/* Les réglages modifiables depuis l'administration. Aucune dépendance : ce
+   fichier ne définit rien de plus que des fonctions et des listes. */
+require_once __DIR__ . '/reglages.php';
+
 /* ---------------------------------------------------------------------
    0. Erreurs : jamais affichées, toujours journalisées
    Une trace PHP affichée à l'écran révèle les chemins du serveur, les
@@ -85,16 +89,37 @@ if (!charger_env(dirname(CHEMIN_RACINE) . '/.env')) {
 }
 
 /**
- * Lit une variable d'environnement, avec valeur de repli.
+ * La variable d'environnement TELLE QUE LE .ENV (ou le système) la porte,
+ * avec valeur de repli.
  *
  * Une clé présente mais VIDE compte comme absente : dans un .env, on
  * laisse couramment « CLE= » pour dire « je n'ai rien à mettre », et
  * c'est justement là que le repli doit jouer.
  */
-function env(string $cle, string $defaut = ''): string
+function env_brut(string $cle, string $defaut = ''): string
 {
     $v = getenv($cle);
     return ($v === false || $v === '') ? $defaut : $v;
+}
+
+/* Ce que l'administrateur a changé depuis admin.php (table `reglage`), clé =>
+   valeur. Vide tant que la base n'est pas ouverte, et tant qu'il n'a rien
+   changé : le .env gouverne alors seul. Rempli plus bas, avant que la
+   première constante réglable ne soit définie. */
+$GLOBALS['REGLAGES_BASE'] = [];
+
+/**
+ * Lit un réglage : ce que l'administrateur a saisi dans la page s'il l'a fait,
+ * sinon le .env, sinon la valeur de repli.
+ *
+ * Seules les clés de REGLAGES (includes/reglages.php) peuvent venir de la base.
+ * Quelle qu'en soit l'origine, la valeur passe ensuite par le même plancher
+ * ou plafond que si elle venait du .env : voir chaque `define()` plus bas.
+ */
+function env(string $cle, string $defaut = ''): string
+{
+    $base = $GLOBALS['REGLAGES_BASE'][$cle] ?? null;
+    return $base !== null ? (string) $base : env_brut($cle, $defaut);
 }
 
 $host     = env('DB_HOST', 'localhost');
@@ -104,6 +129,37 @@ $database = env('DB_NAME', 'Livre');
 
 /* Adresse de contact affichée aux utilisateurs (limites atteintes, etc.) */
 define('ADMIN_EMAIL', env('ADMIN_EMAIL', 'admin@example.com'));
+
+/* ---------------------------------------------------------------------
+   PDO en requêtes préparées réelles (EMULATE_PREPARES = false) :
+   les valeurs ne sont jamais concaténées dans le SQL, donc aucune
+   injection SQL n'est possible.
+
+   La connexion s'ouvre ICI, avant les constantes réglables, et non à la
+   fin du fichier : certaines viennent de la table `reglage` (voir
+   includes/reglages.php), qu'il faut avoir lue avant de les figer. ADMIN_EMAIL
+   est défini juste au-dessus parce que erreur_fatale() l'affiche.
+   --------------------------------------------------------------------- */
+try {
+    $pdo = new PDO(
+        "mysql:host={$host};dbname={$database};charset=utf8mb4",
+        $user,
+        $password,
+        [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]
+    );
+} catch (PDOException $e) {
+    // Le message d'origine peut contenir l'hôte et l'utilisateur de la
+    // base : il va au journal, jamais à l'écran.
+    erreur_fatale('Connexion base impossible: ' . $e->getMessage());
+}
+
+/* Ce que l'administrateur a changé depuis la page remplace le .env. Une
+   table absente ou illisible n'arrête rien : le .env gouverne seul. */
+$GLOBALS['REGLAGES_BASE'] = reglages_lire($pdo);
 
 /* ---------------------------------------------------------------------
    Adresse publique du site, utilisée pour fabriquer les liens envoyés par
@@ -708,8 +764,11 @@ define('QUOTA_BASE_MO', max(0, (int) env('QUOTA_BASE_MO', '200')));
        cron, pour qu'un passage décalé par l'hébergeur ne fasse ni sauter
        ni doubler un rapport.
 
-   Plafond de 720 h (30 jours) : la purge efface au-delà les compteurs de
-   tentatives (tentative_ip). Une période plus longue ferait annoncer à la
+   Plafonds : CRON_HEURES ne dépasse pas 168 h (une semaine) — .env comme
+   administration —, un cron plus espacé laisserait attendre trop longtemps
+   les liens dont la validité se compte en heures. RAPPORT_HEURES, lui, va
+   jusqu'à 720 h (30 jours) : la purge efface au-delà les compteurs de
+   tentatives (tentative_ip), et une période plus longue ferait annoncer à la
    rubrique SÉCURITÉ des jours qu'elle ne couvre plus.
    --------------------------------------------------------------------- */
 
@@ -720,7 +779,7 @@ define('QUOTA_BASE_MO', max(0, (int) env('QUOTA_BASE_MO', '200')));
  */
 function cron_reglages(int $cron, int $rapport): array
 {
-    $cron = min(720, max(1, $cron));
+    $cron = min(168, max(1, $cron));
     return [$cron, min(720, max($cron, $rapport))];
 }
 
@@ -910,24 +969,3 @@ set_exception_handler(static function (Throwable $e): void {
         . ' @ ' . $e->getFile() . ':' . $e->getLine());
 });
 
-/* ---------------------------------------------------------------------
-   PDO en requêtes préparées réelles (EMULATE_PREPARES = false) :
-   les valeurs ne sont jamais concaténées dans le SQL, donc aucune
-   injection SQL n'est possible.
-   --------------------------------------------------------------------- */
-try {
-    $pdo = new PDO(
-        "mysql:host={$host};dbname={$database};charset=utf8mb4",
-        $user,
-        $password,
-        [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]
-    );
-} catch (PDOException $e) {
-    // Le message d'origine peut contenir l'hôte et l'utilisateur de la
-    // base : il va au journal, jamais à l'écran.
-    erreur_fatale('Connexion base impossible: ' . $e->getMessage());
-}

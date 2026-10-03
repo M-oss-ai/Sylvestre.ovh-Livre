@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (839 tests : 706 PHP en 51 fichiers, 133 JavaScript)
+php tests/lancer.php              # toute la suite (886 tests : 751 PHP en 52 fichiers, 135 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -91,6 +91,7 @@ l'amorce, tandis que `CHEMIN_PROJET` est la racine du dépôt.
 | `includes/carte.php` | Le HTML d'une carte de série |
 | `includes/google.php` | « Continuer avec Google » (OpenID Connect) : l'adresse de départ, la lecture et la vérification du jeton, `google_decision()`. Pur, sauf `google_echanger_code()` |
 | `includes/cle_acces.php` | Clés d'accès (WebAuthn) : lecture du CBOR, clé publique COSE → PEM, vérification d'une création et d'une connexion, défi, options. Pur, sauf la session (`cle_defi_*`) et la base (dernière section). Aucune bibliothèque |
+| `includes/reglages.php` | Les réglages modifiables depuis l'administration : la liste FERMÉE (`REGLAGES`, avec bornes, unités, défauts), la validation d'une saisie, le filtrage de ce que porte la table `reglage`. Chargé par `config.php` avant toute constante, donc **aucune dépendance** (ni constante, ni `env()`) |
 | `includes/admin.php` | La page d'administration : la liste des comptes (`admin_utilisateurs`), les décisions pures (ce qui est permis, la forme du motif d'un blocage, les dates, les chiffres), et les écritures (`admin_changer_forfait`, `admin_changer_droits`, `admin_supprimer_compte`). Inclus par `admin.php` et `api.php`, jamais par `fonctions.php` |
 | `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
 
@@ -132,9 +133,11 @@ rien hors de la bibliothèque — c'est ce qui permet au banc de le charger.
 
 ## Règles tacites
 
-**Tout réglage passe par le `.env`, jamais en dur ailleurs.** Et chaque
-constante de `config.php` est bornée par un plancher ou un plafond : un
-`.env` mal rempli ne doit jamais pouvoir *supprimer* une protection.
+**Tout réglage passe par le `.env`, jamais en dur ailleurs** — sauf les
+trente de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
+(voir plus bas). Et chaque constante de `config.php` est bornée par un plancher
+ou un plafond : un `.env` mal rempli ne doit jamais pouvoir *supprimer* une
+protection.
 `tests/cas/config_planchers_test.php` et `couvertures_reglages_test.php`
 imposent des valeurs absurdes et vérifient qu'elles sont relevées.
 **Seule exception : les quotas de recherche** (`COUVERTURE_QUOTA`,
@@ -543,6 +546,59 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   valeur sort de PHP par `e()`. Un identifiant est du texte choisi par quelqu'un
   d'autre.
 
+**Trente réglages se changent depuis `admin.php`, et la base prime sur le
+`.env`** (demande de l'utilisateur : « les limites et les durées, pas de mot de
+passe ni de connexion »). La table `reglage` ne porte que l'ÉCART : une ligne par
+réglage changé, et « ↩ .env » l'efface. `config.php` ouvre la base AVANT ses
+constantes (la connexion PDO est montée juste après `ADMIN_EMAIL`, qu'`erreur_fatale()`
+affiche), lit la table, et `env()` rend la valeur de la base s'il y en a une,
+sinon `env_brut()` (le `.env`). **Aucune constante n'a donc changé de forme** : la
+valeur de la base passe par le MÊME `max(…, min(…))` que si elle venait du `.env`.
+- **La liste est fermée et chaque clé a ses bornes** (`REGLAGES`, dans
+  `includes/reglages.php`) : seules ces clés sont lues dans la base, une ligne
+  tapée à la main en SQL est ramenée dans l'intervalle (ou ignorée si ce n'est pas
+  un entier), et `reglage_valider()` refuse tout le reste à la saisie. Les bornes de
+  la page sont TOUJOURS dans celles du code : `tests/cas/reglages_test.php` impose à
+  chaque réglage sa borne basse puis haute dans un sous-processus et compare à ce que
+  `config.php` en tire — une borne de la page que le code relèverait ferait croire à
+  l'administrateur qu'il a réglé 5 et obtenir 8.
+- **Ne sont PAS dans la liste, exprès** : les secrets et l'accès à la base (`DB_*`,
+  `SMTP_*`, `CRON_TOKEN`, `UPLOAD_SECRET`, `GOOGLE_*`), `APP_URL`, **`ADMIN_EMAIL`**
+  (la seconde clé de la suppression d'un compte : modifiable depuis la page, un intrus
+  ne serait plus arrêté), les mots de passe (`MDP_MIN`, `MDP_MAX`), `CONFIRMATION_DUREE`
+  et `CLE_ACCES_DEFI_DUREE`, ce qui protège l'IP du serveur face à MangaDex
+  (`COUVERTURE_ESPACEMENT`, `_FILE_MAX`, `_TIMEOUT`), `IP_*`, `ASSETS_VERSION`, les
+  images et l'import (retirés à la demande de l'utilisateur), les `LEGAL_*`. Un test
+  le garde.
+- **Les freins : 3 à 20 tentatives, 60 à 600 s** (demande de l'utilisateur) — sauf
+  quatre dont le DÉFAUT dépasse 600 s : `LIMITEUR_FENETRE` (900), `LIMITEUR_BLOCAGE_MAX`
+  (3 600), `LIMITEUR_OUBLI` (86 400, que `config.php` relève d'ailleurs à 3 600 au
+  minimum) et `MDP_OUBLIE_BLOCAGE` (900). Les plafonner à 600 les aurait fait BAISSER
+  sans que personne l'ait demandé (et `LIMITEUR_OUBLI` n'aurait pu descendre sous son
+  propre plancher) : leur défaut est leur plafond. On peut les resserrer, pas les
+  desserrer au-delà d'aujourd'hui.
+- **`CRON_HEURES` : 1 à 168 h, `.env` compris** (demande de l'utilisateur ; il montait
+  à 720). `RAPPORT_HEURES` garde 720. **Les bornes des autres réglages ne touchent
+  que la page** : le `.env`, lui, garde les planchers qu'il avait.
+- **Deux jeux de bornes, ne pas les confondre** : celles de `REGLAGES` valent pour ce
+  qu'on saisit et ce qu'on relit de la base ; celles de `config.php` valent pour le
+  `.env` ET pour ce qui vient de la base (la valeur y repasse). Quand le code déduit
+  une valeur d'une autre (un quota « illimité » ne passe jamais sous le quota
+  ordinaire, un rapport ne part pas plus souvent que le cron ne passe), la page montre
+  ce qui a été SAISI et dit « En vigueur : X » (`reglage_vue()`).
+- **Une table absente n'est pas une erreur** (`reglages_lire()`) : migration 12 pas
+  rejouée, ou base « vide » des tests — le `.env` gouverne seul, sans bruit. Toute
+  autre panne est consignée et ne coupe rien.
+- **Pris en compte à la requête SUIVANTE, pour tout le monde** (config.php relit la
+  table à chaque requête : une requête de plus, sans cache). `SESSION_DUREE` et
+  `REMEMBER_DUREE_VIP` ne touchent que les connexions suivantes ; `CRON_HEURES` ne
+  change pas l'espacement réglé chez OVH, seulement ce que le rapport en croit.
+- **Les actions `admin.reglage` et `admin.reglage_retablir`** sont dans `ACTIONS_ADMIN`
+  comme les autres. L'erreur d'une saisie va SOUS sa case (`champ: 'valeur'`) ;
+  « ↩ .env » recharge la page — seule `config.php` sait quelle valeur est en vigueur —
+  et le message attend le rechargement (`sessionStorage`) : un flash serait en haut
+  de la page, loin des réglages.
+
 **La signature du jeton Google n'est pas vérifiée, et c'est voulu** : il
 arrive par un appel HTTPS direct du serveur à Google, jamais par le
 navigateur (OpenID Connect Core § 3.1.3.7). Ne jamais désactiver
@@ -575,16 +631,18 @@ recommencer.
 
 ## Base de données
 
-Huit tables (`utilisateur.google_sub` relie un compte Google, `cle_acces` garde les clés
+Neuf tables (`utilisateur.google_sub` relie un compte Google, `cle_acces` garde les clés
 publiques des clés d'accès — jamais une clé privée) : `utilisateur`, `serie`, `jeton_action`,
 `session_persistante`, `tentative_ip`, `cle_acces`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
-dernier rapport du cron). `utilisateur.forfait` : `standard`, `illimite` ou
+dernier rapport du cron), `reglage` (une ligne par réglage changé depuis `admin.php`,
+migration 12 : le `.env` reste la valeur de départ). `utilisateur.forfait` : `standard`, `illimite` ou
 `bloque` (consultation seule, voir « Règles tacites »). `utilisateur.admin`
 (administrateur, indépendant du forfait), `raison_blocage` et `bloque_le` (le motif
 et la date d'un blocage) : migration 11. **`utilisateur_actuel()` les lit à chaque
 requête : rejouer `livre.sql` AVANT d'envoyer le code**, sans quoi toutes les pages
-tombent sur « colonne inconnue ».
+tombent sur « colonne inconnue ». La table `reglage`, elle, n'est pas obligatoire : sans
+elle, le `.env` gouverne seul et la carte « Réglages » dit de rejouer `livre.sql`.
 
 `livre.sql` est **entièrement rejouable**. Pour mettre à jour une base
 existante, on rejoue le fichier **en entier** en retirant seulement les

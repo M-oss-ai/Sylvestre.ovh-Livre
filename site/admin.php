@@ -94,6 +94,16 @@ $comptes = array_map(
 $totaux   = admin_totaux($comptes);
 $restant  = max(0, MAX_UTILISATEURS - $totaux['comptes']);
 
+/* Les réglages : ce que la base porte, ce que le .env dit, ce qui est en
+   vigueur. La constante est la valeur réellement appliquée (déjà bornée par
+   config.php) ; la case montre ce qui a été saisi quand la base le porte. */
+$reglages_dispo = reglages_disponibles($pdo);
+$vues = [];
+foreach (REGLAGES as $cle => $r) {
+    $vues[$cle] = reglage_vue($cle, $GLOBALS['REGLAGES_BASE'], env_brut($cle), (int) constant($cle));
+}
+$etiquettes_source = ['base' => 'modifié ici', 'env' => '.env', 'defaut' => 'défaut'];
+
 /** Une coche, ou un tiret : jamais le seul signe, un lecteur d'écran lit « oui » / « non ». */
 function admin_oui_non(bool $oui, string $quoi): string
 {
@@ -251,6 +261,64 @@ function admin_oui_non(bool $oui, string $quoi): string
       Bloquer demande une raison, qui figure dans l'e-mail et sur sa bibliothèque.
       Supprimer envoie d'abord un lien de confirmation à <?= e(ADMIN_EMAIL) ?>.
     </p>
+  </section>
+
+  <!-- ---------------- Les réglages ----------------
+       Ils remplacent le .env, sans renvoyer de fichier : la page n'écrit que ce
+       qu'on a changé (table `reglage`), et « .env » efface la ligne. Liste fermée,
+       chaque valeur a ses bornes ; ce qui touche aux secrets, à l'adresse du
+       site, à ADMIN_EMAIL ou aux mots de passe reste dans le .env. -->
+  <section class="settings-card" id="reglages" aria-labelledby="admin-reglages-titre">
+    <h2 class="settings-card-title" id="admin-reglages-titre"><span class="settings-icon" aria-hidden="true">⚙️</span> Réglages</h2>
+
+    <?php if (!$reglages_dispo): ?>
+      <p class="alert alert-error" role="alert">
+        La table <b>reglage</b> manque : rejouez <code>livre.sql</code> (migration 12). En attendant, le
+        <code>.env</code> gouverne seul.
+      </p>
+    <?php else: ?>
+      <p class="hint">
+        Une valeur enregistrée ici <b>remplace celle du .env</b> et s'applique dès la requête suivante, pour
+        tout le monde. « ↩ .env » efface votre valeur et rend la main au fichier. Chaque réglage a ses bornes.
+      </p>
+
+      <?php foreach (REGLAGES_GROUPES as $groupe => $titre_groupe): ?>
+        <h3 class="settings-sous-titre"><?= e($titre_groupe) ?></h3>
+        <div class="admin-reglages">
+        <?php foreach ($vues as $cle => $v): if ($v['groupe'] !== $groupe) { continue; } ?>
+          <?php $champ = 'reg-' . strtolower($cle); ?>
+          <form class="admin-reglage" data-cle="<?= e($cle) ?>" data-initial="<?= e($v['saisie']) ?>" novalidate>
+            <div class="admin-reglage-texte">
+              <label for="<?= e($champ) ?>"><?= e($v['libelle']) ?></label>
+              <p class="hint">
+                <?= e($v['aide']) ?>
+                <?php if ($v['plage'] !== ''): ?><span class="admin-plage">Entre <?= e(substr($v['plage'], 3)) ?>.</span><?php endif; ?>
+                <span class="admin-sans-base">Sans ce réglage : <?= e(reglage_sans_base_texte($cle, env_brut($cle))) ?>.</span>
+                <span class="admin-en-vigueur<?= $v['en_vigueur'] === null ? ' hidden' : '' ?>">En vigueur : <?= e((string) $v['en_vigueur']) ?> (borné par une autre règle).</span>
+              </p>
+            </div>
+            <div class="admin-reglage-champ">
+              <?php if (isset($v['choix'])): ?>
+                <select id="<?= e($champ) ?>" name="valeur">
+                  <?php foreach ($v['choix'] as $valeur => $libelle): ?>
+                    <option value="<?= e((string) $valeur) ?>"<?= (string) $valeur === $v['saisie'] ? ' selected' : '' ?>><?= e($libelle) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              <?php else: ?>
+                <input id="<?= e($champ) ?>" name="valeur" type="number" inputmode="numeric" step="1"
+                       min="<?= e($v['min_saisie']) ?>" max="<?= e($v['max_saisie']) ?>" value="<?= e($v['saisie']) ?>">
+                <?php if (($v['unite'] ?? '') !== ''): ?><span class="admin-unite"><?= e($v['unite']) ?></span><?php endif; ?>
+              <?php endif; ?>
+            </div>
+            <span class="admin-badge admin-source" data-source="<?= e($v['source']) ?>"><?= e($etiquettes_source[$v['source']]) ?></span>
+            <button type="submit" class="btn btn-primary admin-enregistrer" disabled>Enregistrer</button>
+            <button type="button" class="btn btn-ghost admin-revenir" aria-label="Revenir à la valeur du .env : <?= e($v['libelle']) ?>"
+                    <?= $v['source'] === 'base' ? '' : 'disabled' ?>>↩ .env</button>
+          </form>
+        <?php endforeach; ?>
+        </div>
+      <?php endforeach; ?>
+    <?php endif; ?>
   </section>
 
 </main>

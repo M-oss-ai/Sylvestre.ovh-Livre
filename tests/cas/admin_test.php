@@ -57,7 +57,7 @@ test('être bloqué et administrateur, c\'est possible : deux colonnes, deux dro
 });
 
 test('action_admin() reconnaît les actions réservées', function () {
-    foreach (['admin.forfait', 'admin.admin', 'admin.supprimer'] as $action) {
+    foreach (['admin.forfait', 'admin.admin', 'admin.supprimer', 'admin.reglage', 'admin.reglage_retablir'] as $action) {
         vrai(action_admin($action), $action);
     }
     faux(action_admin('serie.favori'), 'une action ordinaire');
@@ -301,7 +301,7 @@ function actions_admin_de_api(): array
 
 test('toute action admin.* d\'api.php est dans ACTIONS_ADMIN, et inversement', function () {
     $dans_api = actions_admin_de_api();
-    vrai(count($dans_api) >= 3, count($dans_api) . ' actions trouvées : le motif lit bien le switch');
+    vrai(count($dans_api) >= 5, count($dans_api) . ' actions trouvées : le motif lit bien le switch');
     foreach ($dans_api as $action) {
         vrai(in_array($action, ACTIONS_ADMIN, true), "« $action » est gardée par ACTIONS_ADMIN");
     }

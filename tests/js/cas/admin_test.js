@@ -149,6 +149,26 @@ test("aucun compte : des zéros", () => {
   egale("0,0,0,0,0,0,0", Object.values(A.totaux([])).join(","), "tout à zéro");
 });
 
+groupe("Réglages — la pastille et le bouton Enregistrer");
+
+test("sourceTexte() : le mot de la pastille", () => {
+  egale("modifié ici", A.sourceTexte("base"), "changé dans la page");
+  egale(".env", A.sourceTexte("env"), "le .env le fixe");
+  egale("défaut", A.sourceTexte("defaut"), "rien nulle part");
+  egale("", A.sourceTexte("inconnue"), "une origine inconnue ne dit rien");
+});
+
+test("reglageChange() : le bouton ne s'allume que pour une vraie différence", () => {
+  vrai(A.reglageChange("6", "5"), "une autre valeur");
+  faux(A.reglageChange("5", "5"), "la même");
+  faux(A.reglageChange(" 5 ", "5"), "la même, avec des espaces");
+  faux(A.reglageChange("", "5"), "une case vidée n'est pas une valeur");
+  faux(A.reglageChange("   ", "5"), "des espaces non plus");
+  vrai(A.reglageChange("0", "5"), "zéro est une valeur");
+  faux(A.reglageChange(5, "5"), "un nombre et sa chaîne");
+  faux(A.reglageChange(null, "5"), "null");
+});
+
 groupe("Admin.lireLigne() — ce que la page porte dans ses attributs");
 
 test("les attributs deviennent des types", () => {

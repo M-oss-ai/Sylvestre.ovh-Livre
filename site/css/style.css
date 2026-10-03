@@ -1986,3 +1986,55 @@ th[aria-sort="none"] .admin-tri { color: var(--text-dim); }
 @media (max-width: 560px) {
   .admin-main { padding: 16px 12px 50px; }
 }
+
+/* Les réglages : une ligne par réglage — le texte, la case, d'où vient la
+   valeur, et les deux boutons. Sur téléphone, tout s'empile. */
+.admin-reglages { display: flex; flex-direction: column; margin-bottom: 18px; }
+.admin-reglage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-reglage:last-child { border-bottom: 0; }
+/* Sans min-width, un menu aux libellés longs élargissait la colonne et la page débordait sur téléphone. */
+.admin-reglage > * { min-width: 0; }
+.admin-reglage-texte label { font-weight: 600; }
+.admin-reglage-texte .hint { margin-top: 3px; }
+.admin-plage { color: var(--text); }
+.admin-en-vigueur { color: var(--gold-light); font-weight: 600; }
+.admin-reglage-champ { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.admin-reglage-champ input,
+.admin-reglage-champ select {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font-size: 16px;   /* en dessous, iOS agrandit la page dès qu'on touche le champ */
+  font-family: inherit;
+  color-scheme: dark;
+}
+.admin-reglage-champ input { width: 7.5em; text-align: right; }
+.admin-reglage-champ select { max-width: 100%; }
+.admin-reglage-champ input:focus,
+.admin-reglage-champ select:focus { outline: none; border-color: var(--gold); }
+.admin-reglage-champ input[aria-invalid="true"] { border-color: var(--abandon); }
+.admin-reglage-champ .erreur-champ { order: 3; flex: 1 0 100%; margin: 0; }
+.admin-unite { color: var(--text-dim); font-size: 13px; }
+.admin-source { margin-left: 0; white-space: nowrap; }
+.admin-source[data-source="base"] { background: rgba(201, 168, 124, 0.18); }
+.admin-source[data-source="env"],
+.admin-source[data-source="defaut"] { color: var(--text-dim); }
+.admin-reglage .btn { padding: 8px 12px; font-size: 13px; }
+
+@media (max-width: 720px) {
+  .admin-reglage { grid-template-columns: 1fr auto; }
+  .admin-reglage-texte { grid-column: 1 / -1; }
+  .admin-reglage-champ { grid-column: 1; }
+  .admin-source { grid-column: 2; justify-self: end; }
+  .admin-enregistrer { grid-column: 1; }
+  .admin-revenir { grid-column: 2; justify-self: end; }
+}

@@ -71,6 +71,8 @@ const ACTIONS_LIBRES_DU_BLOQUE = [
     'admin.forfait'                => 'administrer les autres comptes : un administrateur bloqué le reste',
     'admin.admin'                  => 'administrer les autres comptes : un administrateur bloqué le reste',
     'admin.supprimer'              => 'administrer les autres comptes : un administrateur bloqué le reste',
+    'admin.reglage'                => 'administrer le site : un administrateur bloqué le reste',
+    'admin.reglage_retablir'       => 'administrer le site : un administrateur bloqué le reste',
 ];
 
 groupe('compte_bloque() — qui est en consultation seule');

@@ -534,3 +534,32 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `jeton_action` MODIFY COLUMN `type` ENUM(''verification'',''reinit'',''changement_email'',''blocage_email'',''suppression_admin'') NOT NULL');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  12. Réglages modifiables depuis l'administration (voir
+--      includes/reglages.php et admin.php).
+--
+--      Une ligne par réglage CHANGÉ : le .env reste la valeur de départ, la
+--      table ne porte que l'écart, et « revenir au .env » efface la ligne.
+--      Liste fermée : config.php ne lit que les clés que reglages.php connaît,
+--      et ramène chaque valeur dans ses bornes.
+--
+--      `valeur`      : toujours en unité NATIVE (secondes, heures…), comme dans
+--                      le .env — la page convertit en jours ou en minutes.
+--      `modifie_par` : l'administrateur qui l'a changé. SET NULL à la
+--                      suppression de son compte : le réglage reste.
+--
+--      Table absente = aucune erreur : le .env gouverne seul, sans bruit.
+--      Tout est rejouable (« CREATE TABLE IF NOT EXISTS »), rien n'est touché.
+CREATE TABLE IF NOT EXISTS `reglage` (
+  `cle`         VARCHAR(64)  NOT NULL,
+  `valeur`      VARCHAR(190) NOT NULL,
+  `modifie_le`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `modifie_par` INT UNSIGNED NULL,
+  PRIMARY KEY (`cle`),
+  KEY `idx_reglage_modifie_par` (`modifie_par`),
+  CONSTRAINT `fk_reglage_utilisateur`
+    FOREIGN KEY (`modifie_par`) REFERENCES `utilisateur` (`id`)
+    ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
