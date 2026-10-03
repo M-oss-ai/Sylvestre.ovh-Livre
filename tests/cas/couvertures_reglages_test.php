@@ -25,7 +25,7 @@ putenv('COUVERTURE_QUOTA_ILLIMITE=50');   // un plafond pour l illimité… sans
 putenv('COUVERTURE_FENETRE=0');          // tranche nulle : la règle n aurait plus de durée
 
 require __DIR__ . '/../lanceur.php';
-require_once CHEMIN_PROJET . '/includes/couvertures.php';
+require_once CHEMIN_SITE . '/includes/couvertures.php';
 
 groupe('Recherche de couverture — les planchers');
 

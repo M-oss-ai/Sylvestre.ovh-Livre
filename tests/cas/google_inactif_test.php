@@ -15,7 +15,7 @@ putenv('GOOGLE_CLIENT_SECRET=');
 putenv('CONFIRMATION_DUREE=');
 
 require __DIR__ . '/../lanceur.php';
-require_once CHEMIN_PROJET . '/includes/google.php';
+require_once CHEMIN_SITE . '/includes/google.php';
 
 groupe('Google non configuré');
 

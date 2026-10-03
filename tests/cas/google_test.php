@@ -16,7 +16,7 @@ putenv('GOOGLE_CLIENT_SECRET=secret-de-test');
 putenv('CONFIRMATION_DUREE=5');   // absurde : relevé à une minute
 
 require __DIR__ . '/../lanceur.php';
-require_once CHEMIN_PROJET . '/includes/google.php';
+require_once CHEMIN_SITE . '/includes/google.php';
 
 const CLIENT = 'client-test.apps.googleusercontent.com';
 

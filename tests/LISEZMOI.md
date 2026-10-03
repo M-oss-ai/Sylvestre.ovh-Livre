@@ -221,7 +221,10 @@ continuent.
 - `vider_journal_test()` — repart d'un journal vide.
 - `executer_php($script, $arguments)` — lance un script en
   sous-processus et rend `['sortie' => …, 'code' => …]`.
-- `CHEMIN_PROJET` — la racine du projet.
+- `CHEMIN_PROJET` — la racine du dépôt (`livre.sql`, `tests/`, `.env`).
+- `CHEMIN_SITE` — `site/`, ce qui monte sur le serveur : les pages, `includes/`,
+  `js/`, `css/`, `uploads/`. C'est là que les tests cherchent les fonctions et
+  les sources, et que ceux qui écrivent des images les suppriment.
 
 ---
 
@@ -295,6 +298,18 @@ possible), le fait que chaque page HTML charge cette feuille ET
 lui qui empêche Safari de zoomer au double-appui) et ne bloque pas le zoom. Un
 garde-fou, pas une mesure du navigateur : que le double-appui ne zoome plus
 ne se constate que sur un iPhone.
+
+**Couvert, structure du dépôt** — `structure_test.php`, par lecture des
+sources : `site/` ne contient que ce qui doit monter (ni `tests/`, ni `.md`,
+ni `.sql`, ni `.env`, ni dossier caché — le `.htaccess` de `site/` ne les
+bloque plus, seule leur absence les garde hors ligne), chaque `require` et
+chaque ressource chargée par `actif()` trouve son fichier, `config.php` prend
+`site/` pour racine et cherche le `.env` au-dessus, `.gitignore` ignore
+`site/uploads/*` sauf son `.htaccess`, les `.htaccess` (fichiers « point »,
+`includes/`, exécution interdite dans `uploads/`, et celui de la racine pour
+le développement local). Ce que les règles font réellement chez Apache ne se
+lit pas dans les sources : il se vérifie avec un Apache jetable (voir
+CLAUDE.md, « Déploiement »).
 
 **Couvert, forfait « bloqué »** — `forfait_bloque_test.php` :
 `compte_bloque` (seul `'bloque'` bloque : ni `''`, ni une autre casse, ni une

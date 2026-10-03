@@ -6,7 +6,7 @@
 
 declare(strict_types=1);
 
-/** Dossier racine du projet (un niveau au-dessus de includes/). */
+/** Racine du site : le dossier qui monte sur le serveur (site/ en local, www/ chez OVH), un niveau au-dessus de includes/. */
 define('CHEMIN_RACINE', dirname(__DIR__));
 
 /* ---------------------------------------------------------------------
@@ -73,7 +73,9 @@ function charger_env(string $chemin): bool
 
 /* Le .env est cherché d'abord AU-DESSUS de la racine web (recommandé en
    production : hors de portée du serveur web même si un .htaccess est
-   ignoré), puis dans le projet (pratique en développement).
+   ignoré), puis dans la racine web elle-même. En développement, « au-dessus
+   de site/ » est la racine du dépôt : le .env y reste, hors du dossier qu'on
+   envoie, et un envoi de site/ ne peut donc jamais écraser celui du serveur.
    On s'arrête au premier trouvé : chercher les deux systématiquement
    coûtait un is_file() de plus à chaque requête, et l'espace des
    hébergements mutualisés OVH est monté en NFS — chaque accès au disque
@@ -117,7 +119,7 @@ define('ADMIN_EMAIL', env('ADMIN_EMAIL', 'admin@example.com'));
    liens seront cassés en production, ce qui se remarque tout de suite,
    au lieu d'être silencieusement détournables.
    --------------------------------------------------------------------- */
-define('APP_URL', rtrim(env('APP_URL', 'http://localhost/Livre'), '/'));
+define('APP_URL', rtrim(env('APP_URL', 'http://localhost/Livre/site'), '/'));
 
 /* Quotas de l'application */
 define('MAX_UTILISATEURS', max(1, (int) env('MAX_UTILISATEURS', '100')));

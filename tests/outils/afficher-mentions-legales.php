@@ -14,4 +14,4 @@ declare(strict_types=1);
 
 require __DIR__ . '/../amorce.php';
 
-require CHEMIN_PROJET . '/mentions-legales.php';
+require CHEMIN_SITE . '/mentions-legales.php';

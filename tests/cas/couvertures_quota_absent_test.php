@@ -16,7 +16,7 @@ putenv('COUVERTURE_QUOTA=');
 putenv('COUVERTURE_QUOTA_ILLIMITE=');
 
 require __DIR__ . '/../lanceur.php';
-require_once CHEMIN_PROJET . '/includes/couvertures.php';
+require_once CHEMIN_SITE . '/includes/couvertures.php';
 
 groupe('Recherche de couverture — quotas absents du .env');
 

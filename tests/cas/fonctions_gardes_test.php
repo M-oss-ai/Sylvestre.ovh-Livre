@@ -152,14 +152,14 @@ test('un chemin hors uploads/ ne supprime rien', function () {
     /* La fonction reçoit des chemins venus de la base. Si le filtre
        tombait, un « ../includes/config.php » arrivé là par un autre
        chemin ferait supprimer un fichier du projet. */
-    $cible = CHEMIN_PROJET . '/tests/.cible-a-ne-pas-supprimer.tmp';
+    $cible = CHEMIN_SITE . '/.cible-a-ne-pas-supprimer.tmp';
     file_put_contents($cible, 'ce fichier doit survivre');
 
     try {
         foreach ([
-            'tests/.cible-a-ne-pas-supprimer.tmp',
-            '../tests/.cible-a-ne-pas-supprimer.tmp',
-            'uploads/../tests/.cible-a-ne-pas-supprimer.tmp',
+            '.cible-a-ne-pas-supprimer.tmp',
+            '../site/.cible-a-ne-pas-supprimer.tmp',
+            'uploads/../.cible-a-ne-pas-supprimer.tmp',
             '/etc/passwd',
             'includes/config.php',
         ] as $chemin) {
@@ -167,7 +167,7 @@ test('un chemin hors uploads/ ne supprime rien', function () {
         }
 
         vrai(is_file($cible), 'le fichier visé est toujours là');
-        vrai(is_file(CHEMIN_PROJET . '/includes/config.php'), 'config.php aussi');
+        vrai(is_file(CHEMIN_SITE . '/includes/config.php'), 'config.php aussi');
     } finally {
         @unlink($cible);
     }

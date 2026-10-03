@@ -22,8 +22,10 @@ pas de Composer, pas de framework.
    puis redémarrez Apache. Sans GD, les images sont stockées à leur
    taille d'origine : l'application marche, mais elle est bien plus lourde.
 3. phpMyAdmin → onglet **SQL** → collez `livre.sql` → **Exécuter**.
-4. Copiez `.env.example` en `.env` et adaptez les valeurs.
-5. Ouvrez <http://localhost/Livre/> et créez votre compte.
+4. Copiez `.env.example` en `.env` **à la racine du dépôt, à côté de
+   `site/`** (pas dedans), et adaptez les valeurs. En local, `APP_URL` vaut
+   `http://localhost/Livre/site`.
+5. Ouvrez <http://localhost/Livre/site/> et créez votre compte.
 
 `livre.sql` peut être rejoué sur une base existante : tout est en
 `CREATE TABLE IF NOT EXISTS`. Sauvegardez d'abord.
@@ -32,10 +34,17 @@ pas de Composer, pas de framework.
 
 ## Mise en ligne chez OVH
 
+**Ce qui monte, c'est le contenu de `site/`, sans `uploads/`**, dans `www/`
+(les images des utilisateurs restent sur le serveur). `livre.sql`, `tests/`,
+les `.md`, `.env` et `.env.example` sont à la racine du dépôt, hors de `site/` :
+ils ne partent jamais, il n'y a rien à nettoyer après. Le `.env` du serveur ne
+peut pas être écrasé par un envoi. `.ovhconfig`, resté à la racine, est posé
+une fois sur le serveur et n'est renvoyé que s'il change.
+
 | # | À faire | Pourquoi |
 |---|---|---|
 | 1 | `.ovhconfig` : `app.engine.version=8.2`, `environment=production` | Fixe la version de PHP |
-| 2 | Placez `.env` **au-dessus de `www/`** | Hors de portée du web même si un `.htaccess` est ignoré. `config.php` le cherche là en premier |
+| 2 | Placez `.env` **au-dessus de `www/`** | Hors de portée du web même si un `.htaccess` est ignoré. `config.php` le cherche là en premier (en local, c'est la racine du dépôt, au-dessus de `site/`) |
 | 3 | Renseignez **`APP_URL`** (`https://votredomaine.fr`, sans `/` final) | Les liens de confirmation en dépendent |
 | 4 | Changez **tous** les mots de passe (base, SMTP) | Ceux du développement ne doivent jamais servir |
 | 5 | Générez **`CRON_TOKEN`** et **`UPLOAD_SECRET`** (chaînes aléatoires) | Voir `.env.example` |
@@ -133,9 +142,15 @@ planifiée.
 
 ```bash
 curl -I https://votredomaine.fr/livre.sql        # doit répondre 404
+curl -I https://votredomaine.fr/tests/lancer.php # doit répondre 404
 curl -I https://votredomaine.fr/.env             # doit répondre 403 ou 404
 curl -sI https://votredomaine.fr/js/app.js | grep -i 'content-encoding\|cache-control'
 ```
+
+Les deux premières ne sont plus bloquées par le `.htaccess` : ces fichiers ne
+sont simplement pas dans `site/`. Un `200` veut dire qu'un **reste d'un ancien
+envoi complet** traîne sur le serveur — `tests/` (du PHP que n'importe qui peut
+exécuter), `livre.sql`, `README.md`, `CLAUDE.md` : à supprimer tout de suite.
 
 La dernière doit montrer `gzip` et `max-age=31536000`. Sinon, Apache sert
 vos `.js` sous un type que le `.htaccess` ne couvre pas.
@@ -220,7 +235,7 @@ peut le supprimer (un avis part par e-mail) pour revenir à Google seul.
 contact), puis « Identifiants » › « Créer des identifiants » › « ID
 client OAuth », type « Application Web », URI de redirection autorisé
 `https://livre.sylvestre.ovh/google.php` (et
-`http://localhost/Livre/google.php` pour l'essai en local). Recopier
+`http://localhost/Livre/site/google.php` pour l'essai en local). Recopier
 l'ID client et le secret dans `GOOGLE_CLIENT_ID` et
 `GOOGLE_CLIENT_SECRET`. Laissés vides, le bouton n'apparaît pas.
 
@@ -524,6 +539,9 @@ configuration.
 
 ## Les fichiers
 
+Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
+`livre.sql`, `.env`, `.env.example` et `tests/`, à la racine du dépôt.
+
 | Fichier | Rôle |
 |---|---|
 | `livre.sql` | Schéma complet, rejouable (migration 9 : table `cle_acces`) |
@@ -546,7 +564,8 @@ configuration.
 | `mentions-legales.php` | Mentions légales et confidentialité |
 | `purger.php` | Entretien de la base, lancé par le cron |
 | `js/*.js` · `css/style.css` | Navigateur (`js/double-appui.js` : un clic posé sur le document, qui empêche Safari de zoomer au double-appui ; chargé par toutes les pages) |
-| `uploads/` | Images envoyées (exécution de code interdite) |
+| `uploads/` | Images envoyées (exécution de code interdite) ; seul son `.htaccess` est au dépôt |
+| `.htaccess` (racine du dépôt) | Développement local seulement : ne laisse voir que `site/`, ne monte jamais |
 | `tests/` | Tests unitaires — voir `tests/LISEZMOI.md` |
 
 ---

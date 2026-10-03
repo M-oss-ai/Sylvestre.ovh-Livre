@@ -15,12 +15,13 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../lanceur.php';
-require_once CHEMIN_PROJET . '/includes/google.php';
+require_once CHEMIN_SITE . '/includes/google.php';
 
-/** Le contenu d'un fichier du projet. */
+/** Le contenu d'un fichier du projet : dans site/, sauf le schéma, à la racine du dépôt. */
 function source(string $chemin): string
 {
-    return (string) file_get_contents(CHEMIN_PROJET . '/' . $chemin);
+    $racine = $chemin === 'livre.sql' ? CHEMIN_PROJET : CHEMIN_SITE;
+    return (string) file_get_contents($racine . '/' . $chemin);
 }
 
 /** Le bloc d'un « case '…': { … }` d'api.php, jusqu'au case suivant. */

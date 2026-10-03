@@ -20,7 +20,7 @@ require __DIR__ . '/../lanceur.php';
 /* couvertures.php n'est pas dans la pile chargée par chaque page : seul
    api.php l'inclut, et uniquement pour l'action de recherche. Le test
    doit donc le demander explicitement. */
-require_once CHEMIN_PROJET . '/includes/couvertures.php';
+require_once CHEMIN_SITE . '/includes/couvertures.php';
 
 groupe('titre_normalise() — comparer deux titres');
 

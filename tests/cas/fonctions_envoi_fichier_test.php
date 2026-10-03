@@ -121,7 +121,7 @@ test('un chemin qui ne vient pas d un envoi HTTP est refusé', function () {
     fichier_recu([
         'error'    => UPLOAD_ERR_OK,
         'size'     => 100,
-        'tmp_name' => CHEMIN_PROJET . '/includes/config.php',
+        'tmp_name' => CHEMIN_SITE . '/includes/config.php',
     ]);
     $erreur = null;
     estNul(enregistrer_image('couverture', $erreur), 'refusé');

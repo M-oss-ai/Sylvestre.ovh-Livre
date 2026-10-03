@@ -27,13 +27,13 @@
 declare(strict_types=1);
 require __DIR__ . '/../lanceur.php';
 
-$css = (string) file_get_contents(CHEMIN_PROJET . '/css/style.css');
+$css = (string) file_get_contents(CHEMIN_SITE . '/css/style.css');
 
 /** Les pages qui affichent du HTML : celles qui ont une balise <html>. */
 function pages_html(): array
 {
     $pages = [];
-    foreach (glob(CHEMIN_PROJET . '/*.php') ?: [] as $fichier) {
+    foreach (glob(CHEMIN_SITE . '/*.php') ?: [] as $fichier) {
         $source = (string) file_get_contents($fichier);
         if (str_contains($source, '<html')) {
             $pages[basename($fichier)] = $source;
@@ -84,7 +84,7 @@ test('chaque page charge js/double-appui.js : un clic posé sur le document', fu
 });
 
 test('le script pose un gestionnaire de clic sur le document, et ne fait rien d autre', function () {
-    $js = (string) file_get_contents(CHEMIN_PROJET . '/js/double-appui.js');
+    $js = (string) file_get_contents(CHEMIN_SITE . '/js/double-appui.js');
     contient('document.addEventListener("click", () => {});', $js, 'un gestionnaire vide, sur le document');
     /* Le commentaire dit pourquoi : on ne regarde que le code. */
     $code = preg_replace('~/\*.*?\*/~s', '', $js);

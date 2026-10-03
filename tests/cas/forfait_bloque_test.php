@@ -19,10 +19,11 @@ declare(strict_types=1);
 
 require __DIR__ . '/../lanceur.php';
 
-/** Le contenu d'un fichier du projet. */
+/** Le contenu d'un fichier du projet : dans site/, sauf le schéma, à la racine du dépôt. */
 function source(string $chemin): string
 {
-    return (string) file_get_contents(CHEMIN_PROJET . '/' . $chemin);
+    $racine = $chemin === 'livre.sql' ? CHEMIN_PROJET : CHEMIN_SITE;
+    return (string) file_get_contents($racine . '/' . $chemin);
 }
 
 /** Les comptes qu'on essaie : seul `forfait` compte. */

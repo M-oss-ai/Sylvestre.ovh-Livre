@@ -23,7 +23,12 @@
 
 declare(strict_types=1);
 
+/* Deux racines. CHEMIN_PROJET est celle du dépôt : livre.sql, README.md,
+   CLAUDE.md, tests/, .env. CHEMIN_SITE est celle de ce qui MONTE sur le
+   serveur (pages, includes/, js/, css/, uploads/) : c'est là que les tests
+   cherchent les fonctions et les sources. */
 define('CHEMIN_PROJET', dirname(__DIR__));
+define('CHEMIN_SITE', CHEMIN_PROJET . '/site');
 
 /* ---------------------------------------------------------------------
    1. Les erreurs doivent se VOIR — c'est l'exact inverse de la production
@@ -148,7 +153,7 @@ register_shutdown_function(static function () use (&$projet_charge): void {
     );
 });
 
-require_once CHEMIN_PROJET . '/includes/carte.php';
+require_once CHEMIN_SITE . '/includes/carte.php';
 
 $projet_charge = true;
 ob_end_clean();   // les en-têtes ne servent à rien en ligne de commande

@@ -15,7 +15,7 @@ putenv('CLE_ACCES_MAX=');          // vides : ce sont les valeurs par défaut qu
 putenv('CLE_ACCES_DEFI_DUREE=');
 
 require __DIR__ . '/../lanceur.php';
-require_once CHEMIN_PROJET . '/includes/cle_acces.php';
+require_once CHEMIN_SITE . '/includes/cle_acces.php';
 
 const RP     = 'livre.exemple.test';
 const ORIGIN = 'https://livre.exemple.test';

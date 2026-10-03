@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (732 tests : 626 PHP en 48 fichiers, 106 JavaScript)
+php tests/lancer.php              # toute la suite (743 tests : 637 PHP en 49 fichiers, 106 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -59,11 +59,26 @@ mysqld.exe --no-defaults --datadir=<dossier jetable> --port=3399 --skip-grant-ta
 DB_HOST='127.0.0.1;port=3399' php tests/lancer.php     # le « ;port= » passe tel quel dans le DSN
 ```
 
-Pour essayer le site lui-même : `php -S 127.0.0.1:8099` avec `DB_HOST`,
-`DB_NAME`, `APP_URL=http://localhost:8099` et `SMTP_HOST=` (vide : aucun
-e-mail ne part) dans l'environnement, après avoir rejoué `livre.sql`.
+Pour essayer le site lui-même : `php -S 127.0.0.1:8099 -t site` avec
+`DB_HOST`, `DB_NAME`, `APP_URL=http://localhost:8099` et `SMTP_HOST=` (vide :
+aucun e-mail ne part) dans l'environnement, après avoir rejoué `livre.sql`.
+Sous XAMPP, le site est à `http://localhost/Livre/site/` (c'est l'`APP_URL`
+du `.env` local) ; l'adresse nue `http://localhost/Livre/` y redirige.
 
 ## Structure
+
+### Le dépôt : `site/` monte sur le serveur, le reste reste ici
+
+| Où | Quoi |
+|---|---|
+| `site/` | **Tout ce qui monte, tel quel** : les pages, `includes/`, `js/`, `css/`, `.htaccess`, `.user.ini`, et `uploads/` (dont seul le `.htaccess` est au dépôt : les images restent sur le serveur) |
+| racine | `livre.sql`, `README.md`, `CLAUDE.md`, `.env`, `.env.example`, `.gitignore`, `.ovhconfig`, `tests/`, et un `.htaccess` **de développement local** (hors de `site/` : il ne monte jamais) |
+
+**Les chemins de ce fichier, sans autre précision, sont ceux de `site/`**
+(`includes/config.php` est `site/includes/config.php`). Dans le code :
+`CHEMIN_RACINE` (défini par `config.php`) est `site/` — c'est là que vit
+`uploads/` — et, dans les tests, `CHEMIN_SITE` en est le même dossier, vu de
+l'amorce, tandis que `CHEMIN_PROJET` est la racine du dépôt.
 
 ### Le noyau
 
@@ -546,34 +561,55 @@ manque, et exécuter `DO 0` sinon.
 
 ## Déploiement
 
-Copie de fichiers par FTP, rien d'autre. Dans l'ordre :
+Copie de fichiers par FTP, rien d'autre. **Ce qui monte, c'est le contenu de
+`site/`, sans `uploads/`** (les images des utilisateurs restent sur le
+serveur), dans `www/`. Dans l'ordre :
 
 1. **Le SQL d'abord**, si le schéma a bougé.
 2. Les fichiers modifiés — et **tous ceux dont ils dépendent**. Les
-   pannes du projet ont presque toutes été des envois partiels.
+   pannes du projet ont presque toutes été des envois partiels : envoyer
+   tout `site/` règle la question.
 3. **`ASSETS_VERSION` à incrémenter** dans le `.env` dès qu'un fichier de
    `js/` ou `css/` change. `actif()` s'en sert pour casser le cache ;
    sans l'incrément le correctif reste invisible, et on le croit raté.
 
-**Envoyer le dossier entier, puis faire le ménage** est la méthode
-retenue, parce que c'est la plus rapide. Le `.htaccess` racine est écrit
-pour ça : il couvre chaque élément du dossier local (le tableau en tête
-du fichier dit ce qui est servi, ce qui est gardé mais bloqué, et ce qui
-est à supprimer). Entre l'envoi et le ménage, rien de ce qui est arrivé
-en trop n'est lisible. À supprimer ensuite : `tests/`, `.git/`,
-`.env.example`, `.gitignore`, `*.md`, `livre.sql`, et les images de test
-de `uploads/`.
+**Il n'y a plus de ménage à faire après l'envoi** : `tests/`, `.git/`,
+`*.md`, `livre.sql`, `.env`, `.env.example` et `.gitignore` sont à la racine
+du dépôt, hors de `site/`, donc jamais envoyés. `tests/cas/structure_test.php`
+refuse tout fichier de développement dans `site/` (un `.md`, un `.env`, un
+dossier `tests` ou `.git`…) : c'est lui, et non plus le `.htaccess`, qui
+garantit que rien d'inutile n'arrive en ligne.
 
-**Seule exception, à exclure du transfert lui-même : `.env`.** Le `.env`
-local (base `localhost`) écraserait celui du serveur, et le site perdrait
-sa base à l'instant même. Aucune règle HTTP n'y peut rien : c'est un
-écrasement de fichier. Le supprimer après coup ne réparerait rien.
+**Le `.env` n'est plus une exception à surveiller.** Il vit AU-DESSUS de
+`site/` — la racine du dépôt en local, au-dessus de `www/` chez OVH —
+et `config.php` le cherche là en premier : un envoi de `site/` ne peut pas
+écraser celui du serveur (base `localhost` contre base de production : le
+site perdrait sa base à l'instant même). Ne jamais en poser un dans `site/`.
+`.ovhconfig`, resté à la racine, ne monte pas non plus : il est posé une fois
+sur le serveur, à renvoyer à part s'il change.
 
-Les règles de `includes/` et `tests/` sont doublées (racine et
-`.htaccess` du dossier) : elles tiennent même si un dossier arrive sans
-ses fichiers cachés. Vérifié avec l'Apache de XAMPP, qui lit ce
-`.htaccess` : demander chaque élément du dossier par `curl` et comparer
-le code de réponse.
+**Le `.htaccess` de `site/` est allégé** : il ne protège plus que ce qui
+monte (fichiers « point », `includes/`, listing, HTTPS, cache, compression).
+Il ne bloque donc **plus** `tests/`, `*.md` ni `*.sql`. Un reste d'un ancien
+envoi complet (surtout `tests/`, dont les fichiers sont du PHP exécutable,
+mais aussi `livre.sql`, `README.md`, `CLAUDE.md`) redevient lisible dès que ce
+`.htaccess` est en ligne : **le supprimer du serveur avant, ou avec, le premier
+envoi du nouveau dossier**, et le vérifier (`curl -I …/livre.sql` doit rendre
+404).
+
+**En local, XAMPP sert tout `htdocs/Livre`**, pas seulement `site/`. Le
+`.htaccess` de la racine du dépôt (jamais envoyé) rend tout le reste
+introuvable — `.env`, `tests/`, `.git/`, `livre.sql` — et renvoie l'adresse nue
+vers `site/`. Sa cible de redirection est `%{REQUEST_URI}site/` : une cible
+relative serait préfixée du chemin DISQUE du dossier, et la redirection partirait
+vers `http://hôte/C:/xampp/…`.
+
+Vérifié avec l'Apache de XAMPP, en instance jetable (`httpd.exe -f <conf>`
+sur un autre port, `AllowOverride All`, `mod_rewrite`, `headers`, `expires`,
+`deflate`, `alias`) : demander chaque élément par `curl` et comparer le code
+de réponse. `includes/` répond 403 (le `Require` de son `.htaccess` passe
+avant le `RedirectMatch`), `.env` et `tests/` 404, `uploads/*.php` 403, et
+`app.js` sort en `gzip` avec `max-age=31536000`.
 
 ## Tests
 
@@ -583,7 +619,10 @@ de tester une constante dans un autre état.
 
 L'amorce neutralise l'environnement : `DB_NAME` pointe sur
 `information_schema` (les tables du projet sont hors de portée) et les
-réglages SMTP sont vidés (rien ne part).
+réglages SMTP sont vidés (rien ne part). Elle charge le projet depuis
+`site/` (`CHEMIN_SITE`) ; `CHEMIN_PROJET`, la racine du dépôt, ne sert qu'à
+ce qui n'est pas en ligne (`livre.sql`, `tests/`). Un test qui lit une source
+ou écrit dans `uploads/` passe par `CHEMIN_SITE`.
 
 Le périmètre est celui des **fonctions pures** : rien qui exige la base
 ou le réseau. `tests/LISEZMOI.md` tient la liste de ce qui est couvert,
@@ -591,7 +630,7 @@ de ce qui ne l'est pas, et pourquoi.
 
 Le JavaScript se teste **dans un navigateur**, pas avec Node (que le
 projet n'a pas) : `tests/js/banc.html` charge `commun.js` et `app.js`
-tels quels, puis les fichiers de `tests/js/cas/`. `lancer.php` l'ouvre
+tels quels (depuis `site/js/`), puis les fichiers de `tests/js/cas/`. `lancer.php` l'ouvre
 dans Edge ou Chrome sans fenêtre et relit le compte rendu. **Un nouveau
 fichier de cas s'ajoute à `banc.html`**, sinon `lancer.php` échoue
 (`[OUBLIÉ]`). Le branchement sur la page (écouteurs, appels à l'API,

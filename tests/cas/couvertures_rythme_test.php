@@ -25,7 +25,7 @@ putenv('COUVERTURE_ESPACEMENT=120');
 putenv('COUVERTURE_FILE_MAX=300');
 
 require __DIR__ . '/../lanceur.php';
-require_once CHEMIN_PROJET . '/includes/couvertures.php';
+require_once CHEMIN_SITE . '/includes/couvertures.php';
 
 groupe('mangadex_attente_suggeree() — le délai à proposer');
 
@@ -103,6 +103,6 @@ test('le fichier témoin reste hors du site', function () {
     /* Il ne contient qu une date : rien à faire dans une sauvegarde, et
        surtout rien à faire derrière une URL publique. */
     faux(str_contains(str_replace('\\', '/', mangadex_fichier_rythme()),
-         str_replace('\\', '/', CHEMIN_PROJET)),
+         str_replace('\\', '/', CHEMIN_SITE)),
         'en dehors du répertoire du site');
 });
