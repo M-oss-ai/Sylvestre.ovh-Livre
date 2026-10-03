@@ -16,6 +16,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/carte.php';
 require_once __DIR__ . '/includes/couvertures.php';
 require_once __DIR__ . '/includes/google.php';   // les modifications en attente d'un compte Google
+require_once __DIR__ . '/includes/cle_acces.php';   // les clés d'accès (ajout, retrait)
 
 $moi    = exiger_connexion_api();
 $mon_id = (int) $moi['id'];
@@ -584,6 +585,78 @@ switch ($action) {
                 ? 'Mot de passe défini ✅ — il vous sera demandé après Google, à chaque connexion.'
                 : 'Mot de passe modifié ✅ — les autres appareils ont été déconnectés.',
         ]);
+    }
+
+    /* ---------------- Clés d'accès ----------------
+       Ajouter une clé est une action sensible (ACTIONS_SENSIBLES) : elle
+       ouvre le compte sans mot de passe, il faut donc avoir prouvé son
+       identité pour CETTE action. Deux appels, comme la fenêtre de
+       confirmation les enchaîne :
+         cle.options  le défi et les options de création (ne consomme rien) ;
+         cle.creer    la réponse du gestionnaire de mots de passe : vérifiée,
+                      enregistrée, et c'est seulement alors que la
+                      confirmation est consommée.
+       Retirer une clé n'ouvre rien : pas de confirmation, un compte ne
+       perd jamais l'accès (il garde son mot de passe ou Google). */
+    case 'cle.options': {
+        if (!confirmation_recente($mon_id, 'compte.cle_creer')) {
+            reponse_json(['ok' => false, 'reconfirmer' => true,
+                'erreur' => "Confirmez de nouveau votre identité pour ajouter une clé d'accès."], 403);
+        }
+        $existantes = cle_lister($mon_id);
+        if (count($existantes) >= CLE_ACCES_MAX) {
+            reponse_json(['ok' => false, 'erreur' => 'Vous avez atteint la limite de ' . CLE_ACCES_MAX
+                . " clés d'accès. Retirez-en une pour en ajouter une autre."], 422);
+        }
+        $defi = cle_defi_creer('creation', $mon_id);
+        reponse_json(['ok' => true,
+            'options' => cle_options_creation($defi, $moi, array_column($existantes, 'cle_id'), cle_rp_id())]);
+    }
+
+    case 'cle.creer': {
+        $defi = cle_defi_prendre('creation', $mon_id);   // consommé d'abord : il ne sert qu'une fois
+        if (!confirmation_recente($mon_id, 'compte.cle_creer')) {
+            reponse_json(['ok' => false, 'reconfirmer' => true,
+                'erreur' => "Confirmez de nouveau votre identité pour ajouter une clé d'accès."], 403);
+        }
+        if ($defi === null) {
+            reponse_json(['ok' => false, 'renouveler' => true,
+                'erreur' => "La demande a expiré. Cliquez de nouveau pour ajouter la clé d'accès."], 409);
+        }
+        $client      = base64url_decoder((string) ($_POST['client_data'] ?? ''));
+        $attestation = base64url_decoder((string) ($_POST['attestation'] ?? ''));
+        if ($client === null || $attestation === null || strlen($client) > 4096 || strlen($attestation) > CLE_CBOR_TAILLE_MAX) {
+            reponse_json(['ok' => false, 'erreur' => "La réponse du gestionnaire de mots de passe est illisible."], 422);
+        }
+
+        $verdict = cle_verifier_creation($client, $attestation, $defi, cle_origine(), cle_rp_id());
+        if (!$verdict['ok']) {
+            journal_securite('cle_acces_refusee', ['utilisateur' => $mon_id, 'raison' => $verdict['raison']]);
+            reponse_json(['ok' => false, 'erreur' => "Cette clé d'accès n'a pas pu être vérifiée : elle n'a pas été ajoutée."], 422);
+        }
+
+        $nom      = cle_nom($_POST['nom'] ?? '');
+        $resultat = cle_ajouter($mon_id, $verdict['identifiant'], $verdict['cle_pem'], $verdict['compteur'], $nom);
+        if ($resultat === 'deja') {
+            reponse_json(['ok' => false, 'erreur' => "Cette clé d'accès est déjà enregistrée."], 409);
+        }
+        if ($resultat === 'limite') {
+            reponse_json(['ok' => false, 'erreur' => 'Vous avez atteint la limite de ' . CLE_ACCES_MAX . " clés d'accès."], 422);
+        }
+
+        oublier_confirmation();   // elle ne sert qu'une fois
+        journal_securite('cle_acces_ajoutee', ['utilisateur' => $mon_id]);
+        avertir_cle_acces_ajoutee((string) $moi['email'], (string) $moi['identifiant'], $nom,
+            acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
+        reponse_json(['ok' => true, 'message' => "Clé d'accès ajoutée ✅"]);
+    }
+
+    case 'cle.supprimer': {
+        if (!cle_supprimer((int) ($_POST['id'] ?? 0), $mon_id)) {
+            reponse_json(['ok' => false, 'erreur' => "Clé d'accès introuvable."], 404);
+        }
+        journal_securite('cle_acces_retiree', ['utilisateur' => $mon_id]);
+        reponse_json(['ok' => true, 'message' => "Clé d'accès retirée ✅"]);
     }
 
     /* ---------------- Renoncer à l'action confirmée ----------------

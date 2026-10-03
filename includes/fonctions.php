@@ -924,6 +924,7 @@ const ACTIONS_SENSIBLES = [
     'compte.profil'        => "changer d'identifiant ou d'adresse e-mail",
     'compte.motdepasse'    => 'définir ou changer votre mot de passe',
     'compte.supprimer_mdp' => 'supprimer votre mot de passe',
+    'compte.cle_creer'     => "ajouter une clé d'accès",
     'donnees.vider'        => 'vider votre bibliothèque',
     'compte.supprimer'     => 'supprimer votre compte',
 ];

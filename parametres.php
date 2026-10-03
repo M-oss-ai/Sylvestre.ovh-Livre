@@ -16,6 +16,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
 require_once __DIR__ . '/includes/google.php';     // « Continuer avec Google »
 require_once __DIR__ . '/includes/couvertures.php';   // le quota de recherche, annoncé dans « Forfait »
+require_once __DIR__ . '/includes/cle_acces.php';     // les clés d'accès, listées dans « Sécurité »
 
 $moi = exiger_connexion();
 
@@ -281,6 +282,7 @@ function bloc_reconnexion(string $action, string $libelle, bool $avec_mdp): stri
         . bouton_google($libelle, 'parametres', $action);
 }
 
+$cles    = cle_lister((int) $moi['id']);
 $photo   = url_image_sure($moi['photo']);
 $csrf    = jeton_csrf();
 $attente_email = changement_email_en_attente((int) $moi['id']);
@@ -581,6 +583,51 @@ $nb_series = (int) $req->fetchColumn();
       </div>
     <?php endif; ?>
 
+    <!-- Clés d'accès : se connecter sans taper de mot de passe, avec son
+         gestionnaire de mots de passe ou son appareil. Rien ne marche sans
+         JavaScript (le navigateur seul parle au gestionnaire) : la liste
+         se lit, mais les boutons n'apparaissent qu'avec lui — et seulement
+         si le navigateur sait faire (js/settings.js). -->
+    <div class="settings-divider"></div>
+    <div class="cles-acces" id="cles-acces">
+      <h3 class="settings-sous-titre">🔑 Clés d'accès</h3>
+      <p class="hint">Une clé d'accès, gardée par votre gestionnaire de mots de passe ou par cet appareil,
+        vous connecte sans taper de mot de passe : sur la page de connexion, choisissez « Se connecter
+        avec une clé d'accès ». L'ajouter demande de confirmer votre identité.</p>
+
+      <ul class="cles-liste<?= $cles ? '' : ' hidden' ?>" id="cles-liste">
+        <?php foreach ($cles as $cle): ?>
+          <li class="cle-ligne" data-cle="<?= (int) $cle['id'] ?>">
+            <span class="cle-texte">
+              <span class="cle-nom"><?= e((string) $cle['nom']) ?></span>
+              <span class="cle-infos hint">Ajoutée le <?= e(date('d/m/Y', (int) strtotime((string) $cle['cree_le']))) ?>
+                · <?= $cle['utilisee_le'] ? 'utilisée le ' . e(date('d/m/Y', (int) strtotime((string) $cle['utilisee_le']))) : 'jamais utilisée' ?></span>
+            </span>
+            <span class="cle-actions">
+              <button type="button" class="btn btn-ghost small danger-text cle-retirer hidden">Retirer</button>
+              <span class="cle-confirmer hidden">Retirer cette clé&nbsp;?
+                <button type="button" class="btn btn-danger small cle-oui">Oui</button>
+                <button type="button" class="btn btn-ghost small cle-non">Non</button>
+              </span>
+            </span>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+      <p class="hint<?= $cles ? ' hidden' : '' ?>" id="cles-vide">Aucune clé d'accès pour l'instant.</p>
+
+      <?php if (count($cles) < CLE_ACCES_MAX): ?>
+        <div class="field hidden" id="cle-nom-champ">
+          <label for="cle-nom">Nom de la clé (facultatif)</label>
+          <input id="cle-nom" type="text" maxlength="<?= CLE_NOM_MAX ?>" autocomplete="off"
+                 placeholder="Par exemple : mon téléphone">
+        </div>
+        <button type="button" id="btn-ajouter-cle" class="btn btn-ghost full hidden">🔑 Ajouter une clé d'accès</button>
+      <?php else: ?>
+        <p class="hint">Limite de <?= CLE_ACCES_MAX ?> clés atteinte : retirez-en une pour en ajouter une autre.</p>
+      <?php endif; ?>
+      <p class="hint hidden" id="cles-non-supporte">Ce navigateur ne gère pas les clés d'accès.</p>
+    </div>
+
     <div class="settings-divider"></div>
 
     <form method="post" action="deconnexion.php">
@@ -779,6 +826,7 @@ $nb_series = (int) $req->fetchColumn();
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
 <script src="<?= e(actif('js/mdp.js')) ?>" defer></script>
+<script src="<?= e(actif('js/cle-acces.js')) ?>" defer></script>
 <script src="<?= e(actif('js/settings.js')) ?>" defer></script>
 </body>
 </html>

@@ -166,6 +166,7 @@ importantes :
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
+| `CLE_ACCES_MAX` · `CLE_ACCES_DEFI_DUREE` | Clés d'accès : nombre par compte (10, plafond 50) et validité du défi envoyé au navigateur (300 s, entre 60 et 900) |
 | `CONFIRMATION_DUREE` | Temps laissé, après avoir prouvé son identité (Google, ou mot de passe pour un compte e-mail), pour valider l'action à risque choisie (une seule) |
 
 ---
@@ -222,6 +223,31 @@ client OAuth », type « Application Web », URI de redirection autorisé
 `http://localhost/Livre/google.php` pour l'essai en local). Recopier
 l'ID client et le secret dans `GOOGLE_CLIENT_ID` et
 `GOOGLE_CLIENT_SECRET`. Laissés vides, le bouton n'apparaît pas.
+
+---
+
+## Clés d'accès
+
+Se connecter **sans rien taper**, avec son gestionnaire de mots de passe
+(Bitwarden, 1Password, Proton Pass…) ou son appareil : la page de
+connexion propose « Se connecter avec une clé d'accès », et le champ
+identifiant liste les clés du site quand on le touche.
+
+- **Ajouter une clé** : Paramètres › Sécurité › « Ajouter une clé
+  d'accès ». Comme toute action à risque, il faut d'abord prouver son
+  identité (mot de passe retapé, ou reconnexion à Google) ; l'identité ne
+  vaut que pour cet ajout. Un e-mail prévient le titulaire.
+- **Ce que le site garde** : la clé **publique**, un nom, deux dates. La clé
+  privée ne quitte jamais l'appareil ou le gestionnaire : une fuite de la
+  base ne permet de se connecter à la place de personne.
+- **Retirer une clé** : Paramètres › Sécurité. « Mot de passe oublié » les
+  retire **toutes** (une clé posée par un intrus ne survit pas à la reprise
+  en main du compte).
+- **Compatibilité** : ES256 et RS256 (tous les gestionnaires, Windows
+  Hello, iCloud, Google). Sans prise en charge du navigateur, le bouton
+  n'apparaît pas.
+- **Mise en ligne** : rejouer `livre.sql` (nouvelle table `cle_acces`) et
+  envoyer les fichiers. Aucun réglage obligatoire dans le `.env`.
 
 ---
 
@@ -500,7 +526,7 @@ configuration.
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migration 8 : `prenom` et `nom` retirés) |
+| `livre.sql` | Schéma complet, rejouable (migration 9 : table `cle_acces`) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
@@ -514,6 +540,7 @@ configuration.
 | `google.php` · `includes/google.php` | « Continuer avec Google » : départ, retour, décision |
 | `google-inscription.php` | Création d'un compte Google : choix de l'identifiant, mot de passe facultatif |
 | `google-mot-de-passe.php` | Seconde étape d'une connexion Google, pour un compte qui a un mot de passe |
+| `connexion-cle.php` · `includes/cle_acces.php` · `js/cle-acces.js` | Clés d'accès : l'appel de la connexion, la vérification (CBOR, signature), le bouton |
 | `mot-de-passe-oublie.php` · `reinitialiser-mot-de-passe.php` · `verifier-email.php` | Récupération et confirmation |
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
 | `mentions-legales.php` | Mentions légales et confidentialité |

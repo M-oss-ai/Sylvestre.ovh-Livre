@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (635 tests : 549 PHP en 44 fichiers, 86 JavaScript)
+php tests/lancer.php              # toute la suite (703 tests : 599 PHP en 47 fichiers, 104 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -47,6 +47,22 @@ connexion ratée appelle `erreur_fatale()`, qui coupe le processus.
 
 Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 
+Si le port 3306 est pris par un autre serveur MySQL (un service
+« MySQL80 » l'occupait un jour, et refusait `root` sans mot de passe),
+**ne pas y toucher** : lancer une instance jetable de la base de XAMPP sur
+un autre port, hors du projet, et la désigner par l'environnement (le
+`.env` n'écrase jamais une variable déjà posée) :
+
+```bash
+mysql_install_db.exe --datadir=<dossier jetable>
+mysqld.exe --no-defaults --datadir=<dossier jetable> --port=3399 --skip-grant-tables
+DB_HOST='127.0.0.1;port=3399' php tests/lancer.php     # le « ;port= » passe tel quel dans le DSN
+```
+
+Pour essayer le site lui-même : `php -S 127.0.0.1:8099` avec `DB_HOST`,
+`DB_NAME`, `APP_URL=http://localhost:8099` et `SMTP_HOST=` (vide : aucun
+e-mail ne part) dans l'environnement, après avoir rejoué `livre.sql`.
+
 ## Structure
 
 ### Le noyau
@@ -59,6 +75,7 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 | `includes/images.php` | Chaîne GD : type déduit du contenu, ré-encodage WebP, nom = empreinte salée |
 | `includes/carte.php` | Le HTML d'une carte de série |
 | `includes/google.php` | « Continuer avec Google » (OpenID Connect) : l'adresse de départ, la lecture et la vérification du jeton, `google_decision()`. Pur, sauf `google_echanger_code()` |
+| `includes/cle_acces.php` | Clés d'accès (WebAuthn) : lecture du CBOR, clé publique COSE → PEM, vérification d'une création et d'une connexion, défi, options. Pur, sauf la session (`cle_defi_*`) et la base (dernière section). Aucune bibliothèque |
 | `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
 
 ### Les points d'entrée
@@ -68,6 +85,7 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 `reinitialiser-mot-de-passe.php`, `verifier-email.php`,
 `deconnexion.php`, `mentions-legales.php`, `google.php` (départ vers
 Google et retour : ouvre le compte, ou mène à la création),
+`connexion-cle.php` (l'appel JSON de la connexion par clé d'accès : défi, puis vérification),
 `google-inscription.php` (création d'un compte Google : identifiant,
 mot de passe facultatif), `google-mot-de-passe.php` (seconde étape
 d'une connexion Google, quand le compte a un mot de passe).
@@ -81,7 +99,8 @@ d'une connexion Google, quand le compte a un mot de passe).
 ### Le client
 
 `js/commun.js` (socle partagé), `js/app.js` (bibliothèque),
-`js/auth.js`, `js/settings.js`, `js/mdp.js` (règles du mot de passe
+`js/auth.js`, `js/settings.js`, `js/cle-acces.js` (clés d'accès : conversions pures
+`window.CleAcces`, testées, et le bouton de la page de connexion), `js/mdp.js` (règles du mot de passe
 pendant la saisie), `js/delai.js` (comptes à rebours des
 attentes). `css/style.css` pour tout le style.
 
@@ -355,6 +374,60 @@ suit. Un compte e-mail JAMAIS confirmé portant l'adresse est supprimé
 Google configuré, ce choix n'a pas lieu d'être : le formulaire vient
 directement.
 
+**Une clé d'accès (passkey) ouvre le compte à elle seule, et se pose comme
+n'importe quelle action à risque** (demande de l'utilisateur : se connecter
+sans rien taper, avec son gestionnaire de mots de passe). Pour un compte
+e-mail comme pour un compte Google : `compte.cle_creer` est dans
+`ACTIONS_SENSIBLES`, donc la même fenêtre en deux phases, et l'identité
+prouvée ne sert qu'à CETTE action, une fois (`cle.creer` la consomme).
+Google + mot de passe reste « une seconde clé, jamais une porte » pour le
+MOT DE PASSE ; la clé d'accès, elle, est une porte à part, dont la pose a
+exigé la preuve complète — d'où aussi un e-mail d'avis à l'ajout
+(`avis_cle_acces_ajoutee()`). Retirer une clé n'ouvre rien : une
+confirmation en place, sans identité.
+
+- **Le serveur reste maître.** Défi de 32 octets à usage unique dans
+  `$_SESSION['cle_defi']` (usage, compte, `CLE_ACCES_DEFI_DUREE`), pris —
+  donc consommé — AVANT toute vérification, réussite ou non. Adresse du site
+  et origine lues dans `APP_URL` (`cle_rp_id()`, `cle_origine()`), jamais
+  dans l'en-tête Host. Signature vérifiée par `openssl_verify` (ES256 et
+  RS256 ; pas d'EdDSA : OpenSSL ne le fait pas). Compteur de signatures :
+  il ne recule pas, sauf `0` puis `0` (clés synchronisées). L'attestation
+  n'est pas vérifiée, on demande `none` : on enregistre une clé, on ne
+  juge pas l'appareil.
+- **`userVerification: preferred`, exprès.** L'exiger ferait redemander le
+  code du gestionnaire à chaque connexion, ce que la demande voulait éviter.
+- **Le compte vient de la clé retrouvée en base** (`cle_trouver()`), jamais
+  d'un champ du navigateur ; l'identifiant d'utilisateur qu'il renvoie ne
+  fait que recouper. Une même clé ne sert pas deux comptes (index unique
+  sur l'empreinte).
+- **Les échecs se comptent sous « connexion_cle »**, ni avec « connexion »
+  (une clé périmée ne doit pas bloquer le mot de passe) ni par compte (on
+  ne verrouille pas un compte de l'extérieur : une signature ne se devine pas).
+- **« Mot de passe oublié » retire TOUTES les clés** : une clé posée par un
+  intrus (il lui a fallu le mot de passe, ou Google) survivrait sinon à la
+  reprise en main. La page de réinitialisation le dit.
+- **La demande en arrière-plan de `js/cle-acces.js` reste silencieuse.**
+  Au chargement de la page de connexion, le script demande au navigateur de
+  proposer les clés dans le champ identifiant (`mediation: "conditional"`).
+  Son échec — aucune clé à proposer, liste fermée — ne dit rien et ne
+  relance rien : la première version relançait, et un échec immédiat
+  bouclait en harcelant le gestionnaire de mots de passe de l'utilisateur.
+  Seule une clé CHOISIE puis refusée par le serveur affiche un message.
+- **`js/cle-acces.js` se charge AVANT `js/settings.js`** (qui lit
+  `window.CleAcces` au chargement), et le défi de création est tiré dès que
+  la fenêtre passe à la phase « action » (`PRECHARGER`) : certains
+  navigateurs n'ouvrent le gestionnaire que dans le geste du clic.
+- **Essayer cela dans le navigateur intégré** : remplacer
+  `navigator.credentials.create` / `get` par un faux (WebCrypto : clé ECDSA,
+  objet CBOR à la main, signature convertie en DER) — le vrai appelle le
+  gestionnaire de l'utilisateur. Le chargement de la page de connexion fait
+  déjà UNE demande réelle en arrière-plan : n'en provoquer qu'une, jamais
+  en boucle.
+- **Non vérifié ici** : un vrai gestionnaire de mots de passe (Bitwarden,
+  1Password, Proton Pass…) et iOS/Safari. Seuls un authentificateur simulé
+  (tests PHP, HTTP complet, faux navigateur) l'ont été.
+
 **La signature du jeton Google n'est pas vérifiée, et c'est voulu** : il
 arrive par un appel HTTPS direct du serveur à Google, jamais par le
 navigateur (OpenID Connect Core § 3.1.3.7). Ne jamais désactiver
@@ -387,8 +460,9 @@ recommencer.
 
 ## Base de données
 
-Sept tables (`utilisateur.google_sub` relie un compte Google) : `utilisateur`, `serie`, `jeton_action`,
-`session_persistante`, `tentative_ip`,
+Huit tables (`utilisateur.google_sub` relie un compte Google, `cle_acces` garde les clés
+publiques des clés d'accès — jamais une clé privée) : `utilisateur`, `serie`, `jeton_action`,
+`session_persistante`, `tentative_ip`, `cle_acces`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
 dernier rapport du cron).
 

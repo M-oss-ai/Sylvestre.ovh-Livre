@@ -12,6 +12,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
 require_once __DIR__ . '/includes/google.php';     // « Continuer avec Google »
+require_once __DIR__ . '/includes/cle_acces.php';  // « Se connecter avec une clé d'accès »
 
 if (utilisateur_actuel()) {
     header('Location: index.php');
@@ -216,7 +217,7 @@ $csrf = jeton_csrf();
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
-<body class="auth-body">
+<body class="auth-body" data-csrf="<?= e($csrf) ?>">
 
 <main class="auth-wrap">
   <section class="auth-card">
@@ -264,6 +265,7 @@ $csrf = jeton_csrf();
       <div class="choix-methode">
         <a class="btn btn-primary full" href="connexion.php?avec=email">✉️ Continuer avec une adresse e-mail</a>
         <?= bouton_google('Continuer avec Google') ?>
+        <?= bouton_cle_acces() ?>
       </div>
       <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
     <?php else: ?>
@@ -278,7 +280,10 @@ $csrf = jeton_csrf();
       <?php $decrit = $erreur ? ' aria-describedby="connexion-erreur"' : ''; ?>
       <div class="field">
         <label for="identifiant">Identifiant ou e-mail</label>
-        <input id="identifiant" name="identifiant" type="text" required autocomplete="username"
+        <!-- « webauthn » : c'est ce qui fait proposer ses clés d'accès au
+             gestionnaire de mots de passe, dans la liste qui s'ouvre sur
+             ce champ (voir js/cle-acces.js). -->
+        <input id="identifiant" name="identifiant" type="text" required autocomplete="username webauthn"
                value="<?= e($identifiant) ?>"<?= $decrit ?><?= $identifiant === '' ? ' autofocus' : '' ?>>
       </div>
 
@@ -294,6 +299,8 @@ $csrf = jeton_csrf();
       <button type="submit" class="btn btn-primary full">Se connecter</button>
     </form>
 
+    <div class="cle-acces-bloc"><?= bouton_cle_acces() ?></div>
+
     <p class="auth-switch"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
     <?php if (google_actif()): ?>
       <p class="auth-switch"><a href="connexion.php">← Autres façons de se connecter</a></p>
@@ -306,5 +313,6 @@ $csrf = jeton_csrf();
 
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/auth.js')) ?>" defer></script>
+<script src="<?= e(actif('js/cle-acces.js')) ?>" defer></script>
 </body>
 </html>

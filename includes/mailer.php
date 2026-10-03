@@ -444,6 +444,49 @@ function avertir_mot_de_passe_supprime(string $email, string $identifiant): void
 }
 
 /**
+ * Une clé d'accès vient d'être ajoutée : elle ouvre le compte SANS mot de
+ * passe. L'ajout a exigé de prouver son identité (mot de passe retapé, ou
+ * reconnexion à Google puis mot de passe) : si ce n'est pas le titulaire,
+ * c'est que quelqu'un tient ces accès — le recours est donc de retirer la
+ * clé ET de sécuriser ce qui a servi à la poser.
+ *
+ * $nom est choisi par la personne qui l'ajoute : il n'est qu'écrit, jamais
+ * transformé en lien (voir corps_html()).
+ *
+ * @return array{0: string, 1: string} le sujet et le corps
+ */
+function avis_cle_acces_ajoutee(string $identifiant, string $nom, string $acces): array
+{
+    $recours = match ($acces) {
+        'google'     => "SINON, quelqu'un a accès à votre compte Google : l'ajout exige de s'y "
+                      . "reconnecter. Sécurisez-le d'abord (changez son mot de passe chez Google), puis "
+                      . "retirez cette clé d'accès dans les Paramètres :\n"
+                      . url_publique('parametres.php#securite'),
+        'google_mdp' => "SINON, quelqu'un a accès à votre compte Google et connaissait votre mot de passe "
+                      . "du site : l'ajout exige les deux. Sécurisez d'abord votre compte Google (changez "
+                      . "son mot de passe chez Google), retirez cette clé d'accès dans les Paramètres, "
+                      . "puis changez votre mot de passe :\n"
+                      . url_publique('parametres.php#securite'),
+        default      => "SINON, quelqu'un connaît votre mot de passe : l'ajout l'exige. Demandez-en un "
+                      . "nouveau ici — cela retire AUSSI toutes les clés d'accès du compte :\n"
+                      . url_publique('mot-de-passe-oublie.php'),
+    };
+
+    return ["Une clé d'accès a été ajoutée à votre compte", "Bonjour {$identifiant},\n\n"
+        . "Une clé d'accès vient d'être ajoutée à votre compte Ma Bibliothèque Manga : « {$nom} ».\n\n"
+        . "Elle permet de se connecter sans taper de mot de passe, depuis l'appareil ou le gestionnaire "
+        . "de mots de passe qui la garde.\n\n"
+        . "Si vous êtes à l'origine de cet ajout, vous n'avez rien à faire.\n\n"
+        . $recours];
+}
+
+function avertir_cle_acces_ajoutee(string $email, string $identifiant, string $nom, string $acces): void
+{
+    [$sujet, $corps] = avis_cle_acces_ajoutee($identifiant, $nom, $acces);
+    envoyer_email($email, $sujet, $corps);
+}
+
+/**
  * Prévient qu'un compte vient d'être supprimé.
  *
  * C'est l'action la plus irréversible du site, et c'était la seule

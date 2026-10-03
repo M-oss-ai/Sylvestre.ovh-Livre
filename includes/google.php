@@ -199,7 +199,8 @@ function google_page_action(string $action): string
 {
     return match ($action) {
         'compte.profil'                           => 'parametres.php#profil',
-        'compte.motdepasse', 'compte.supprimer_mdp' => 'parametres.php#securite',
+        'compte.motdepasse', 'compte.supprimer_mdp',
+        'compte.cle_creer'                        => 'parametres.php#securite',
         default                                   => 'parametres.php#donnees',
     };
 }

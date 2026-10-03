@@ -412,3 +412,39 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
               AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'nom');
 SET @sql := IF(@c = 0, 'DO 0', 'ALTER TABLE `utilisateur` DROP COLUMN `nom`');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  9. Clés d'accès (« passkeys », voir includes/cle_acces.php).
+--
+--     Une ligne par clé : la clé PUBLIQUE seulement (PEM) — la privée ne
+--     quitte jamais l'appareil ou le gestionnaire de mots de passe, rien
+--     ici ne permet de se connecter à sa place.
+--
+--     `cle_hash`  : empreinte sha256 de l'identifiant de la clé. C'est elle
+--                   qui se cherche (et que l'index UNIQUE protège : une même
+--                   clé ne sert pas deux comptes) ; l'identifiant brut, plus
+--                   long qu'un index n'en admet partout, n'est pas indexé.
+--     `cle_id`    : l'identifiant, en base64url, pour dire au navigateur
+--                   « cet appareil a déjà une clé de ce compte » à l'ajout.
+--     `compteur`  : le compteur de signatures de la dernière connexion ;
+--                   s'il recule, la clé a peut-être été copiée.
+--     `utilisee_le` : NULL tant que la clé n'a jamais servi.
+--
+--     ON DELETE CASCADE : les clés disparaissent avec le compte.
+CREATE TABLE IF NOT EXISTS `cle_acces` (
+  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `utilisateur_id` INT UNSIGNED NOT NULL,
+  `cle_hash`       CHAR(64)     NOT NULL,
+  `cle_id`         VARCHAR(700) NOT NULL,
+  `cle_publique`   TEXT         NOT NULL,
+  `compteur`       INT UNSIGNED NOT NULL DEFAULT 0,
+  `nom`            VARCHAR(60)  NOT NULL DEFAULT '',
+  `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `utilisee_le`    DATETIME     NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_cle_acces_hash` (`cle_hash`),
+  KEY `idx_cle_acces_utilisateur` (`utilisateur_id`),
+  CONSTRAINT `fk_cle_acces_utilisateur`
+    FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

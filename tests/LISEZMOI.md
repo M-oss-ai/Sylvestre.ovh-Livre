@@ -265,7 +265,30 @@ défaut restrictif de `COUVERTURE_CONTENU_ADULTE` —, et les contrôles de form
 précèdent une requête (`valider_profil`, `jeton_action_valide`,
 `verifier_session_persistante`, `supprimer_images_locales`).
 
-**Couvert par lecture des sources** — `tactile_test.php` : la règle
+**Couvert, clés d'accès** — `cle_acces_test.php` joue l'AUTHENTIFICATEUR :
+vraies clés OpenSSL (EC P-256 et RSA 2048), vrais objets CBOR, vraies
+signatures, puis demande au code de les accepter — et de refuser chaque
+altération. `cbor_lire` / `cbor_decoder` (entiers, textes, tables, et tout
+ce qu'il refuse : longueurs indéfinies, étiquettes, flottants, clés en
+double, imbrication, tailles annoncées), `cle_lire_donnees_auth`,
+`cle_cose_vers_pem` (courbe, longueur, point hors courbe, RSA trop court),
+`cle_verifier_creation`, `cle_verifier_connexion` (défi, origine, adresse du
+site, présence, signature d'une autre clé, message modifié, compteur),
+`cle_compteur_valide`, `cle_rp_id`, `cle_origine`, `cle_defi_valide`,
+`cle_defi_creer` / `cle_defi_prendre` (à usage unique), `cle_options_*`,
+`cle_identifiant_utilisateur` (opaque), `cle_nom`, `bouton_cle_acces`,
+`avis_cle_acces_ajoutee`, les réglages (`CLE_ACCES_*` : défauts, planchers,
+plafonds). Côté navigateur : `CleAcces` (base64url, conversions des options
+et des réponses, messages d'erreur).
+
+**Couvert par lecture des sources** — `cle_acces_sources_test.php` : la table
+`cle_acces` de `livre.sql`, `compte.cle_creer` dans les actions sensibles,
+les trois actions d'`api.php` (confirmation exigée puis consommée, défi
+pris d'abord, cloisonnement), `connexion-cle.php` (défi consommé, échecs
+comptés à part, session par `connecter()`), l'ordre des scripts des
+Paramètres, `cle_effacer_toutes()` à la réinitialisation, et que la demande
+en arrière-plan de `js/cle-acces.js` ne relance pas en cas d'échec.
+`tactile_test.php` : la règle
 `* { touch-action: manipulation }` de `css/style.css` (le double-appui ne
 zoome sur aucune page, le pincement reste possible) et le fait que
 chaque page HTML charge cette feuille et ne bloque pas le zoom. Un
@@ -283,7 +306,7 @@ partie qui décide quelle série remonte en tête.
 fenêtre glissante), les sessions persistantes (`creer_session_persistante`,
 la rotation des jetons, le plafond d'appareils), les jetons d'action
 (`generer_jeton_action`, `consommer_jeton_action`), les comptes
-(`utilisateur_actuel`, `connecter`, `invalider_sessions`,
+(`utilisateur_actuel`, `connecter`, `invalider_sessions`, `cle_ajouter`, `cle_trouver`, `cle_supprimer` (la table `cle_acces`),
 `email_disponible`, `changement_email_en_attente`), `couverture_consommer`,
 `couverture_rendre` et `couverture_restantes` (le quota de recherche par
 compte : le barème est testé, le comptage non), la lecture de
@@ -305,7 +328,9 @@ effacée dès qu'on le corrige), `Lib.urlImageAcceptee`, `Lib.dureeToast`,
 rebonds et recalages du navigateur compris), `Bibliotheque.annonceQuota`
 et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Bibliotheque.toucheSuppression` (Suppr sur la carte sélectionnée, pas un raccourci) et `champDeSaisie` (dans la fiche, les champs où la touche efface du texte au lieu de supprimer la série), `Bibliotheque.panneauApres`, `panneauMemorise` et `aucunFiltre` (le groupe de filtres déplié, un seul à la fois, sa mémoire d'avant comprise, et le moment où « Toutes » s'allume), `Bibliotheque.bordsDefilement` (de quel côté une rangée de filtres a de la suite, pour le fondu ; le `ResizeObserver` et le `mask-image` qui l'appliquent se vérifient à la main), `Lib.piegerFocus` (l'œil du mot de passe n'est pas un arrêt), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`, `ReglesMdp.manques` et `brancher` (les règles du mot de passe non respectées, et quand les dire — mêmes messages que `valider_mot_de_passe`).
 
-**Non couvert, côté navigateur** — le branchement sur la page : les
+**Non couvert, côté navigateur** — le vrai `navigator.credentials` et les
+gestionnaires de mots de passe (Bitwarden, 1Password, iCloud…) : seul un
+authentificateur simulé a servi. Le branchement sur la page : les
 écouteurs d'`app.js` et de `settings.js`, les appels à l'API, les
 modales, le contrôle de session au retour arrière. Ils demandent une
 vraie bibliothèque et un compte connecté : ils se vérifient à la main.

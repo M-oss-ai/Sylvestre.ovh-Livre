@@ -484,6 +484,12 @@ window.Parametres = (() => {
   let elementDeclencheur = null;
   let arreterDelai = null;
 
+  /* Ce qu'une action prépare dès que la fenêtre passe à sa phase « action »,
+     avant le clic final. Les clés d'accès y tirent leur défi : le navigateur
+     n'ouvre le gestionnaire de mots de passe que dans le geste du clic, et
+     certains refusent s'il a fallu attendre le serveur entre-temps. */
+  const PRECHARGER = {};
+
   /** Bascule la fenêtre sur la bonne phase pour $action, et démarre (ou
       arrête) le compte à rebours de la phase « action ». */
   function preparerPhase(action) {
@@ -507,6 +513,7 @@ window.Parametres = (() => {
       // « Annuler » — la fenêtre se ferme, la confirmation et les
       // modifications qui attendaient s'effacent.
       arreterDelai = window.Delai.lancer($confirmDelai, reste, annulerConfirmation) || null;
+      if (PRECHARGER[action]) PRECHARGER[action]();
     }
     /* Jamais sur le bouton qui agit (Confirmer mon identité, ou Confirmer) :
        une touche Entrée ou un second appui suffisait alors à tout
@@ -790,11 +797,127 @@ window.Parametres = (() => {
     );
   });
 
+  /* ---------------- Clés d'accès ----------------
+     Ajouter une clé passe par la fenêtre de confirmation, comme les autres
+     actions à risque : identité d'abord, puis le bouton final, qui ouvre
+     le gestionnaire de mots de passe (navigator.credentials.create). Le
+     serveur vérifie la réponse et n'enregistre qu'alors. Retirer une clé
+     n'ouvre rien : une confirmation en place, sans la fenêtre. */
+  const CA = window.CleAcces;
+  const $btnAjouterCle = document.getElementById("btn-ajouter-cle");
+  const $cleNom = document.getElementById("cle-nom");
+  let optionsCle = null;   // la promesse des options de création, tirées avant le clic final
+
+  if (CA && CA.disponible()) {
+    document.querySelectorAll(".cle-retirer").forEach((b) => b.classList.remove("hidden"));
+    if ($btnAjouterCle) {
+      $btnAjouterCle.classList.remove("hidden");
+      document.getElementById("cle-nom-champ").classList.remove("hidden");
+    }
+  } else {
+    document.getElementById("cles-non-supporte").classList.remove("hidden");
+  }
+
+  function prechargerCle() {
+    optionsCle = L.api("cle.options", {}).then((r) => CA.optionsCreation(r.options));
+    optionsCle.catch(() => {});   // l'erreur se dit au clic final (finirCle), pas ici
+  }
+  PRECHARGER["compte.cle_creer"] = prechargerCle;
+
+  /** Un message dans la fenêtre, à la place du texte d'explication. */
+  function direDansLaFenetre(message) {
+    if (!message) return;
+    $confirmText.textContent = message;
+    $confirmText.classList.remove("hidden", "alert-info");
+    $confirmText.classList.add("alert-error");
+  }
+
+  async function finirCle() {
+    let options;
+    try {
+      if (!optionsCle) prechargerCle();
+      options = await optionsCle;
+    } catch (err) {
+      optionsCle = null;
+      if (err.donnees && err.donnees.reconfirmer) throw err;   // lancerAction : l'identité est à refaire
+      direDansLaFenetre(err.message);
+      return;
+    }
+
+    let credential;
+    try {
+      credential = await navigator.credentials.create({ publicKey: options });
+    } catch (err) {
+      /* Fenêtre du gestionnaire fermée, clé déjà présente… Rien n'est parti
+         au serveur : le même défi resservira au prochain clic. */
+      direDansLaFenetre(CA.messageErreur(err, "creation"));
+      return;
+    }
+
+    optionsCle = null;   // le défi va servir : il ne servira plus
+    try {
+      const champs = CA.champsCreation(credential);
+      champs.nom = $cleNom ? $cleNom.value : "";
+      const r = await L.api("cle.creer", champs);
+      fermerConfirmation();
+      L.toast(r.message);
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      if (err.donnees && err.donnees.reconfirmer) throw err;
+      direDansLaFenetre(err.message);
+      prechargerCle();   // un défi neuf pour un nouvel essai
+    }
+  }
+
+  if ($btnAjouterCle) {
+    $btnAjouterCle.addEventListener("click", () => {
+      demanderConfirmation(
+        "Ajouter une clé d'accès ?",
+        "Votre gestionnaire de mots de passe (ou cet appareil) va vous proposer d'enregistrer une clé d'accès pour ce site.",
+        "Ajouter la clé",
+        "compte.cle_creer",
+        finirCle,
+        false
+      );
+    });
+  }
+
+  document.querySelectorAll(".cle-ligne").forEach((ligne) => {
+    const $retirer = ligne.querySelector(".cle-retirer");
+    const $confirmer = ligne.querySelector(".cle-confirmer");
+    const $non = ligne.querySelector(".cle-non");
+    const $oui = ligne.querySelector(".cle-oui");
+    $retirer.addEventListener("click", () => {
+      $retirer.classList.add("hidden");
+      $confirmer.classList.remove("hidden");
+      $non.focus();   // le choix prudent d'abord
+    });
+    $non.addEventListener("click", () => {
+      $confirmer.classList.add("hidden");
+      $retirer.classList.remove("hidden");
+      $retirer.focus();
+    });
+    $oui.addEventListener("click", async () => {
+      $oui.disabled = true;
+      try {
+        const r = await L.api("cle.supprimer", { id: ligne.dataset.cle });
+        L.toast(r.message);
+        setTimeout(() => window.location.reload(), 900);   // la liste (et le bouton d'ajout) se refont
+      } catch (err) {
+        $oui.disabled = false;
+        ligne.querySelector(".cle-infos").textContent = err.message;
+      }
+    });
+  });
+
   /* Retour de Google : la fenêtre se rouvre d'elle-même, avec le temps qui
      reste pour cliquer le bouton final. Vider et Supprimer n'ont rien à
      garder ; le Profil et le mot de passe retrouvent ce qui avait été saisi
      avant de partir (enAttente, plus haut). */
-  const BOUTON_ACTION = { "donnees.vider": "btn-clear-library", "compte.supprimer": "btn-delete-account" };
+  const BOUTON_ACTION = {
+    "donnees.vider": "btn-clear-library", "compte.supprimer": "btn-delete-account",
+    "compte.cle_creer": "btn-ajouter-cle",
+  };
   if (PAR_GOOGLE && BOUTON_ACTION[CONFIRME.action]) {
     document.getElementById(BOUTON_ACTION[CONFIRME.action]).click();
   } else if (PAR_GOOGLE && enAttente && enAttente.action === CONFIRME.action) {

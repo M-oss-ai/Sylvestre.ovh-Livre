@@ -107,6 +107,9 @@ $connecte = utilisateur_actuel() !== null;
     <ul class="legal-puces">
       <li><b>Votre compte</b> — identifiant, adresse e-mail, photo de profil (facultative),
           mot de passe (jamais en clair : seule une empreinte bcrypt est conservée).</li>
+      <li><b>Clés d'accès</b> — seulement si vous en ajoutez : la partie <b>publique</b> de la clé
+          (la partie privée reste dans votre appareil ou votre gestionnaire de mots de passe),
+          le nom que vous lui donnez et ses dates d'ajout et de dernière utilisation.</li>
       <?php if (google_actif()): ?>
       <li><b>Compte créé avec Google</b> — l'identifiant technique de votre compte Google,
           et l'adresse e-mail qu'il nous transmet.</li>

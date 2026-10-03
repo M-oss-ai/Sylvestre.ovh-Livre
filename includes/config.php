@@ -151,6 +151,18 @@ define('GOOGLE_CLIENT_SECRET', trim(env('GOOGLE_CLIENT_SECRET', '')));
    au-delà, une session volée suffirait de nouveau. */
 define('CONFIRMATION_DUREE', min(3600, max(60, (int) env('CONFIRMATION_DUREE', '600'))));
 
+/* Clés d'accès (voir includes/cle_acces.php et connexion-cle.php).
+   CLE_ACCES_MAX : nombre de clés par compte — un téléphone, un
+   ordinateur, un gestionnaire de mots de passe… Le plafond (50) borne ce
+   qu'un compte peut écrire en base ; le plancher (1) empêche un « 0 » de
+   rendre la fonction muette sans le dire.
+   CLE_ACCES_DEFI_DUREE : le temps, en secondes, pendant lequel le défi
+   envoyé au navigateur reste valable. Un défi n'est jamais réutilisé ;
+   plus court que 1 minute, on n'a pas le temps de choisir sa clé, plus long
+   que 15, un défi oublié ouvert traîne. */
+define('CLE_ACCES_MAX', min(50, max(1, (int) env('CLE_ACCES_MAX', '10'))));
+define('CLE_ACCES_DEFI_DUREE', min(900, max(60, (int) env('CLE_ACCES_DEFI_DUREE', '300'))));
+
 /* ---------------------------------------------------------------------
    Identification du client — limiteurs et journal de sécurité
 

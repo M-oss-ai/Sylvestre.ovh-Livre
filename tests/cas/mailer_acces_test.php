@@ -145,3 +145,43 @@ test('un compte e-mail garde « Mot de passe oublié ? »', function () {
     [, $corps] = avis_tentative_inscription('marco', 'google_mdp');
     contient('mot-de-passe-oublie.php', $corps, 'Google avec mot de passe : aussi');
 });
+
+groupe('avis_cle_acces_ajoutee()');
+
+test('dit quelle clé a été ajoutée, et rassure celui qui l\'a fait', function () {
+    foreach (['email', 'google', 'google_mdp'] as $acces) {
+        [$sujet, $corps] = avis_cle_acces_ajoutee('marco', 'Mon gestionnaire', $acces);
+        contient('clé d\'accès', $sujet, "$acces : le sujet parle de la clé");
+        contient('« Mon gestionnaire »', $corps, "$acces : le nom de la clé");
+        contient('sans taper de mot de passe', $corps, "$acces : ce que la clé permet");
+        contient('rien à faire', $corps, "$acces : celui qui l\'a ajoutée n\'a rien à faire");
+        contient('SINON', $corps, "$acces : le recours est dit");
+    }
+});
+
+test('un compte e-mail : le recours est « Mot de passe oublié », qui retire aussi les clés', function () {
+    [, $corps] = avis_cle_acces_ajoutee('marco', 'x', 'email');
+    contient('mot-de-passe-oublie.php', $corps, 'le lien');
+    contient('AUSSI toutes les clés d\'accès', $corps, 'et il dit pourquoi ce lien règle le problème');
+});
+
+test('un compte Google sans mot de passe : seul Google est en cause', function () {
+    [, $corps] = avis_cle_acces_ajoutee('marco', 'x', 'google');
+    sans_mot_de_passe_suppose($corps, 'clé d\'accès ajoutée');
+    contient('votre compte Google', $corps, 'le compte Google est à sécuriser');
+    contient('parametres.php#securite', $corps, 'la clé se retire dans les Paramètres');
+});
+
+test('un compte Google avec mot de passe : les deux sont en cause', function () {
+    [, $corps] = avis_cle_acces_ajoutee('marco', 'x', 'google_mdp');
+    contient('compte Google', $corps, 'Google');
+    contient('mot de passe du site', $corps, 'et le mot de passe');
+    contient('parametres.php#securite', $corps, 'la clé se retire dans les Paramètres');
+});
+
+test('le nom choisi ne devient jamais un lien cliquable', function () {
+    [$sujet, $corps] = avis_cle_acces_ajoutee('marco', 'https://pirate.test/vite', 'email');
+    $html = corps_html($corps, $sujet);
+    contient('https://pirate.test/vite', $html, 'le nom est écrit');
+    sans('href="https://pirate.test', $html, 'mais n\'est pas un lien');
+});

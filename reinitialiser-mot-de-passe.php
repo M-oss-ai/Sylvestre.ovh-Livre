@@ -12,6 +12,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
+require_once __DIR__ . '/includes/cle_acces.php';   // les clés d'accès tombent avec le mot de passe oublié
 
 $jeton  = (string) ($_GET['jeton'] ?? $_POST['jeton'] ?? '');
 $compte = null;
@@ -36,6 +37,7 @@ $erreurs      = [];
 $reussi       = false;
 $retablie     = '';   // l'adresse rendue au compte, s'il a fallu la rétablir
 $non_retablie = '';   // celle qu'on n'a pas pu rétablir (prise entre-temps)
+$cles_retirees = 0;   // les clés d'accès retirées au passage
 
 if ($compte && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exiger_csrf();
@@ -105,7 +107,14 @@ if ($compte && $_SERVER['REQUEST_METHOD'] === 'POST') {
            moi », laissant une session PHP volée parfaitement utilisable.
            Un changement d'adresse en attente tombe avec elles. */
         invalider_sessions((int) $compte['id']);
-        journal_securite('mot_de_passe_reinitialise', ['utilisateur' => (int) $compte['id']]);
+
+        /* Les clés d'accès tombent elles aussi. Elles ouvrent le compte sans
+           mot de passe : une clé posée par quelqu'un qui tenait le compte
+           (il a fallu pour cela le mot de passe, ou Google) survivrait sinon
+           à la reprise en main — la porte restait ouverte derrière le
+           nouveau mot de passe. Les ajouter de nouveau coûte un clic. */
+        $cles_retirees = cle_effacer_toutes((int) $compte['id']);
+        journal_securite('mot_de_passe_reinitialise', ['utilisateur' => (int) $compte['id'], 'cles_retirees' => $cles_retirees]);
         consommer_jeton_action((int) $compte['jeton_id']); // le lien ne doit plus jamais resservir
         $reussi = true;
     }
@@ -150,6 +159,9 @@ $csrf = jeton_csrf();
           Le changement avait déjà été confirmé : votre compte utilise de nouveau <?= e($retablie) ?>.
         <?php endif; ?>
         Votre identifiant est <b><?= e((string) $compte['identifiant']) ?></b>.
+        <?php if ($cles_retirees > 0): ?>
+          Vos clés d'accès ont été retirées par sécurité : vous pourrez en ajouter de nouvelles dans les Paramètres.
+        <?php endif; ?>
       </div>
       <?php if ($non_retablie !== ''): ?>
         <div class="alert alert-error" role="alert">
@@ -160,7 +172,11 @@ $csrf = jeton_csrf();
       <p class="auth-switch"><a href="connexion.php">Se connecter</a></p>
 
     <?php elseif ($reussi): ?>
-      <div class="alert alert-info">Mot de passe modifié. Vous pouvez vous connecter.</div>
+      <div class="alert alert-info">Mot de passe modifié. Vous pouvez vous connecter.
+        <?php if ($cles_retirees > 0): ?>
+          Vos clés d'accès ont été retirées par sécurité : vous pourrez en ajouter de nouvelles dans les Paramètres.
+        <?php endif; ?>
+      </div>
       <p class="auth-switch"><a href="connexion.php">Se connecter</a></p>
 
     <?php else: ?>

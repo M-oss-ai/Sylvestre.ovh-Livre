@@ -40,6 +40,8 @@ putenv('REMEMBER_DUREE_VIP=-99');
 putenv('QUOTA_BASE_MO=-5');
 putenv('CRON_HEURES=0');                  // 0 h : aucun passage ne serait jamais « à l heure »
 putenv('RAPPORT_HEURES=-3');
+putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait muette sans le dire
+putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
 putenv('APP_URL=https://exemple.test/bibliotheque/');   // avec un / final
 
 require __DIR__ . '/../lanceur.php';
@@ -156,4 +158,14 @@ test('APP_URL perd son slash final', function () {
         url_publique('inscription.php'),
         'le lien construit est propre'
     );
+});
+
+groupe('Clés d\'accès');
+
+test('CLE_ACCES_MAX ne descend jamais sous 1', function () {
+    egale(1, CLE_ACCES_MAX, 'le .env demandait 0');
+});
+
+test('CLE_ACCES_DEFI_DUREE ne descend jamais sous une minute', function () {
+    egale(60, CLE_ACCES_DEFI_DUREE, 'le .env demandait 1 seconde');
 });
