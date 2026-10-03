@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (756 tests : 627 PHP en 48 fichiers, 129 JavaScript)
+php tests/lancer.php              # toute la suite (757 tests : 627 PHP en 48 fichiers, 130 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -245,11 +245,12 @@ la fois (`panneauApres()`, mémorisé par compte sous `panneau` ;
 un interrupteur direct. **« Toutes » remet à zéro les trois genres de
 filtres** (statut, favori, image) et ne s'allume que quand plus rien n'est
 posé (`aucunFiltre()`) : il reste visible groupes repliés, c'est le seul
-moyen de tout effacer d'un geste. **« Toutes » et « Favoris » referment le
-groupe resté ouvert** (demande de l'utilisateur : « cliquer sur tout ça doit
-fermer les sous-filtres ») : `panneauApres()` replie tout pour un bouton qui
-n'est pas un groupe. Les pastilles DANS un groupe, elles, le laissent
-ouvert : les statuts se cumulent. Un groupe replié dit ce qu'il porte par
+moyen de tout effacer d'un geste. **« Toutes » referme aussi le groupe resté
+ouvert** (demande de l'utilisateur : cliquer « Toutes » ferme les
+sous-filtres) : `panneauApres(ouvert, "toutes")` rend `""`. « Favoris » ne le
+referme PAS, ni les pastilles DANS un groupe (les statuts se cumulent) : la
+première version fermait aussi sur « Favoris », ce que l'utilisateur n'avait
+pas demandé. Un groupe replié dit ce qu'il porte par
 une pastille dorée en surimpression (`.nb-actifs`) — en surimpression et
 non en rangée : élargissant « Statut » de 30 px, elle poussait « Image »
 hors de l'écran. Les statuts gardent leurs ids `count-<statut>` et leurs

@@ -166,14 +166,16 @@ window.Bibliotheque = (() => {
    * Le groupe ouvert après un clic sur le bouton de `demande` : le même
    * groupe se referme, un autre prend la place de celui qui était ouvert
    * (un seul à la fois, pour que la barre ne dépasse jamais sa rangée plus
-   * une). Un bouton qui n'est PAS un groupe — « Toutes », « Favoris » —
-   * replie celui qui était ouvert (demande de l'utilisateur) : passer à un
-   * autre réglage de la rangée, c'est en avoir fini avec le sous-filtre.
+   * une). « Toutes » (`demande` = "toutes") replie celui qui était ouvert
+   * (demande de l'utilisateur : cliquer « Toutes » ferme les sous-filtres) ;
+   * tout autre bouton qui n'est pas un groupe, « Favoris » par exemple, le
+   * laisse comme il est.
    * `ouvert` : "statut", "image", ou "" quand tout est replié.
    */
   function panneauApres(ouvert, demande) {
     const courant = PANNEAUX.includes(ouvert) ? ouvert : "";
-    if (!PANNEAUX.includes(demande)) return "";
+    if (demande === "toutes") return "";
+    if (!PANNEAUX.includes(demande)) return courant;
     return courant === demande ? "" : demande;
   }
 
@@ -860,12 +862,12 @@ window.Bibliotheque = (() => {
       filtresImage.clear();
       favorisSeuls = false;
       ["statut", "image", "favori"].forEach(oublierExceptions);
+      // Et referme le sous-filtre resté ouvert. « Favoris » ne le referme pas,
+      // ni les pastilles DANS un groupe (les statuts se cumulent).
+      panneauOuvert = B.panneauApres(panneauOuvert, "toutes");
     } else {
       return;
     }
-    // « Toutes » et « Favoris » referment le sous-filtre resté ouvert ; les
-    // boutons DANS un groupe, eux, le laissent ouvert (les statuts se cumulent).
-    panneauOuvert = B.panneauApres(panneauOuvert, "");
     filtresChanges();
     revenirEnHaut();
   });

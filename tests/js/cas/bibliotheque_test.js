@@ -288,12 +288,18 @@ test("ouvrir l autre groupe prend la place du premier", () => {
   egale("statut", B.panneauApres("image", "statut"), "Image cède à Statut");
 });
 
-test("un bouton qui n est pas un groupe (Toutes, Favoris) replie le groupe ouvert", () => {
-  egale("", B.panneauApres("statut", "favori"), "Favoris referme Statut");
+test("« Toutes » replie le groupe ouvert, quel qu il soit", () => {
+  egale("", B.panneauApres("statut", "toutes"), "Toutes referme Statut");
   egale("", B.panneauApres("image", "toutes"), "Toutes referme Image");
-  egale("", B.panneauApres("statut", ""), "la demande vide aussi : c est ce qu envoie le clic");
-  egale("", B.panneauApres("statut", undefined), "pas de demande : tout se replie");
+  egale("", B.panneauApres("", "toutes"), "rien d ouvert : rien ne s ouvre");
+  egale("", B.panneauApres("n importe quoi", "toutes"), "un état mémorisé inconnu : replié aussi");
+});
+
+test("un autre bouton qui n est pas un groupe (Favoris) laisse le groupe comme il est", () => {
+  egale("statut", B.panneauApres("statut", "favori"), "Favoris ne referme pas Statut");
+  egale("image", B.panneauApres("image", "favori"), "ni Image");
   egale("", B.panneauApres("", "favori"), "rien d ouvert : rien ne s ouvre");
+  egale("statut", B.panneauApres("statut", undefined), "pas de demande : rien ne change");
 });
 
 test("un état mémorisé inconnu vaut « tout replié »", () => {
