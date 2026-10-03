@@ -545,7 +545,7 @@ configuration.
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
 | `mentions-legales.php` | Mentions légales et confidentialité |
 | `purger.php` | Entretien de la base, lancé par le cron |
-| `js/*.js` · `css/style.css` | Navigateur |
+| `js/*.js` · `css/style.css` | Navigateur (`js/tactile.js` : le double-appui ne zoome pas, chargé par toutes les pages) |
 | `uploads/` | Images envoyées (exécution de code interdite) |
 | `tests/` | Tests unitaires — voir `tests/LISEZMOI.md` |
 
@@ -774,5 +774,16 @@ Chez OVH : Hébergements → Statistiques et logs.
 - **Pas d'écran de gestion des appareils.** Le nombre de jetons est
   plafonné, mais on ne peut pas révoquer un appareil précis — seulement
   tous, en changeant de mot de passe.
-- **Passage au forfait illimité manuel**, en base :
+- **Changement de forfait manuel**, en base — il n'y a pas de paiement en
+  ligne :
   `UPDATE utilisateur SET forfait = 'illimite' WHERE identifiant = '...';`
+  Le forfait **`bloque`** met un compte en consultation seule : il lit, cherche,
+  filtre, exporte et gère son compte (ou le supprime), mais ne peut plus créer,
+  modifier, mettre en favori, changer de tome, importer, supprimer une série,
+  vider sa bibliothèque ni chercher une couverture. Le serveur refuse ces
+  actions (403) quoi que le navigateur affiche, et le compte voit un bandeau
+  qui le dit.
+  `UPDATE utilisateur SET forfait = 'bloque' WHERE identifiant = '...';`
+  (puis `'standard'` pour le rétablir). **La migration 10 de `livre.sql` doit
+  avoir été jouée avant** : sans elle, MySQL range une chaîne vide et le compte
+  reste libre, sans erreur.

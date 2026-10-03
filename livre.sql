@@ -43,11 +43,16 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   `mot_de_passe` VARCHAR(255) NOT NULL,
   `photo`        VARCHAR(500) NOT NULL DEFAULT '',
   -- Forfait du compte : « standard » = limité à MAX_SERIES_PAR_UTILISATEUR
-  -- (voir .env), « illimite » = pas de limite de séries. Pas de paiement en
-  -- ligne dans l'appli : le passage à l'illimité se fait manuellement en
-  -- base (l'utilisateur doit contacter l'administrateur, voir ADMIN_EMAIL) :
+  -- (voir .env), « illimite » = pas de limite de séries, « bloque » =
+  -- consultation seule (ni création, ni modification, ni favori, ni tome,
+  -- ni import, ni suppression : voir ACTIONS_BLOQUEES dans fonctions.php).
+  -- Pas de paiement en ligne dans l'appli : un changement de forfait se fait
+  -- manuellement en base (l'utilisateur doit contacter l'administrateur,
+  -- voir ADMIN_EMAIL) :
   --     UPDATE utilisateur SET forfait = 'illimite' WHERE identifiant = '...';
-  `forfait`      ENUM('standard','illimite') NOT NULL DEFAULT 'standard',
+  --     UPDATE utilisateur SET forfait = 'bloque'   WHERE identifiant = '...';
+  --     UPDATE utilisateur SET forfait = 'standard' WHERE identifiant = '...';
+  `forfait`      ENUM('standard','illimite','bloque') NOT NULL DEFAULT 'standard',
   -- Incrémenté à chaque changement de mot de passe. Une session PHP porte
   -- la valeur qu'elle a vue à la connexion : dès qu'elles diffèrent, la
   -- session est rejetée. C'est ce qui déconnecte RÉELLEMENT les autres
@@ -448,3 +453,24 @@ CREATE TABLE IF NOT EXISTS `cle_acces` (
     FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+--  10. Forfait « bloque » : consultation seule (voir ACTIONS_BLOQUEES,
+--      includes/fonctions.php). Une valeur de plus dans la liste du
+--      forfait : aucune donnée n'est touchée, chaque compte garde son
+--      forfait actuel.
+--
+--      ⚠️ À exécuter AVANT tout « UPDATE … SET forfait = 'bloque' ». Hors
+--      mode strict, une valeur absente de l'ENUM ne fait aucune erreur :
+--      MySQL range '' à la place, et le compte, loin d'être bloqué, resterait
+--      libre — sans qu'aucun message ne le dise.
+--
+--      MODIFY réécrit la liste entière des valeurs : on ne l'exécute que si
+--      la nouvelle manque, sur le même modèle que la migration 6.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'forfait'
+              AND COLUMN_TYPE LIKE '%''bloque''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` MODIFY COLUMN `forfait` ENUM(''standard'',''illimite'',''bloque'') NOT NULL DEFAULT ''standard''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

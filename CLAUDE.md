@@ -26,12 +26,12 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 - push, intègre aussi mes propres modifications sauf en cas d'erreurs
 - dit moi "x tests fait x erreurs, je commite, je push"
 - dit moi quelles fichier mettre dans le serveur et quelle mofifications du .env
-- donne moi le sql pour modifier la base sans perdre mes données ( uniquement si nécessaire )
+- quand tu modifie la bdd donne moi le sql pour modifier la base sans perdre mes données
 
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (703 tests : 599 PHP en 47 fichiers, 104 JavaScript)
+php tests/lancer.php              # toute la suite (756 tests : 627 PHP en 48 fichiers, 129 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -102,7 +102,8 @@ d'une connexion Google, quand le compte a un mot de passe).
 `js/auth.js`, `js/settings.js`, `js/cle-acces.js` (clés d'accès : conversions pures
 `window.CleAcces`, testées, et le bouton de la page de connexion), `js/mdp.js` (règles du mot de passe
 pendant la saisie), `js/delai.js` (comptes à rebours des
-attentes). `css/style.css` pour tout le style.
+attentes), `js/tactile.js` (le double-appui ne zoome pas : chargé par TOUTES
+les pages, voir « Règles tacites »). `css/style.css` pour tout le style.
 
 `app.js` commence par `window.Bibliotheque` : sa logique pure (carte
 voisine au clavier, suivi du défilement, textes des quotas), testée par
@@ -244,7 +245,11 @@ la fois (`panneauApres()`, mémorisé par compte sous `panneau` ;
 un interrupteur direct. **« Toutes » remet à zéro les trois genres de
 filtres** (statut, favori, image) et ne s'allume que quand plus rien n'est
 posé (`aucunFiltre()`) : il reste visible groupes repliés, c'est le seul
-moyen de tout effacer d'un geste. Un groupe replié dit ce qu'il porte par
+moyen de tout effacer d'un geste. **« Toutes » et « Favoris » referment le
+groupe resté ouvert** (demande de l'utilisateur : « cliquer sur tout ça doit
+fermer les sous-filtres ») : `panneauApres()` replie tout pour un bouton qui
+n'est pas un groupe. Les pastilles DANS un groupe, elles, le laissent
+ouvert : les statuts se cumulent. Un groupe replié dit ce qu'il porte par
 une pastille dorée en surimpression (`.nb-actifs`) — en surimpression et
 non en rangée : élargissant « Statut » de 30 px, elle poussait « Image »
 hors de l'écran. Les statuts gardent leurs ids `count-<statut>` et leurs
@@ -285,6 +290,21 @@ permis, exprès : c'est le recours de qui lit mal. Ne jamais y ajouter
 `user-scalable=no` ni `maximum-scale` dans le viewport, ni un
 `touch-action: none` / `pan-*` seul (`tests/cas/tactile_test.php` le
 refuse). Toute nouvelle page HTML charge `css/style.css`, sinon elle zoome.
+
+**La règle CSS ne suffisait pas : `js/tactile.js` la double** (l'utilisateur a
+redemandé la même chose sur son téléphone, la règle étant déjà en ligne).
+Au `touchend` du SECOND appui d'un double-appui — deux appuis de moins de
+350 ms et 45 px —, il appelle `preventDefault()` : l'astuce connue, qui ne
+dépend d'aucun CSS. Son revers est que le navigateur n'envoie plus le
+« click » de ce second appui, et « → » touché deux fois vite ne comptait plus
+qu'une fois : le script REJOUE donc le clic sur le même élément (`detail: 2`).
+Il ne touche ni au pincement (deux doigts ne sont jamais « un appui »), ni à un
+champ de saisie (le double-appui y sélectionne un mot), ni à un geste qui n'est
+pas un appui (défilement, appui long). **Chaque page le charge EN PREMIER**,
+avant ses autres scripts (`tests/cas/tactile_test.php` le vérifie) — une page
+qui l'oublie zoomerait là où l'on s'y attendait le moins. Ce que
+`preventDefault()` empêche réellement n'a été vérifié que par évènements
+simulés : il faut un iPhone pour le constater.
 
 **Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
 `js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se
@@ -428,6 +448,35 @@ confirmation en place, sans identité.
   1Password, Proton Pass…) et iOS/Safari. Seuls un authentificateur simulé
   (tests PHP, HTTP complet, faux navigateur) l'ont été.
 
+**Le forfait « bloqué » est la consultation seule** (demande de l'utilisateur).
+`utilisateur.forfait` vaut `'bloque'` (à poser À LA MAIN en base, comme
+« illimite » : `UPDATE utilisateur SET forfait = 'bloque' WHERE identifiant =
+'…'`). Le compte se connecte, lit, cherche, filtre, **exporte**, gère son
+compte (mot de passe, clés d'accès) et peut le **supprimer** : ce sont des
+droits sur ses propres données. Il ne peut plus : créer ni modifier une série
+(`serie.enregistrer`), mettre en favori, changer de tome (→ et ←), importer un
+`.json` — ce que l'utilisateur a demandé — ni, par cohérence, supprimer une
+série, vider la bibliothèque, ni toucher à MangaDex (`couverture.chercher`,
+`.rafraichir`, `.delier` : quota et appels du serveur, ou image réécrite).
+- **Le serveur est le seul juge.** `api.php` refuse (403, `bloque: true`) toute
+  action de `ACTIONS_BLOQUEES` (`includes/fonctions.php`) AVANT le switch, juste
+  après le CSRF ; `forfait` est relu à chaque requête, donc un blocage posé
+  pendant une session prend effet à l'appel suivant. Les pages cessent aussi
+  de proposer ce que le serveur refuse (`carte_html($s, true)` : ni bouton ni
+  couverture cliquable, l'étoile reste, fixe ; « + » caché ; bandeau ;
+  Importer et Vider désactivés dans Paramètres) — politesse, pas barrière.
+- **Toute action d'`api.php` est CLASSÉE.** `tests/cas/forfait_bloque_test.php`
+  lit les `case` et exige que chacun soit dans `ACTIONS_BLOQUEES` ou dans
+  `ACTIONS_LIBRES_DU_BLOQUE` (le test, avec la raison). Une action ajoutée sans
+  décision fait échouer le test : sinon une écriture oubliée resterait ouverte.
+- **L'`ENUM` doit connaître « bloque » AVANT l'`UPDATE`** (migration 10 de
+  `livre.sql`). Hors mode strict, une valeur absente de l'ENUM est rangée en
+  `''` sans erreur : le compte, loin d'être bloqué, resterait libre. Et `''`
+  ne bloque personne (`compte_bloque()` ne reconnaît que `'bloque'`).
+- **Assumé** : un compte bloqué peut supprimer son compte et en ouvrir un
+  autre avec une autre adresse — rien n'en empêche, le forfait part avec la
+  ligne. Il n'y a pas de liste d'adresses interdites.
+
 **La signature du jeton Google n'est pas vérifiée, et c'est voulu** : il
 arrive par un appel HTTPS direct du serveur à Google, jamais par le
 navigateur (OpenID Connect Core § 3.1.3.7). Ne jamais désactiver
@@ -464,7 +513,8 @@ Huit tables (`utilisateur.google_sub` relie un compte Google, `cle_acces` garde 
 publiques des clés d'accès — jamais une clé privée) : `utilisateur`, `serie`, `jeton_action`,
 `session_persistante`, `tentative_ip`, `cle_acces`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
-dernier rapport du cron).
+dernier rapport du cron). `utilisateur.forfait` : `standard`, `illimite` ou
+`bloque` (consultation seule, voir « Règles tacites »).
 
 `livre.sql` est **entièrement rejouable**. Pour mettre à jour une base
 existante, on rejoue le fichier **en entier** en retirant seulement les

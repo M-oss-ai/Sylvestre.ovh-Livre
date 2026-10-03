@@ -135,6 +135,7 @@ $csrf = jeton_csrf();
   </section>
 </main>
 
+<script src="<?= e(actif('js/tactile.js')) ?>" defer></script>
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 
 </body>

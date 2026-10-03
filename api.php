@@ -43,6 +43,13 @@ if (post_trop_gros()) {
 if (!csrf_valide($_POST['csrf'] ?? null)) {
     reponse_json(['ok' => false, 'erreur' => 'Jeton de sécurité invalide. Rechargez la page.'], 403);
 }
+/* Forfait « bloqué » : consultation seule. Refusé ICI, avant tout
+   traitement, pour toute action de ACTIONS_BLOQUEES — ce que les pages
+   cachent n'engage que le navigateur. L'export, la gestion du compte et sa
+   suppression restent ouverts. */
+if (action_bloquee($moi, $action)) {
+    reponse_json(['ok' => false, 'bloque' => true, 'erreur' => message_compte_bloque()], 403);
+}
 
 /**
  * Exige le mot de passe du compte, ou répond 403 — en comptant les

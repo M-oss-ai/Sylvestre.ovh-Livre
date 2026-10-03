@@ -166,11 +166,14 @@ window.Bibliotheque = (() => {
    * Le groupe ouvert après un clic sur le bouton de `demande` : le même
    * groupe se referme, un autre prend la place de celui qui était ouvert
    * (un seul à la fois, pour que la barre ne dépasse jamais sa rangée plus
-   * une). `ouvert` : "statut", "image", ou "" quand tout est replié.
+   * une). Un bouton qui n'est PAS un groupe — « Toutes », « Favoris » —
+   * replie celui qui était ouvert (demande de l'utilisateur) : passer à un
+   * autre réglage de la rangée, c'est en avoir fini avec le sous-filtre.
+   * `ouvert` : "statut", "image", ou "" quand tout est replié.
    */
   function panneauApres(ouvert, demande) {
     const courant = PANNEAUX.includes(ouvert) ? ouvert : "";
-    if (!PANNEAUX.includes(demande)) return courant;
+    if (!PANNEAUX.includes(demande)) return "";
     return courant === demande ? "" : demande;
   }
 
@@ -454,6 +457,12 @@ window.Bibliotheque = (() => {
      perdues. Le serveur reste le garde-fou (voir l'INSERT d'api.php). */
 
   const QUOTA_SERIES = parseInt(document.body.dataset.quotaSeries || "0", 10) || 0;
+
+  /* Forfait « bloqué » : consultation seule. La page n'affiche déjà plus ce
+     qui modifie (index.php, carte.php) ; ces gardes ferment ce qui resterait
+     atteignable — Entrée sur une couverture, Suppr sur une carte. Le serveur
+     refuse de toute façon (ACTIONS_BLOQUEES, api.php). */
+  const BLOQUE = document.body.dataset.bloque === "1";
   const $quotaSeries = document.getElementById("quota-series");
   const $btnAdd = document.getElementById("btn-add");
   const $quotaOverlay = document.getElementById("quota-overlay");
@@ -493,6 +502,7 @@ window.Bibliotheque = (() => {
   }
 
   function demanderAjout() {
+    if (BLOQUE) return;
     if (bibliothequePleine()) ouvrirQuota();
     else ouvrirModale(null);
   }
@@ -853,6 +863,9 @@ window.Bibliotheque = (() => {
     } else {
       return;
     }
+    // « Toutes » et « Favoris » referment le sous-filtre resté ouvert ; les
+    // boutons DANS un groupe, eux, le laissent ouvert (les statuts se cumulent).
+    panneauOuvert = B.panneauApres(panneauOuvert, "");
     filtresChanges();
     revenirEnHaut();
   });
@@ -1027,6 +1040,7 @@ window.Bibliotheque = (() => {
   }
 
   function ouvrirModale(carte) {
+    if (BLOQUE) return;
     const edition = !!carte;
     idEnEdition = edition ? carte.dataset.id : "";
     focusAvantModale = document.activeElement;
@@ -1223,6 +1237,7 @@ window.Bibliotheque = (() => {
       ailleurs, et Safari ne donne pas le focus au bouton cliqué — on
       n'aurait plus trouvé que <body>. */
   function demanderSuppression(id, titre, retour) {
+    if (BLOQUE) return;
     idASupprimer = id;
     focusAvantConfirmation = retour;
     $confirmText.textContent = "« " + titre + " » sera définitivement supprimée.";

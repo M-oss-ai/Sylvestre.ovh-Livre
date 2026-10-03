@@ -296,6 +296,7 @@ $v = $erreurs_profil && $saisie_profil ? $saisie_profil : [
 /* Le quota de recherche automatique de couverture n'était annoncé nulle
    part : on le découvrait en butant dessus. */
 $quota_recherche = couverture_quota($moi);
+$bloque          = compte_bloque($moi);   // consultation seule
 $tranche         = secondes_lisibles(COUVERTURE_FENETRE);
 
 $req = $pdo->prepare('SELECT COUNT(*) FROM serie WHERE utilisateur_id = ?');
@@ -639,7 +640,15 @@ $nb_series = (int) $req->fetchColumn();
   <!-- ---------------- Forfait ---------------- -->
   <section class="settings-card">
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🎫</span> Forfait</h2>
-    <?php if ($moi['forfait'] === 'illimite'): ?>
+    <?php if ($bloque): ?>
+      <p class="hint"><b>Bloqué 🔒</b> — consultation seule (<?= $nb_series ?> série(s)).</p>
+      <p class="hint">
+        Ce compte ne permet plus d'ajouter, de modifier ni de supprimer de séries, ni d'importer
+        une sauvegarde. Vous pouvez toujours consulter votre bibliothèque, l'exporter et gérer
+        votre compte. Pour le rétablir, contactez l'administrateur à
+        <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a>.
+      </p>
+    <?php elseif ($moi['forfait'] === 'illimite'): ?>
       <p class="hint"><b>Illimité ✨</b> — aucune limite de séries pour ce compte (<?= $nb_series ?> actuellement).</p>
     <?php else: ?>
       <p class="hint">
@@ -650,7 +659,9 @@ $nb_series = (int) $req->fetchColumn();
         <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a> pour passer au forfait supérieur.
       </p>
     <?php endif; ?>
-    <?php if ($quota_recherche > 0): ?>
+    <?php if ($bloque): ?>
+      <p class="hint">Recherche automatique de couverture : <b>suspendue</b>.</p>
+    <?php elseif ($quota_recherche > 0): ?>
       <p class="hint">
         Recherche automatique de couverture : <b><?= $quota_recherche ?> recherches toutes les <?= e($tranche) ?></b>.
         Au-delà, il suffit d'attendre la fin des <?= e($tranche) ?> : le compteur repart de zéro.
@@ -723,21 +734,28 @@ $nb_series = (int) $req->fetchColumn();
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
         <button type="submit" id="btn-export-all" class="btn btn-ghost">⬇️ Exporter mes données</button>
       </form>
-      <label class="btn btn-ghost file-label">
+      <label class="btn btn-ghost file-label<?= $bloque ? ' btn-inactif' : '' ?>"<?= $bloque ? ' aria-disabled="true"' : '' ?>>
         ⬆️ Importer
-        <input id="btn-import-all" type="file" accept="application/json,.json" class="visually-hidden">
+        <input id="btn-import-all" type="file" accept="application/json,.json" class="visually-hidden"<?= $bloque ? ' disabled' : '' ?>>
       </label>
     </div>
     <!-- Le résultat de l'import reste ici, lisible : il partait dans une
          notification de deux secondes, suivie d'une redirection. -->
     <p id="import-statut" class="import-statut hidden" role="status"></p>
+    <?php if ($bloque): ?>
+    <p class="hint">
+      Compte en consultation seule : l'import et le vidage de la bibliothèque sont suspendus.
+      L'export reste possible.
+    </p>
+    <?php else: ?>
     <p class="hint">
       Importer une sauvegarde n'ajoute que les séries absentes : une série déjà présente
       (même titre) n'est jamais dupliquée, elle récupère seulement l'image ou l'étoile qui
       lui manquent.
     </p>
+    <?php endif; ?>
 
-    <button id="btn-clear-library" type="button" class="btn btn-danger full">🗑️ Vider ma bibliothèque</button>
+    <button id="btn-clear-library" type="button" class="btn btn-danger full"<?= $bloque ? ' disabled' : '' ?>>🗑️ Vider ma bibliothèque</button>
     <p class="hint">Supprime toutes vos séries. Votre compte est conservé.</p>
 
     <div class="settings-divider"></div>
@@ -823,6 +841,7 @@ $nb_series = (int) $req->fetchColumn();
 
 <div id="toast" class="toast hidden" role="status"></div>
 
+<script src="<?= e(actif('js/tactile.js')) ?>" defer></script>
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
 <script src="<?= e(actif('js/mdp.js')) ?>" defer></script>

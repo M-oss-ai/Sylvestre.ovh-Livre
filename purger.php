@@ -250,7 +250,7 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, float $demarre
     $un  = static fn (string $sql) => $pdo->query($sql)->fetch(PDO::FETCH_NUM);
 
     $u = $un("SELECT COUNT(*), SUM(email_verifie), SUM(forfait = 'illimite'),
-                     SUM(cree_le > {$depuis}) FROM utilisateur");
+                     SUM(cree_le > {$depuis}), SUM(forfait = 'bloque') FROM utilisateur");
     /* « maj_le > cree_le » est ce qui distingue une modification d'une
        création. La colonne vaut CURRENT_TIMESTAMP à l'insertion, si bien
        qu'une série ajoutée et jamais retouchée a maj_le = cree_le : sans
@@ -293,6 +293,7 @@ function rapport_texte(PDO $pdo, array $resume, array $anomalies, float $demarre
     $t .= $lit('Adresse confirmée', (int) $u[1]);
     $t .= $lit('En attente de confirmation', (int) $u[0] - (int) $u[1]);
     $t .= $lit('Forfait illimité', (int) $u[2]);
+    $t .= $lit('Forfait bloqué', (int) $u[4]);
     $t .= $lit('Nouveaux comptes (' . $duree . ')', (int) $u[3]);
 
     $t .= "\nBIBLIOTHÈQUES\n";

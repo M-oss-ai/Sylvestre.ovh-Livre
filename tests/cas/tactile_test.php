@@ -8,12 +8,16 @@
    supprime ce geste-là et garde le pincement, le moyen d'agrandir pour qui
    en a besoin.
 
+   La règle CSS ne suffisait pas sur le téléphone de l'utilisateur, qui l'a
+   redemandée : js/tactile.js la double, en neutralisant le second appui
+   d'un double-appui. Chaque page le charge, comme la feuille de style.
+
    Ce test lit les SOURCES : c'est un garde-fou, pas une mesure du
-   navigateur. Il tient deux promesses que rien d'autre ne surveille —
+   navigateur. Il tient les promesses que rien d'autre ne surveille —
    la règle porte sur tous les éléments (le comportement d'un élément est
    l'intersection du sien et de celui de ses ancêtres, jusqu'au premier
    cadre qui défile : une liste d'éléments laissait zoomer ailleurs), et
-   toute page qui s'affiche charge la feuille qui la porte.
+   toute page qui s'affiche charge la feuille et le script qui la portent.
    ===================================================================== */
 
 declare(strict_types=1);
@@ -64,6 +68,32 @@ test('chaque page charge la feuille de style', function () {
     foreach (pages_html() as $nom => $source) {
         contient("actif('css/style.css')", $source, $nom . ' charge css/style.css');
     }
+});
+
+test('chaque page charge js/tactile.js, le renfort du double-appui', function () {
+    foreach (pages_html() as $nom => $source) {
+        contient("actif('js/tactile.js')", $source, $nom . ' charge js/tactile.js');
+    }
+});
+
+test('js/tactile.js passe avant les autres scripts d une page', function () {
+    /* Les scripts sont « defer » : ils s exécutent dans l ordre de la page.
+       Le premier doit être celui qui surveille les doigts, pour qu un
+       script plus long à charger ou à planter ne le retarde pas. */
+    foreach (pages_html() as $nom => $source) {
+        preg_match_all("/actif\('(js\/[a-z-]+\.js)'\)/", $source, $m);
+        egale('js/tactile.js', $m[1][0] ?? '', $nom . ' : le premier script chargé');
+    }
+});
+
+test('le script ne touche ni au pincement ni aux champs de saisie', function () {
+    $js = (string) file_get_contents(CHEMIN_PROJET . '/js/tactile.js');
+    contient('zoneDeSaisie(e.target)', $js, 'un champ garde son double-appui');
+    contient('e.touches.length === 1', $js, 'un seul doigt posé commence un appui, deux remettent la série à zéro');
+    contient('e.touches.length !== 0', $js, 'un doigt encore posé à la levée : un pincement, pas un appui');
+    contient('rejouerClic(e.target', $js, 'le clic du second appui est rejoué');
+    sans('gesturestart', $js, 'aucun blocage du pincement');
+    sans('user-scalable', $js, 'aucune interdiction de zoomer');
 });
 
 test('aucune page n interdit le zoom au pincement', function () {

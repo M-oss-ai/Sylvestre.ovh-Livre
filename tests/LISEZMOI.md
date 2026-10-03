@@ -290,10 +290,28 @@ Paramètres, `cle_effacer_toutes()` à la réinitialisation, et que la demande
 en arrière-plan de `js/cle-acces.js` ne relance pas en cas d'échec.
 `tactile_test.php` : la règle
 `* { touch-action: manipulation }` de `css/style.css` (le double-appui ne
-zoome sur aucune page, le pincement reste possible) et le fait que
-chaque page HTML charge cette feuille et ne bloque pas le zoom. Un
+zoome sur aucune page, le pincement reste possible), le fait que
+chaque page HTML charge cette feuille ET `js/tactile.js` (en premier de ses
+scripts) et ne bloque pas le zoom. Un
 garde-fou, pas une mesure du navigateur : le style réellement calculé se
 vérifie à la main, page par page.
+
+**Couvert, forfait « bloqué »** — `forfait_bloque_test.php` :
+`compte_bloque` (seul `'bloque'` bloque : ni `''`, ni une autre casse, ni une
+clé absente), `action_bloquee` (ce que l'utilisateur a demandé, ce qui s'y
+ajoute, et ce qui reste ouvert : export, compte, sécurité, sortie),
+`message_compte_bloque`, `carte_html($s, true)` (aucun bouton ni
+`data-action`, la lecture et les attributs des filtres intacts, l'étoile fixe,
+l'échappement). Et, par lecture des sources : **chaque `case` d'`api.php` est
+classé** (bloqué, ou libre pour une raison dite — une action ajoutée sans
+décision fait échouer le test), la garde passe après le CSRF et avant le
+switch, les pages cessent de proposer ce qui est refusé, `livre.sql` porte la
+valeur et sa migration rejouable, le rapport du cron compte les comptes
+bloqués. Côté navigateur : `Tactile` (ce qu'est un appui et un double-appui,
+les champs de saisie) et son branchement sur de VRAIS évènements tactiles
+(second appui annulé, clic rejoué, pincement et défilement laissés tranquilles).
+Ce que le navigateur fait ensuite d'un `preventDefault()` — ne pas zoomer — ne
+se mesure pas ici : il faut un iPhone.
 
 **Non couvert, faute de réseau** — `mangadex_get`,
 `chercher_couvertures` et le téléchargement fait par

@@ -929,6 +929,55 @@ const ACTIONS_SENSIBLES = [
     'compte.supprimer'     => 'supprimer votre compte',
 ];
 
+/* ---------------- Le forfait « bloqué » : consultation seule ----------------
+   Un compte bloqué se connecte, lit sa bibliothèque, la cherche, la filtre,
+   l'EXPORTE, gère son compte (mot de passe, clés d'accès) et peut le
+   supprimer : rien de tout cela n'a besoin d'être refusé, et l'export comme
+   la suppression sont des droits sur ses propres données. Il ne peut plus
+   la MODIFIER, ni solliciter MangaDex à son profit.
+
+   Le serveur est le seul juge : api.php refuse ces actions avant tout
+   traitement. Les pages cachent aussi les commandes (index.php,
+   carte_html()), mais ce n'est que de la politesse — un navigateur qu'on
+   bricole les afficherait encore.
+
+   Chaque `case` d'api.php est classé : ici, ou parmi les actions libres que
+   tests/cas/forfait_bloque_test.php énumère. Une action ajoutée sans choix
+   fait échouer ce test — sinon une écriture oubliée resterait ouverte. */
+const FORFAIT_BLOQUE = 'bloque';
+
+const ACTIONS_BLOQUEES = [
+    'serie.enregistrer',     // créer ET modifier une fiche : titre, auteur, tome, statut, image
+    'serie.avancer',         // tome suivant (→)
+    'serie.reculer',         // tome précédent (←)
+    'serie.favori',          // l'étoile
+    'serie.supprimer',       // retirer une série
+    'donnees.importer',      // importer une sauvegarde .json
+    'donnees.vider',         // vider la bibliothèque
+    'couverture.chercher',   // la recherche MangaDex : quota, appels faits par le serveur
+    'couverture.rafraichir', // réécrit l'image d'une série
+    'couverture.delier',     // rapatrie une image sur le disque du serveur
+];
+
+/** Ce compte est-il en consultation seule ? `$utilisateur` : la ligne de la table, au moins `forfait`. */
+function compte_bloque(array $utilisateur): bool
+{
+    return ($utilisateur['forfait'] ?? '') === FORFAIT_BLOQUE;
+}
+
+/** Le serveur doit-il refuser cette action d'api.php à ce compte ? */
+function action_bloquee(array $utilisateur, string $action): bool
+{
+    return compte_bloque($utilisateur) && in_array($action, ACTIONS_BLOQUEES, true);
+}
+
+/** Ce qu'un compte bloqué lit, à la page comme dans la réponse de l'API. */
+function message_compte_bloque(): string
+{
+    return 'Votre compte est en consultation seule : la bibliothèque ne peut plus être modifiée. '
+        . "Pour le rétablir, contactez l'administrateur à " . ADMIN_EMAIL . '.';
+}
+
 /**
  * La confirmation en cours : ['action' => …, 'restant' => secondes], ou
  * null. Le même mécanisme pour les deux façons de prouver son identité :

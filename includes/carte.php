@@ -23,7 +23,14 @@ const ETOILE_SVG = '<svg class="etoile" viewBox="0 0 24 24" aria-hidden="true" f
     . '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24'
     . 'l5.46 4.73L5.82 21z"/></svg>';
 
-function carte_html(array $s): string
+/**
+ * `$lecture_seule` : le compte est bloqué (compte_bloque()). La carte garde
+ * tout ce qui se lit — couverture, titre, progression — et perd ce qui
+ * agit : la couverture n'ouvre plus la fiche, les quatre boutons s'en vont.
+ * L'étoile reste visible, sans être un bouton : le favori est une
+ * information, pas seulement une commande.
+ */
+function carte_html(array $s, bool $lecture_seule = false): string
 {
     $statut  = isset(STATUTS[$s['statut']]) ? (string) $s['statut'] : 'cours';
     $tome    = max(0, (int) $s['tome_actuel']);
@@ -66,27 +73,16 @@ function carte_html(array $s): string
        la carte « active », que js/app.js remet à 0 (les flèches passent
        d'une carte à l'autre). Cinq arrêts par carte faisaient 780 appuis
        sur Tab pour traverser 150 séries. */
-    return '
-      <article class="card status-' . e($statut) . '"
-               data-id="' . (int) $s['id'] . '"
-               data-statut="' . e($statut) . '"
-               data-titre="' . e($titre) . '"
-               data-auteur="' . e($auteur) . '"
-               data-tome="' . $tome . '"
-               data-couverture="' . e($couverture) . '"
-               data-mangadex="' . e((string) ($s['mangadex_id'] ?? '')) . '"
-               data-favori="' . ($favori ? '1' : '0') . '"
-               data-image="' . e(type_image($couverture)) . '">
-        <div class="card-cover" data-action="edit" role="button" tabindex="-1" aria-label="Modifier ' . e($titre) . '">
-          ' . $image . '
-          <span class="badge">' . e(STATUTS[$statut]) . '</span>
-          ' . $etiquette . '
-        </div>
-        <div class="card-body">
-          <h3 class="card-title">' . e($titre) . '</h3>
-          <p class="card-subtitle">' . e($auteur) . '</p>
-          <p class="card-progress">' . $progression . '</p>
-          <div class="card-actions">
+    if ($lecture_seule) {
+        $couverture_html = '<div class="card-cover" tabindex="-1">';
+        $actions_html    = $favori
+            ? '<div class="card-actions card-actions-lecture">
+            <span class="favori-lecture" role="img" aria-label="Favori" title="Favori">' . ETOILE_SVG . '</span>
+          </div>'
+            : '';
+    } else {
+        $couverture_html = '<div class="card-cover" data-action="edit" role="button" tabindex="-1" aria-label="Modifier ' . e($titre) . '">';
+        $actions_html    = '<div class="card-actions">
             <button type="button" class="btn-undo" data-action="undo" tabindex="-1"
                     title="Annuler : revenir au tome précédent"
                     aria-label="Annuler la dernière lecture"' . ($tome <= 0 ? ' disabled' : '') . '>←</button>
@@ -100,7 +96,30 @@ function carte_html(array $s): string
               . ETOILE_SVG . '</button>
             <button type="button" class="btn-edit" data-action="edit" tabindex="-1"
                     title="Modifier / gérer la couverture" aria-label="Modifier ' . e($titre) . '">✏️</button>
-          </div>
+          </div>';
+    }
+
+    return '
+      <article class="card status-' . e($statut) . '"
+               data-id="' . (int) $s['id'] . '"
+               data-statut="' . e($statut) . '"
+               data-titre="' . e($titre) . '"
+               data-auteur="' . e($auteur) . '"
+               data-tome="' . $tome . '"
+               data-couverture="' . e($couverture) . '"
+               data-mangadex="' . e((string) ($s['mangadex_id'] ?? '')) . '"
+               data-favori="' . ($favori ? '1' : '0') . '"
+               data-image="' . e(type_image($couverture)) . '">
+        ' . $couverture_html . '
+          ' . $image . '
+          <span class="badge">' . e(STATUTS[$statut]) . '</span>
+          ' . $etiquette . '
+        </div>
+        <div class="card-body">
+          <h3 class="card-title">' . e($titre) . '</h3>
+          <p class="card-subtitle">' . e($auteur) . '</p>
+          <p class="card-progress">' . $progression . '</p>
+          ' . $actions_html . '
         </div>
       </article>';
 }

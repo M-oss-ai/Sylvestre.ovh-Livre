@@ -27,7 +27,8 @@ $csrf    = jeton_csrf();
 /* Les deux limites du compte, annoncées AVANT qu'on bute dessus : la
    limite de séries ne se découvrait qu'une fiche entièrement remplie, et
    celle des recherches de couverture nulle part. 0 = pas de limite. */
-$quota_series    = $moi['forfait'] === 'illimite' ? 0 : MAX_SERIES_PAR_UTILISATEUR;
+$bloque          = compte_bloque($moi);   // consultation seule : rien à modifier, donc pas de quota à annoncer
+$quota_series    = ($bloque || $moi['forfait'] === 'illimite') ? 0 : MAX_SERIES_PAR_UTILISATEUR;
 $quota_recherche = couverture_quota($moi);
 $tranche         = secondes_lisibles(COUVERTURE_FENETRE);
 
@@ -46,7 +47,7 @@ $flash = flash_prendre();
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
-      data-quota-series="<?= (int) $quota_series ?>"
+      data-quota-series="<?= (int) $quota_series ?>" data-bloque="<?= $bloque ? '1' : '0' ?>"
       data-quota-recherche="<?= (int) $quota_recherche ?>" data-tranche-recherche="<?= e($tranche) ?>"
       data-compte="<?= (int) $moi['id'] ?>" data-flash="<?= e($flash) ?>" data-prive="1">
 
@@ -82,7 +83,7 @@ $flash = flash_prendre();
          largeur : sur téléphone, celui-ci occupait une rangée entière de
          la barre fixe. Le libellé reste là pour les lecteurs d'écran et au
          survol. -->
-    <button id="btn-add" class="btn btn-primary btn-ajout" type="button"
+    <button id="btn-add" class="btn btn-primary btn-ajout<?= $bloque ? ' hidden' : '' ?>" type="button"
             aria-label="Ajouter une série" title="Ajouter une série"><span aria-hidden="true">＋</span></button>
   </div>
 </header>
@@ -134,6 +135,16 @@ $flash = flash_prendre();
        d'enregistrer une fiche entièrement remplie. -->
   <p id="quota-series" class="quota-series hidden" role="status"></p>
 
+  <?php if ($bloque): ?>
+  <!-- Forfait « bloqué » : le serveur refuse toute modification (api.php) ;
+       la page cesse seulement de les proposer. -->
+  <p class="alert alert-info compte-bloque" role="status">
+    <b>Consultation seule.</b> Votre compte ne permet plus d'ajouter ni de modifier de séries.
+    Pour le rétablir, contactez l'administrateur :
+    <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a>.
+  </p>
+  <?php endif; ?>
+
   <!-- Au clavier, la grille ne compte qu'UN arrêt : on y entre par Tab,
        les flèches passent d'une série à l'autre (voir js/app.js). Chaque
        carte en ajoutait cinq, soit 780 appuis pour traverser 150 séries.
@@ -141,14 +152,14 @@ $flash = flash_prendre();
   <p id="grille-aide" class="visually-hidden">Flèches pour passer d'une série à l'autre, Tab pour ses boutons, Suppr pour la supprimer.</p>
   <div id="grid" class="grid<?= $series ? '' : ' hidden' ?>"><?php
     foreach ($series as $s) {
-        echo carte_html($s);
+        echo carte_html($s, $bloque);
     }
   ?></div>
 
   <div id="empty-collection" class="empty-state<?= $series ? ' hidden' : '' ?>">
     <p class="empty-emoji">📖</p>
     <p>Votre bibliothèque est vide pour l'instant.</p>
-    <button class="btn btn-primary" id="btn-add-first" type="button">Ajouter votre première série</button>
+    <button class="btn btn-primary<?= $bloque ? ' hidden' : '' ?>" id="btn-add-first" type="button">Ajouter votre première série</button>
   </div>
 
   <div id="empty-search" class="empty-state hidden">
@@ -319,6 +330,7 @@ $flash = flash_prendre();
 
 <div id="toast" class="toast hidden" role="status"></div>
 
+<script src="<?= e(actif('js/tactile.js')) ?>" defer></script>
 <script src="<?= e(actif('js/delai.js')) ?>" defer></script>
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
 <script src="<?= e(actif('js/app.js')) ?>" defer></script>

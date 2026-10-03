@@ -328,6 +328,9 @@ main.bibliotheque { padding-top: 0; }
   font-weight: 600;
 }
 
+/* Forfait « bloqué » : le bandeau qui dit pourquoi rien ne se modifie. */
+.compte-bloque { margin: 0 0 16px; }
+
 /* ---------- Grille ---------- */
 
 main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
@@ -490,6 +493,22 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .btn-favori.actif .etoile { fill: var(--gold); stroke: var(--gold); }
 
 .btn-favori:disabled { opacity: 0.5; cursor: default; }
+
+/* L'étoile d'une carte en consultation seule (forfait « bloqué ») : la même
+   étoile pleine, mais qui n'est plus un bouton — le favori se lit encore. */
+.favori-lecture {
+  display: inline-flex;
+  align-items: center;
+  color: var(--gold);
+}
+.favori-lecture .etoile {
+  width: 20px;
+  height: 20px;
+  fill: var(--gold);
+  stroke: var(--gold);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
 
 /* Les groupes de filtres (Statut, Image), repliables sous la rangee du
    haut. Chacun tient sur UNE ligne qui coulisse : avec leurs nombres, les
@@ -706,6 +725,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .btn:hover { border-color: var(--border-strong); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.55; cursor: default; }
+
+/* Une étiquette « bouton » ne se désactive pas : celle d'un champ de fichier
+   désactivé (Importer, forfait bloqué) en prend l'allure, sans le clic. */
+.btn-inactif { opacity: 0.55; cursor: default; pointer-events: none; }
 
 .btn-primary {
   background: linear-gradient(135deg, var(--gold), #a9835a);
