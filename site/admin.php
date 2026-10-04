@@ -102,7 +102,7 @@ $vues = [];
 foreach (REGLAGES as $cle => $r) {
     $vues[$cle] = reglage_vue($cle, $GLOBALS['REGLAGES_BASE'], env_brut($cle), (int) constant($cle));
 }
-$etiquettes_source = ['base' => 'modifié ici', 'env' => '.env', 'defaut' => 'défaut'];
+$etiquettes_source = ['base' => 'modifié', 'env' => '.env', 'defaut' => 'défaut'];
 
 /** Une coche, ou un tiret : jamais le seul signe, un lecteur d'écran lit « oui » / « non ». */
 function admin_oui_non(bool $oui, string $quoi): string
@@ -291,6 +291,7 @@ function admin_oui_non(bool $oui, string $quoi): string
             <div class="admin-reglage-texte">
               <label for="<?= e($champ) ?>"><?= e($v['libelle']) ?></label>
               <p class="hint">
+                <span class="admin-cle">dans le .env : <code><?= e($cle) ?></code></span>
                 <?= e($v['aide']) ?>
                 <?php if ($v['plage'] !== ''): ?><span class="admin-plage">Entre <?= e(substr($v['plage'], 3)) ?>.</span><?php endif; ?>
                 <span class="admin-sans-base">Sans ce réglage : <?= e(reglage_sans_base_texte($cle, env_brut($cle))) ?>.</span>

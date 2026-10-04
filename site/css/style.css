@@ -2005,7 +2005,22 @@ th[aria-sort="none"] .admin-tri { color: var(--text-dim); }
 .admin-reglage-texte .hint { margin-top: 3px; }
 .admin-plage { color: var(--text); }
 .admin-en-vigueur { color: var(--gold-light); font-weight: 600; }
-.admin-reglage-champ { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+/* Les cases s'alignent d'une ligne à l'autre. La case a une largeur fixe, et la
+   colonne de l'unité a celle de la PLUS GRANDE unité (« recherches », « tentatives » :
+   10 caractères — tests/cas/reglages_test.php le vérifie, et échoue si une unité
+   plus longue arrive), l'unité collée à gauche, contre la case. Sans cela chaque
+   ligne avait sa propre largeur, et les pastilles comme les boutons ne tombaient
+   pas les uns sous les autres. La taille de police est posée ici, pour que « em » et
+   « ch » parlent de la même police dans toute la case. */
+.admin-reglage-champ {
+  display: grid;
+  grid-template-columns: 7.5em 10ch;
+  column-gap: 6px;
+  align-items: center;
+  width: calc(7.5em + 10ch + 6px);
+  max-width: 100%;
+  font-size: 13px;
+}
 .admin-reglage-champ input,
 .admin-reglage-champ select {
   padding: 8px 10px;
@@ -2017,14 +2032,18 @@ th[aria-sort="none"] .admin-tri { color: var(--text-dim); }
   font-family: inherit;
   color-scheme: dark;
 }
-.admin-reglage-champ input { width: 7.5em; text-align: right; }
-.admin-reglage-champ select { max-width: 100%; }
+.admin-reglage-champ input { width: 100%; text-align: right; }
+.admin-reglage-champ select { grid-column: 1 / -1; width: 100%; }
 .admin-reglage-champ input:focus,
 .admin-reglage-champ select:focus { outline: none; border-color: var(--gold); }
 .admin-reglage-champ input[aria-invalid="true"] { border-color: var(--abandon); }
-.admin-reglage-champ .erreur-champ { order: 3; flex: 1 0 100%; margin: 0; }
-.admin-unite { color: var(--text-dim); font-size: 13px; }
-.admin-source { margin-left: 0; white-space: nowrap; }
+.admin-reglage-champ .erreur-champ { grid-column: 1 / -1; order: 3; margin: 6px 0 0; }
+.admin-unite { color: var(--text-dim); font-size: 13px; text-align: left; white-space: nowrap; }
+/* La pastille d'origine : même largeur partout, « modifié » étant le plus long mot. */
+.admin-source { width: 7em; box-sizing: border-box; margin-left: 0; text-align: center; white-space: nowrap; }
+/* Le nom du réglage dans le .env, sur sa propre ligne : c'est ce qu'on cherche dans le fichier. */
+.admin-cle { display: block; margin-bottom: 2px; color: var(--text); }
+.admin-cle code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--gold-light); }
 .admin-source[data-source="base"] { background: rgba(201, 168, 124, 0.18); }
 .admin-source[data-source="env"],
 .admin-source[data-source="defaut"] { color: var(--text-dim); }

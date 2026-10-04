@@ -80,11 +80,19 @@ test('les trois forfaits, et rien d\'autre', function () {
     faux(admin_forfait_valide(['bloque']), 'un tableau (POST forfait[]=…)');
 });
 
-test('ADMIN_FORFAITS suit l\'ENUM de la base', function () {
+test('ADMIN_FORFAITS offre les valeurs de l\'ENUM de la base, ni plus ni moins', function () {
     preg_match("/`forfait`\s+ENUM\(([^)]+)\)/", lire('livre.sql'), $m);
     $enum = array_map(static fn (string $v): string => trim($v, " '"), explode(',', $m[1] ?? ''));
-    egale($enum, array_keys(ADMIN_FORFAITS), 'les mêmes valeurs, dans le même ordre');
+    $offerts = array_keys(ADMIN_FORFAITS);
+    sort($enum);
+    sort($offerts);
+    egale($enum, $offerts, 'les mêmes valeurs : l\'ordre du menu n\'est pas celui de la base');
     egale(FORFAIT_BLOQUE, 'bloque', 'et « bloque » est celui qu\'api.php teste');
+});
+
+test('le menu des forfaits va du plus haut au plus bas : illimité, standard, bloqué', function () {
+    egale(['illimite', 'standard', 'bloque'], array_keys(ADMIN_FORFAITS), 'l\'ordre demandé');
+    egale(['Illimité', 'Standard', 'Bloqué'], array_values(ADMIN_FORFAITS), 'et leurs libellés');
 });
 
 groupe('admin_raison() — le motif d\'un blocage');

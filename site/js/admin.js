@@ -17,8 +17,9 @@
 window.Admin = (() => {
   "use strict";
 
-  const FORFAITS = { standard: "Standard", illimite: "Illimité", bloque: "Bloqué" };
-  const ORDRE_FORFAIT = { standard: 0, illimite: 1, bloque: 2 };
+  // Du plus haut au plus bas : le menu de la page (ADMIN_FORFAITS, côté PHP) et le tri de la colonne.
+  const FORFAITS = { illimite: "Illimité", standard: "Standard", bloque: "Bloqué" };
+  const ORDRE_FORFAIT = { illimite: 0, standard: 1, bloque: 2 };
 
   function normaliser(texte) {
     const t = String(texte == null ? "" : texte);
@@ -84,7 +85,7 @@ window.Admin = (() => {
   /* ---------- Les réglages ---------- */
 
   /* D'où vient la valeur affichée : le mot que porte la pastille. */
-  const SOURCES = { base: "modifié ici", env: ".env", defaut: "défaut" };
+  const SOURCES = { base: "modifié", env: ".env", defaut: "défaut" };
 
   function sourceTexte(source) {
     return source in SOURCES ? SOURCES[source] : "";

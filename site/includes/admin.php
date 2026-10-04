@@ -20,10 +20,13 @@ declare(strict_types=1);
 require_once __DIR__ . '/fonctions.php';
 
 /* Les forfaits qu'un administrateur peut donner, et leur libellé. L'ordre est
-   celui du menu de la page. La liste est FERMÉE : api.php refuse tout le reste. */
+   celui du menu de la page, du plus haut au plus bas : illimité, standard,
+   bloqué (demande de l'utilisateur) — et celui du tri de la colonne « Forfait »
+   (js/admin.js). Ce n'est PAS celui de l'ENUM de la base, qui n'a pas à le
+   suivre. La liste est FERMÉE : api.php refuse tout le reste. */
 const ADMIN_FORFAITS = [
-    'standard' => 'Standard',
     'illimite' => 'Illimité',
+    'standard' => 'Standard',
     'bloque'   => 'Bloqué',
 ];
 

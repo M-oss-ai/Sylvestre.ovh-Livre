@@ -312,7 +312,7 @@ test('reglage_vue() : la case montre la saisie quand la base la porte, la valeur
 
     $v = reglage_vue('SESSION_DUREE', ['SESSION_DUREE' => '2592000'], '', 2592000);
     egale('30', $v['saisie'], 'la base : 30 jours, en jours');
-    egale('base', $v['source'], 'modifié ici');
+    egale('base', $v['source'], 'modifié');
     estNul($v['en_vigueur'], 'même valeur partout : rien à dire');
 });
 
@@ -336,7 +336,7 @@ test('reglage_sans_base_texte() : ce qui s\'applique si on revient au .env', fun
     egale('10 clés (défaut)', reglage_sans_base_texte('CLE_ACCES_MAX', ''), 'le défaut du code');
     egale('1 jours (.env)', reglage_sans_base_texte('SESSION_DUREE', '86400'), 'dans l\'unité de la page');
     egale('365 jours (défaut)', reglage_sans_base_texte('REMEMBER_DUREE_VIP', ''), 'défaut d\'un an');
-    egale('Autorisées, après déclaration de majorité (.env)', reglage_sans_base_texte('COUVERTURE_CONTENU_ADULTE', '1'), 'un menu : son libellé');
+    egale('Autorisées (.env)', reglage_sans_base_texte('COUVERTURE_CONTENU_ADULTE', '1'), 'un menu : son libellé');
     egale('Bloquées (défaut)', reglage_sans_base_texte('COUVERTURE_CONTENU_ADULTE', ''), 'défaut d\'un menu');
     egale('10 clés (défaut)', reglage_sans_base_texte('CLE_ACCES_MAX', 'abc'), 'un .env illisible : le défaut s\'applique');
 });
@@ -455,6 +455,44 @@ test('la page : liste fermée, une case par réglage, tout échappé', function 
         contient($sortie, $page, $sortie);
     }
     sans("<?= \$v['libelle']", $page, 'jamais brut');
+});
+
+test('chaque ligne dit son nom dans le .env', function () {
+    $page = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/admin.php'));
+    contient('dans le .env : <code><?= e($cle) ?></code>', $page, 'la clé du .env, échappée, sur chaque ligne');
+    contient("'base' => 'modifié'", $page, 'la pastille d\'une valeur changée dit « modifié »');
+    sans('modifié ici', $page, 'plus « modifié ici »');
+});
+
+groupe('La mise en page — les cases s\'alignent');
+
+test('la colonne de l\'unité a la largeur de la plus grande unité', function () {
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    $plus_grande = max(array_map('mb_strlen', array_filter(array_column(REGLAGES, 'unite'))));
+    vrai($plus_grande >= 8, 'la plus grande unité compte ' . $plus_grande . ' caractères');
+    preg_match('/\.admin-reglage-champ\s*\{[^}]*grid-template-columns:\s*7\.5em\s+(\d+)ch/', $css, $m);
+    vrai(isset($m[1]), 'la colonne de l\'unité est dite en « ch » dans style.css');
+    egale($plus_grande, (int) ($m[1] ?? 0), 'et vaut la plus grande unité : plus étroite, elle couperait ; plus large, elle décalerait tout');
+    preg_match('/\.admin-reglage-champ\s*\{[^}]*width:\s*calc\(7\.5em \+ (\d+)ch \+ 6px\)/', $css, $w);
+    egale($plus_grande, (int) ($w[1] ?? 0), 'la case entière porte le même nombre');
+});
+
+test('l\'unité est collée à gauche, contre la case', function () {
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    preg_match('/\.admin-unite\s*\{([^}]*)\}/', $css, $m);
+    contient('text-align: left', (string) ($m[1] ?? ''), 'alignée à gauche de sa colonne');
+});
+
+test('un menu occupe toute la largeur de la case, et ses libellés y tiennent', function () {
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    contient('.admin-reglage-champ select { grid-column: 1 / -1; width: 100%; }', $css, 'le menu prend les deux colonnes de la case');
+    foreach (REGLAGES as $cle => $r) {
+        if (isset($r['choix'])) {
+            foreach ($r['choix'] as $libelle) {
+                vrai(mb_strlen($libelle) <= 14, "$cle : « $libelle » tient dans la case (14 caractères au plus)");
+            }
+        }
+    }
 });
 
 test('la migration 12 crée la table, rejouable, avec les bornes qu\'il faut', function () {

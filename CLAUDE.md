@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (886 tests : 751 PHP en 52 fichiers, 135 JavaScript)
+php tests/lancer.php              # toute la suite (892 tests : 756 PHP en 52 fichiers, 136 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -518,6 +518,9 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   Ces actions sont dans `ACTIONS_LIBRES_DU_BLOQUE` (un administrateur bloqué garde
   la page) ; `tests/cas/admin_test.php` exige que chaque `case 'admin.*'` soit dans
   `ACTIONS_ADMIN` et inversement.
+- **Le menu des forfaits va du plus haut au plus bas : illimité, standard, bloqué**
+  (demande de l'utilisateur). C'est l'ordre de `ADMIN_FORFAITS` — qui n'est PAS celui de
+  l'`ENUM` de la base — et celui du tri de la colonne « Forfait » (`js/admin.js`).
 - **Changer le forfait envoie un e-mail** (`avis_forfait()`, textes dans
   `mailer.php`, tous des fonctions pures). Bloquer EXIGE une raison
   (`admin_raison_erreur()`), rangée dans `raison_blocage` avec la date
@@ -580,6 +583,16 @@ valeur de la base passe par le MÊME `max(…, min(…))` que si elle venait du 
 - **`CRON_HEURES` : 1 à 168 h, `.env` compris** (demande de l'utilisateur ; il montait
   à 720). `RAPPORT_HEURES` garde 720. **Les bornes des autres réglages ne touchent
   que la page** : le `.env`, lui, garde les planchers qu'il avait.
+- **Chaque ligne dit son nom dans le `.env`** (« dans le .env : COUVERTURE_QUOTA_ILLIMITE »,
+  demande de l'utilisateur) : certains libellés (« Idem, forfait illimité ») ne se
+  comprennent que par leur clé. La pastille d'origine dit « modifié », « .env » ou « défaut ».
+- **Les cases s'alignent d'une ligne à l'autre** : la case a une largeur fixe et la colonne de
+  l'unité celle de la PLUS GRANDE unité (10 caractères : « recherches », « tentatives »), l'unité
+  collée à gauche, contre la case ; la pastille a aussi une largeur fixe. Sans cela chaque ligne
+  avait sa propre largeur et rien ne tombait sous rien. `tests/cas/reglages_test.php` compare
+  la largeur dite dans `style.css` à la plus grande unité de `REGLAGES` : une unité plus longue
+  fait échouer le test. Un menu (`choix`) occupe toute la case, ses libellés tiennent donc en
+  14 caractères.
 - **Deux jeux de bornes, ne pas les confondre** : celles de `REGLAGES` valent pour ce
   qu'on saisit et ce qu'on relit de la base ; celles de `config.php` valent pour le
   `.env` ET pour ce qui vient de la base (la valeur y repasse). Quand le code déduit

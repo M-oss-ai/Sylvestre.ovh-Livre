@@ -102,7 +102,7 @@ const REGLAGES = [
         'groupe' => 'couverture', 'libelle' => 'Séries classées « erotica »',
         'aide' => "Ouvre la possibilité, sans l'accorder : il faut encore que la personne déclare sa majorité et lève le filtre. Un choix qui engage l'éditeur du site.",
         'min' => 0, 'max' => 1, 'defaut' => 0,
-        'choix' => ['0' => 'Bloquées', '1' => 'Autorisées, après déclaration de majorité'],
+        'choix' => ['0' => 'Bloquées', '1' => 'Autorisées'],
     ],
 
     // ---- Durées ----

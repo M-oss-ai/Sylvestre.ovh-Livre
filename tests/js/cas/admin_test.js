@@ -87,9 +87,14 @@ test("par identifiant, accents et casse ignorés", () => {
   egale("3,2,1", ids(A.trier(l, "identifiant", 1)), "alex, Élodie, zoé");
 });
 
-test("par forfait : standard, illimité, bloqué", () => {
+test("par forfait : illimité, standard, bloqué — du plus haut au plus bas", () => {
   const l = [compte({ id: 1, forfait: "bloque" }), compte({ id: 2, forfait: "standard" }), compte({ id: 3, forfait: "illimite" })];
-  egale("2,3,1", ids(A.trier(l, "forfait", 1)), "dans l ordre du menu");
+  egale("3,2,1", ids(A.trier(l, "forfait", 1)), "dans l ordre du menu");
+  egale("1,2,3", ids(A.trier(l, "forfait", -1)), "et en sens inverse");
+});
+
+test("Admin.FORFAITS : le menu garde cet ordre", () => {
+  egale("illimite,standard,bloque", Object.keys(A.FORFAITS).join(","), "illimité, standard, bloqué");
 });
 
 test("par inscription et par nombre de séries", () => {
@@ -152,7 +157,7 @@ test("aucun compte : des zéros", () => {
 groupe("Réglages — la pastille et le bouton Enregistrer");
 
 test("sourceTexte() : le mot de la pastille", () => {
-  egale("modifié ici", A.sourceTexte("base"), "changé dans la page");
+  egale("modifié", A.sourceTexte("base"), "changé dans la page");
   egale(".env", A.sourceTexte("env"), "le .env le fixe");
   egale("défaut", A.sourceTexte("defaut"), "rien nulle part");
   egale("", A.sourceTexte("inconnue"), "une origine inconnue ne dit rien");

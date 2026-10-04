@@ -405,6 +405,7 @@ forfait** : on peut être bloqué et administrateur.
   enregistrée **remplace celle du `.env`** et s'applique dès la requête suivante, pour tout le
   monde ; « ↩ .env » l'efface. Chaque réglage a ses bornes (3 à 20 tentatives et 60 à 600 s de
   blocage pour les freins, 0 à 365 jours pour les sessions, 1 à 168 h pour `CRON_HEURES`…).
+  Chaque ligne dit son nom dans le `.env`, et d'où vient sa valeur (« modifié », « .env » ou « défaut »).
   Les secrets, l'adresse du site, `ADMIN_EMAIL`, les mots de passe et les images restent dans
   le `.env`. Il faut avoir rejoué `livre.sql` (migration 12, la table `reglage`) ; sans elle, la
   carte le dit et le `.env` gouverne seul.
