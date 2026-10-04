@@ -394,7 +394,10 @@ décimaux, comparés comme des nombres, préférence de langue, plafond),
 retard sur le lecteur ; l'état sans numéro quand aucun tome n'est connu ; rien quand on ne sait pas), `serie_au_bout`, `statut_apres_avance` (« → » au-delà de MangaDex), `statut_apres_recul` (« ← » depuis « En attente » ou
 « Terminée » : « En cours » seulement en quittant le dernier tome connu), `publication_connue`,
 la mention dans `carte_html`, son « ⓘ » (`serie_fin_info` : seules les quatre mentions sans numéro de tome
-ont une explication, qui dit qui parle, les autres n'en ont pas ni de « ⓘ » ; le balisage accessible ; le
+ont une explication, courte (≤ 100 caractères), qui dit qui parle, les autres n'en ont pas ni de « ⓘ » ; le texte
+de la bulle dans `data-aide`, aucune explication dans la carte, la bulle unique de `index.php` ; `Bibliotheque.placerBulle` :
+à droite, au-dessus, au-dessous, jamais hors de la fenêtre, jamais NaN ; ses fermetures et son maintien quand le relevé
+refait une autre carte, lus dans les sources de `js/app.js` ; le balisage accessible ; le
 câblage dans `js/app.js`), le compteur du filtre, la couleur, les
 migrations 15 et 16, la
 carte INCHANGÉE dans tous les autres cas.

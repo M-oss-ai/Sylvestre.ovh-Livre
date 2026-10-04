@@ -340,7 +340,9 @@ test('SEULES les mentions sans numéro de tome ont une explication (demande de l
         $i = serie_fin_info($serie);
         vrai($i['texte'] !== '', $nom . ' : une mention');
         vrai(mb_strlen($i['aide'], 'UTF-8') >= 30, $nom . ' : une explication, pas un mot');
-        contient('MangaDex indique', $i['aide'], $nom . ' : on dit QUI parle');
+        contient('D\'après MangaDex', $i['aide'], $nom . ' : on dit QUI parle');
+        vrai(mb_strlen($i['aide'], 'UTF-8') <= 100, $nom . ' : COURTE, pour une petite bulle (' . mb_strlen($i['aide'], 'UTF-8') . ' caractères)');
+        sans("\n", $i['aide'], $nom . ' : une seule ligne de texte');
         egale($i['texte'], serie_fin_etiquette($serie), $nom . ' : serie_fin_etiquette() est le texte de serie_fin_info()');
     }
     $avec_numero = [
@@ -378,10 +380,9 @@ test('une aide n\'existe jamais sans mention, et une mention porte son numéro O
     }
 });
 
-test('« Série terminée » est expliquée par rapport au statut « Terminée » de la pastille (la confusion qu\'on a eue)', function () {
+test('« Série terminée » se distingue du statut « Terminée » de la pastille (la confusion qu\'on a eue)', function () {
     $aide = serie_fin_info(serie_mangadex('completed', 2, 0))['aide'];
-    contient('statut « Terminée »', $aide, 'on nomme l\'autre');
-    contient('le vôtre', $aide, 'et on dit lequel est à qui');
+    contient('votre statut « Terminée »', $aide, 'on nomme l\'autre, et on dit lequel est à qui');
 });
 
 test('« En cours de publication » dit pourquoi il n\'y a pas de numéro', function () {
@@ -390,18 +391,21 @@ test('« En cours de publication » dit pourquoi il n\'y a pas de numéro', func
     contient('aucun tome numéroté', $i['aide'], 'la raison');
 });
 
-groupe('carte_html() — le « ⓘ »');
+groupe('carte_html() — le « ⓘ » et sa bulle');
 
-test('un bouton accessible, avec son explication cachée juste dessous', function () {
+test('un bouton accessible, qui porte son texte : la carte ne contient ni explication ni bulle', function () {
     $html = carte_html(serie_mangadex('completed', 2, 0));
-    contient('<span class="card-fin-texte">Série terminée</span><button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="aide-fin-7"', $html,
-        'un <button> à côté de la mention, replié, relié à son explication (tabindex -1 : la carte active le rend)');
+    contient('<span class="card-fin-texte">Série terminée</span><button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="bulle-info"', $html,
+        'un <button> à côté de la mention, fermé, relié à la bulle de la page (tabindex -1 : la carte active le rend)');
     contient('aria-label="Que veut dire « Série terminée » ?"', $html, 'le lecteur d\'écran sait de quoi il s\'agit');
     contient('title="Que veut dire ce message ?"', $html, 'et la souris aussi');
-    contient('>ⓘ</button>', $html, 'le signe');
-    contient('<p class="card-fin-aide hidden" id="aide-fin-7" role="note">MangaDex indique que la publication de la série est terminée', $html, 'l\'explication, cachée au départ');
-    vrai(strpos($html, 'class="card-fin"') < strpos($html, 'class="card-fin-aide'), 'sous la mention');
-    vrai(strpos($html, 'class="card-fin-aide') < strpos($html, 'class="card-actions"'), 'et avant les boutons');
+    contient('data-aide="D&#039;après MangaDex, la publication est finie.', $html, 'le texte de la bulle est dans data-aide');
+    contient('>ⓘ</button></p>', $html, 'le signe, et rien après dans la mention');
+    /* « Que ça ne prenne pas de place dans la div » (demande de l'utilisateur) : plus aucun
+       bloc d'explication dans la carte, même caché. */
+    sans('card-fin-aide', $html, 'aucun bloc d\'explication dans la carte');
+    sans('role="note"', $html, 'ni de note');
+    egale(1, substr_count($html, 'D&#039;après MangaDex'), 'le texte n\'est écrit qu\'une fois');
 });
 
 test('les quatre mentions sans numéro ont leur « ⓘ »', function () {
@@ -409,7 +413,7 @@ test('les quatre mentions sans numéro ont leur « ⓘ »', function () {
         $html = carte_html(serie_mangadex($etat, 2, 0));
         contient('<span class="card-fin-texte">' . $texte . '</span>', $html, $etat . ' : la mention');
         contient('class="card-info"', $html, $etat . ' : son « ⓘ »');
-        contient('class="card-fin-aide hidden"', $html, $etat . ' : son explication');
+        contient('data-aide="D&#039;après MangaDex', $html, $etat . ' : sa bulle');
     }
 });
 
@@ -426,7 +430,7 @@ test('une mention avec un numéro de tome n\'a PAS de « ⓘ » (demande de l\'u
         $html = carte_html($serie);
         contient('<span class="card-fin-texte">' . e($mention) . '</span></p>', $html, $mention . ' : la mention, seule');
         sans('card-info', $html, $mention . ' : pas de bouton');
-        sans('card-fin-aide', $html, $mention . ' : pas d\'explication cachée');
+        sans('data-aide', $html, $mention . ' : pas de bulle');
         sans('aria-controls', $html, $mention . ' : rien à relier');
     }
 });
@@ -434,38 +438,72 @@ test('une mention avec un numéro de tome n\'a PAS de « ⓘ » (demande de l\'u
 test('pas de mention, pas de « ⓘ »', function () {
     $html = carte_html(serie_mangadex('', 2, 0));
     sans('card-info', $html, 'rien à expliquer');
-    sans('card-fin-aide', $html, 'et aucune explication vide');
-});
-
-test('l\'identifiant de l\'explication est celui de la série : deux cartes ne se confondent pas', function () {
-    $a = carte_html(serie_mangadex('hiatus', 2, 0) + ['id' => 7]);
-    $b = carte_html(['id' => 8] + serie_mangadex('hiatus', 2, 0));
-    contient('id="aide-fin-7"', $a, 'série 7');
-    contient('id="aide-fin-8"', $b, 'série 8');
+    sans('data-aide', $html, 'et aucune bulle vide');
 });
 
 test('tout est échappé : un titre ou une explication ne devient jamais du HTML', function () {
     $html = carte_html(serie_mangadex('completed', 2, 0) + ['titre' => '"><script>alert(1)</script>']);
     sans('<script>', $html, 'aucune balise injectée');
     contient('class="card-info"', $html, 'et le « ⓘ » est bien là : le test porte sur une carte qui en a un');
+    /* data-aide est un attribut entre guillemets : un guillemet du texte le fermerait. */
+    foreach (['ongoing', 'hiatus', 'completed', 'cancelled'] as $etat) {
+        $attr = serie_fin_info(serie_mangadex($etat, 2, 0))['aide'];
+        sans('"', $attr, $etat . ' : le texte de la bulle ne contient aucun guillemet droit');
+    }
 });
 
-test('js/app.js : le « ⓘ » plie et déplie, sans rien envoyer au serveur ni sélectionner la carte', function () {
+test('index.php porte la bulle unique, hors de toute carte, vide et fermée', function () {
+    $page = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/index.php'));
+    contient('<div id="bulle-info" class="bulle-info fermee" role="status"></div>', $page, 'la bulle, vide et fermée, annoncée comme « status »');
+    egale(1, substr_count($page, 'id="bulle-info"'), 'une seule pour toute la page');
+    vrai(strpos($page, 'id="bulle-info"') > strpos($page, '</main>'), 'après la grille : une carte la rognerait (overflow: hidden)');
+    $carte = (string) file_get_contents(CHEMIN_SITE . '/includes/carte.php');
+    sans('id="bulle-info"', $carte, 'et jamais dans une carte');
+});
+
+test('js/app.js : le « ⓘ » ouvre la bulle, sans rien envoyer au serveur ni sélectionner la carte', function () {
     $js = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/js/app.js'));
     contient('const info = e.target.closest(".card-info");', $js, 'l\'écouteur du « ⓘ »');
-    contient('info.setAttribute("aria-expanded", ouvre ? "true" : "false");', $js, 'aria-expanded suit');
-    contient('aide.classList.toggle("hidden", !ouvre);', $js, 'l\'explication se plie et se déplie');
+    contient('if (info === ancreBulle) fermerBulle();', $js, 'un second clic sur le « ⓘ » ferme');
+    contient('info.setAttribute("aria-expanded", "true");', $js, 'aria-expanded suit');
+    contient('ancre.setAttribute("aria-expanded", "false");', $js, 'et retombe à la fermeture');
+    contient('$bulle.textContent = texte;', $js, 'le texte est posé comme TEXTE, jamais comme HTML');
+    sans('$bulle.innerHTML', $js, 'jamais en innerHTML');
     contient('e.target.closest("[data-action], .card-info")', $js, 'le clic ne sélectionne pas la carte');
     contient('const FOCUSABLES_CARTE = ".card-cover, .card-actions button, .card-info";', $js,
         'la carte active rend son « ⓘ » à la tabulation : un seul arrêt par carte, plus celui-là');
-    $bloc = substr($js, (int) strpos($js, 'const info = e.target.closest(".card-info");'), 500);
+    $debut = (int) strpos($js, 'function fermerBulle(');
+    $bloc = substr($js, $debut, (int) strpos($js, 'window.addEventListener("resize", () => fermerBulle());') - $debut);
     sans('L.api(', $bloc, 'aucun appel serveur : ce n\'est pas une commande');
     sans('BLOQUE', $bloc, 'et un compte bloqué s\'en sert aussi');
+    sans('setAttribute("style"', $bloc, 'la position se pose en CSSOM, la CSP refuse l\'attribut style');
 });
 
-test('style.css : le « ⓘ » et son explication ont leur style', function () {
+test('js/app.js : la bulle se ferme au clic ailleurs, à Échap, au défilement, au redimensionnement, au changement de vue', function () {
+    $js = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/js/app.js'));
+    contient('fermerBulle(); // un clic ailleurs, la bulle elle-même comprise', $js, 'un clic ailleurs');
+    contient('if (ancreBulle) { fermerBulle(true); return; }', $js, 'Échap, qui rend le focus au « ⓘ »');
+    contient('window.addEventListener("scroll", () => fermerBulle(), { passive: true });', $js, 'le défilement');
+    contient('window.addEventListener("resize", () => fermerBulle());', $js, 'le redimensionnement');
+    contient('if (ancreBulle && e.target === ancreBulle) fermerBulle();', $js, 'le « ⓘ » qui perd le focus');
+    /* Le relevé des nouveaux tomes refait des cartes juste après le chargement : fermer la
+       bulle à chacune la faisait disparaître sous les yeux de qui la lisait. */
+    $debut = (int) strpos($js, 'function appliquerVue()');
+    $fin   = (int) strpos($js, 'function majCompteurs(');
+    contient('verifierBulle();', substr($js, $debut, $fin - $debut), 'appliquerVue() vérifie la bulle à la fin, il ne la ferme pas d\'office');
+    sans('fermerBulle();', substr($js, $debut, $fin - $debut), 'et ne la ferme pas d\'office');
+    $bloc = substr($js, (int) strpos($js, 'function verifierBulle()'), 260);
+    contient('if (!ancreBulle.isConnected || ancreBulle.closest(".card.hidden")) fermerBulle();', $bloc, 'fermée seulement si son « ⓘ » a disparu ou se cache');
+    contient('else poserBulle();', $bloc, 'sinon replacée : une autre carte a pu changer de hauteur');
+});
+
+test('style.css : le « ⓘ » et sa bulle ont leur style, la bulle est hors des cartes', function () {
     $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
-    foreach (['.card-info {', '.card-info[aria-expanded="true"]', '.card-fin-aide {', '.card-fin-texte'] as $regle) {
+    foreach (['.card-info {', '.card-info[aria-expanded="true"]', '.bulle-info {', '.bulle-info.fermee {', '.card-fin-texte'] as $regle) {
         contient($regle, $css, $regle);
     }
+    $bulle = substr($css, (int) strpos($css, '.bulle-info {'), 400);
+    contient('position: fixed;', $bulle, 'fixe : hors du flux, elle ne prend aucune place dans la carte');
+    contient('z-index: 30;', $bulle, 'au-dessus de la barre du haut');
+    sans('.card-fin-aide', $css, 'l\'ancien bloc d\'explication, replié dans la carte, n\'existe plus');
 });

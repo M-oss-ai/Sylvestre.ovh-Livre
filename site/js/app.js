@@ -243,10 +243,59 @@ window.Bibliotheque = (() => {
     return { gauche: gauche > 1, droite: gauche < reste - 1 };
   }
 
+  /**
+   * Où poser la bulle d'un « ⓘ » (demande de l'utilisateur : « que ça ne prenne pas de
+   * place dans la carte », le message à droite du « ⓘ », montant à partir de lui, quitte
+   * à recouvrir la carte voisine).
+   *
+   *   ancre      : le « ⓘ », { left, right, top, bottom } en pixels de la fenêtre ;
+   *   fenetre    : { largeur, hauteur } de la zone visible ;
+   *   hauteurPour: (largeur) => hauteur de la bulle une fois le texte mis à cette largeur
+   *                (mesurée sur la page : la fonction elle-même ne touche à rien).
+   *
+   * Retourne { cote, left, top, largeur }, en pixels de la fenêtre :
+   *   - « droite » : à droite du « ⓘ », si 110 px au moins y tiennent (la mention est à sa
+   *     gauche : elle reste lisible) ; son bas sur le bas du « ⓘ », donc elle monte ;
+   *   - « dessus » : quand la droite manque de place (mention longue, carte contre le bord),
+   *     centrée sur le « ⓘ » et posée au-dessus de lui — jamais sur la mention qu'elle explique ;
+   *   - « dessous » : comme « dessus », quand il n'y a pas la place au-dessus.
+   * Dans tous les cas elle reste dans la fenêtre, à 8 px des bords.
+   */
+  const BULLE_MARGE = 8;
+  const BULLE_ECART = 6;
+  const BULLE_LARGEUR_MAX = 200;
+  const BULLE_LARGEUR_MIN = 110;
+
+  function placerBulle(ancre, fenetre, hauteurPour) {
+    const W = Math.max(0, Number(fenetre && fenetre.largeur) || 0);
+    const H = Math.max(0, Number(fenetre && fenetre.hauteur) || 0);
+    const placeADroite = W - BULLE_MARGE - (ancre.right + BULLE_ECART);
+    let cote, largeur, left, hauteur, top;
+    if (placeADroite >= BULLE_LARGEUR_MIN) {
+      cote = "droite";
+      largeur = Math.min(BULLE_LARGEUR_MAX, placeADroite);
+      left = ancre.right + BULLE_ECART;
+      hauteur = Math.max(0, Number(hauteurPour(largeur)) || 0);
+      top = ancre.bottom - hauteur;
+    } else {
+      cote = "dessus";
+      largeur = Math.max(0, Math.min(BULLE_LARGEUR_MAX, W - 2 * BULLE_MARGE));
+      const milieu = (ancre.left + ancre.right) / 2;
+      left = Math.max(BULLE_MARGE, Math.min(milieu - largeur / 2, W - BULLE_MARGE - largeur));
+      hauteur = Math.max(0, Number(hauteurPour(largeur)) || 0);
+      top = ancre.top - BULLE_ECART - hauteur;
+      if (top < BULLE_MARGE) {
+        cote = "dessous";
+        top = ancre.bottom + BULLE_ECART;
+      }
+    }
+    top = Math.max(BULLE_MARGE, Math.min(top, H - BULLE_MARGE - hauteur));
+    return { cote, left: Math.round(left), top: Math.round(top), largeur: Math.round(largeur) };
+  }
   return {
     voisine, suiviDefilement, annonceQuota, texteQuotaRecherche, pagesSeries,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
-    panneauApres, panneauMemorise, aucunFiltre, bordsDefilement,
+    panneauApres, panneauMemorise, aucunFiltre, bordsDefilement, placerBulle,
   };
 })();
 
@@ -298,6 +347,9 @@ window.Bibliotheque = (() => {
   const $plusSeries = document.getElementById("plus-series");
   const $btnPlus = document.getElementById("btn-plus-series");
   const $plusInfo = document.getElementById("plus-info");
+  // Le « ⓘ » dont la bulle est ouverte, ou null (voir « Le ⓘ de la mention »).
+  let ancreBulle = null;
+  const $bulle = document.getElementById("bulle-info");
   // Série MangaDex de la fiche ouverte, ou "" si elle n'est pas liée.
   let lienMangadex = "";
   let coverEnAttente = null; // null | {type:'url'|'file', …}
@@ -430,6 +482,8 @@ window.Bibliotheque = (() => {
     if (!carteActive || !carteActive.isConnected || carteActive.classList.contains("hidden")) {
       rendreActive(visiblesDansLOrdre()[0] || null);
     }
+
+    verifierBulle(); // la carte de son « ⓘ » a pu être refaite, filtrée ou repliée
   }
 
   function majCompteurs(compte) {
@@ -657,18 +711,80 @@ window.Bibliotheque = (() => {
 
   /* ---------------- Actions sur une carte ---------------- */
 
-  /* Le « ⓘ » de la mention (« Tome 44 en attente »…) : déplie ou replie son
-     explication, juste dessous. Ce n'est pas une commande — rien ne part au serveur,
-     un compte bloqué s'en sert aussi — d'où ni data-action ni garde BLOQUE. */
-  $grid.addEventListener("click", (e) => {
+  /* Le « ⓘ » de la mention (« En cours de publication », « Série terminée »…) : une petite
+     bulle à côté de lui, avec le texte court que carte.php range dans son data-aide
+     (demande de l'utilisateur : « que ça ne prenne pas de place dans la div et que ça
+     disparaisse au clic ailleurs »). Ce n'est pas une commande — rien ne part au serveur,
+     un compte bloqué s'en sert aussi — d'où ni data-action ni garde BLOQUE.
+
+     UNE seule bulle pour toute la page (#bulle-info, posée par index.php hors de toute
+     carte : la carte a « overflow: hidden » et la rognerait), en position fixe. Elle se
+     ferme au clic ailleurs — y compris sur elle —, à Échap, au défilement, au
+     redimensionnement, quand son « ⓘ » perd le focus, et quand la carte est refaite ou
+     filtrée. Elle est un « role=status » : le texte est lu quand il y est posé. */
+  function fermerBulle(rendreFocus = false) {
+    if (!ancreBulle) return;
+    const ancre = ancreBulle;
+    ancreBulle = null;
+    ancre.setAttribute("aria-expanded", "false");
+    $bulle.textContent = "";
+    $bulle.classList.add("fermee");
+    for (const p of ["left", "top", "width"]) $bulle.style.removeProperty(p);
+    if (rendreFocus && ancre.isConnected) ancre.focus();
+  }
+
+  // Pose la bulle ouverte à côté de son « ⓘ » (Bibliotheque.placerBulle décide où).
+  function poserBulle() {
+    const zone = document.documentElement;
+    const place = B.placerBulle(
+      ancreBulle.getBoundingClientRect(),
+      { largeur: zone.clientWidth, hauteur: zone.clientHeight },
+      (largeur) => {
+        $bulle.style.setProperty("width", largeur + "px"); // CSSOM : la CSP l'accepte
+        return $bulle.offsetHeight;
+      }
+    );
+    $bulle.style.setProperty("width", place.largeur + "px");
+    $bulle.style.setProperty("left", place.left + "px");
+    $bulle.style.setProperty("top", place.top + "px");
+  }
+
+  function ouvrirBulle(info) {
+    const texte = info.dataset.aide || "";
+    fermerBulle();
+    if (!texte || !$bulle) return;
+    ancreBulle = info;
+    info.setAttribute("aria-expanded", "true");
+    $bulle.classList.remove("fermee");
+    $bulle.textContent = texte; // du TEXTE : jamais du HTML
+    poserBulle();
+  }
+
+  /* Après un changement de la grille (une carte refaite par le relevé, un filtre, une
+     page de plus) : la bulle ne se ferme que si SON « ⓘ » a disparu ou se cache. Sinon elle
+     reste, et se replace — une autre carte a pu changer de hauteur au-dessus. Le relevé
+     des nouveaux tomes arrive juste après le chargement : fermer à chaque carte refaite
+     faisait disparaître la bulle sous les yeux de qui venait de la lire. */
+  function verifierBulle() {
+    if (!ancreBulle) return;
+    if (!ancreBulle.isConnected || ancreBulle.closest(".card.hidden")) fermerBulle();
+    else poserBulle();
+  }
+
+  document.addEventListener("click", (e) => {
     const info = e.target.closest(".card-info");
-    if (!info) return;
-    const aide = document.getElementById(info.getAttribute("aria-controls"));
-    if (!aide) return;
-    const ouvre = aide.classList.contains("hidden");
-    aide.classList.toggle("hidden", !ouvre);
-    info.setAttribute("aria-expanded", ouvre ? "true" : "false");
+    if (!info) {
+      fermerBulle(); // un clic ailleurs, la bulle elle-même comprise
+      return;
+    }
+    if (info === ancreBulle) fermerBulle();
+    else ouvrirBulle(info);
   });
+  document.addEventListener("focusout", (e) => {
+    if (ancreBulle && e.target === ancreBulle) fermerBulle();
+  });
+  window.addEventListener("scroll", () => fermerBulle(), { passive: true });
+  window.addEventListener("resize", () => fermerBulle());
 
   $grid.addEventListener("click", (e) => {
     const cible = e.target.closest("[data-action]");
@@ -1405,6 +1521,7 @@ window.Bibliotheque = (() => {
       return;
     }
     if (e.key !== "Escape") return;
+    if (ancreBulle) { fermerBulle(true); return; } // la bulle d'abord : elle est au-dessus de tout
     if (quotaOuvert) fermerQuota();
     else if (abandonOuvert) fermerAbandon(false);   // Échap annule la question, pas la saisie
     else if (confirmOuverte) fermerConfirmation();

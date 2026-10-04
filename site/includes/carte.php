@@ -78,15 +78,17 @@ function serie_fin_etiquette(array $s): string
  * La mention (voir serie_fin_etiquette()) ET son explication, pour le « ⓘ » de la
  * carte (demande de l'utilisateur : « un petit message clair »).
  *
- * Retourne ['texte' => la mention, 'aide' => une ou deux phrases qui disent ce
- * qu'elle veut dire et d'où elle vient]. Les deux sont '' quand on ne sait rien.
+ * Retourne ['texte' => la mention, 'aide' => une phrase COURTE qui dit ce qu'elle
+ * veut dire et d'où elle vient]. Les deux sont '' quand on ne sait rien. L'aide
+ * s'affiche dans une petite bulle d'environ 200 px (demande de l'utilisateur : « résume
+ * le message ») : une phrase, une centaine de caractères au plus (testé).
  *
  * **Seules les mentions SANS numéro de tome ont une aide** (demande de l'utilisateur :
  * « le ⓘ seulement sur les messages sans tomes ou flous, comme “En cours de
  * publication” et “Série terminée” ») : « En cours de publication », « En pause »,
  * « Série terminée », « Série arrêtée » — celles qu'on ne comprend pas d'un coup d'œil.
  * « Tome 44 en attente », « En pause au tome 43 »… se suffisent : 'aide' vaut '' et la
- * carte n'a pas de « ⓘ ». L'aide dit toujours QUI parle — « MangaDex indique que… » —
+ * carte n'a pas de « ⓘ ». L'aide dit toujours QUI parle — « D'après MangaDex… » —
  * parce que ce sont des informations de MangaDex, saisies par des bénévoles, pas des
  * certitudes du site. Fonction pure, testée : un « ⓘ » n'existe que s'il a quelque
  * chose à dire (carte_html() le décide sur 'aide').
@@ -125,20 +127,19 @@ function serie_fin_info(array $s): array
         return match ($publication) {
             'ongoing'   => [
                 'texte' => 'En cours de publication',
-                'aide'  => 'MangaDex indique que la série paraît toujours, mais il ne connaît aucun tome numéroté : le site ne peut pas dire où elle en est.',
+                'aide'  => 'D\'après MangaDex, la série paraît toujours, mais aucun tome numéroté n\'y est connu.',
             ],
             'hiatus'    => [
                 'texte' => 'En pause',
-                'aide'  => 'MangaDex indique que la série est en pause, mais il ne connaît aucun tome numéroté : le site ne peut pas dire à quel tome.',
+                'aide'  => 'D\'après MangaDex, la série est en pause, mais aucun tome numéroté n\'y est connu.',
             ],
             'completed' => [
                 'texte' => 'Série terminée',
-                'aide'  => 'MangaDex indique que la publication de la série est terminée, mais ne donne pas son nombre de tomes. '
-                    . 'À ne pas confondre avec le statut « Terminée » de la pastille : celui-là est le vôtre, il dit que vous avez fini de la lire.',
+                'aide'  => 'D\'après MangaDex, la publication est finie. Ce n\'est pas votre statut « Terminée ».',
             ],
             default     => [
                 'texte' => 'Série arrêtée',
-                'aide'  => 'MangaDex indique que la série a été arrêtée avant sa fin, mais il ne connaît aucun tome numéroté.',
+                'aide'  => 'D\'après MangaDex, la série est arrêtée, mais aucun tome numéroté n\'y est connu.',
             ],
         };
     }
@@ -201,22 +202,23 @@ function carte_html(array $s, bool $lecture_seule = false): string
     $etiquette = $emprunter ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>' : '';
     /* La mention ; et, SEULEMENT quand elle n'a pas de numéro de tome (« En cours de
        publication », « Série terminée »… : serie_fin_info() lui donne une aide), un « ⓘ » :
-       un bouton qui déplie l'explication juste dessous (js/app.js, « card-info »). Pas de
+       un bouton dont le clic ouvre une petite bulle à côté de lui (js/app.js, « card-info »).
+       Le texte de la bulle est dans data-aide, PAS dans la carte : la bulle est un élément
+       unique de la page (#bulle-info, index.php), qui ne prend aucune place dans la carte
+       (demande de l'utilisateur) et que « overflow: hidden » ne rogne pas. Pas de
        data-action : ce n'est pas une commande, et un compte bloqué le garde (« aucune
        action pour le script »). tabindex="-1" comme tout ce qui se focalise dans une
-       carte ; la carte active le rend (app.js, FOCUSABLES_CARTE). aria-expanded dit s'il
-       est déplié. */
+       carte ; la carte active le rend (app.js, FOCUSABLES_CARTE). aria-expanded dit si sa
+       bulle est ouverte. */
     $fin_html = '';
     if ($mention !== '') {
         $bouton = '';
-        $aide   = '';
         if ($info['aide'] !== '') {
-            $aide_id = 'aide-fin-' . (int) $s['id'];
-            $bouton  = '<button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="' . $aide_id . '"'
-                . ' aria-label="Que veut dire « ' . e($mention) . ' » ?" title="Que veut dire ce message ?">ⓘ</button>';
-            $aide    = '<p class="card-fin-aide hidden" id="' . $aide_id . '" role="note">' . e($info['aide']) . '</p>';
+            $bouton = '<button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="bulle-info"'
+                . ' aria-label="Que veut dire « ' . e($mention) . ' » ?" title="Que veut dire ce message ?"'
+                . ' data-aide="' . e($info['aide']) . '">ⓘ</button>';
         }
-        $fin_html = '<p class="card-fin"><span class="card-fin-texte">' . e($mention) . '</span>' . $bouton . '</p>' . $aide;
+        $fin_html = '<p class="card-fin"><span class="card-fin-texte">' . e($mention) . '</span>' . $bouton . '</p>';
     }
 
     /* Le même libellé quel que soit le statut : c'est le dernier tome

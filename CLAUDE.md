@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1144 tests : 964 PHP en 56 fichiers, 180 JavaScript)
+php tests/lancer.php              # toute la suite (1153 tests : 965 PHP en 56 fichiers, 188 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -648,15 +648,34 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   attente », « En pause au tome 43 », « Se termine au tome 50 », « Arrêtée au tome 43 », « MangaDex s'arrête au tome
   3 », « Tome 21 en attente » posée à la main) ont `'aide' => ''` et **la carte n'a pas de « ⓘ »** : `carte_html()`
   le décide sur `$info['aide'] !== ''`, jamais sur la seule présence d'une mention. Une aide fait au moins une phrase
-  et dit QUI parle (« MangaDex indique que… » : des données de bénévoles, pas des certitudes du site) ; « Série
-  terminée » dit en plus qu'il ne faut pas la confondre avec le statut « Terminée » de la pastille (le vôtre). Pas
-  de mention, pas de « ⓘ » ; pas d'aide, pas de « ⓘ ». Dans la carte : un `<button class="card-info" aria-expanded aria-controls="aide-fin-<id>">` après le
-  texte, et le `<p class="card-fin-aide hidden" role="note">` juste dessous ; `js/app.js` plie/déplie
-  (`hidden` + `aria-expanded`), sans appel serveur et sans garde `BLOQUE` (un compte bloqué s'en sert : il
-  explique, il ne change rien). **Ni `data-action` ni sélection de la carte** (le clic est exclu du clic de sélection)
-  ; **`tabindex="-1"` comme tout ce qui se focalise dans une carte, rendu à la carte active** par `FOCUSABLES_CARTE`
-  (qui compte donc `.card-info`). Replié au départ ; une carte refaite (relevé, avancer…) le replie. Pas de bulle
-  flottante : l'explication s'insère dans la carte, ce qui marche au toucher comme à la souris. **Les données** : `publication` (migration 16, `VARCHAR(12)`, pas un
+  et dit QUI parle (« D'après MangaDex… » : des données de bénévoles, pas des certitudes du site) ; « Série
+  terminée » dit en plus que ce n'est pas le statut « Terminée » de la pastille (« votre statut »). **Elle est COURTE**
+  (demande de l'utilisateur : « résume le message » : une phrase, 100 caractères au plus, testé), car elle tient dans
+  une bulle d'environ 200 px. Pas de mention, pas de « ⓘ » ; pas d'aide, pas de « ⓘ ».
+  **La bulle ne prend aucune place dans la carte et disparaît au clic ailleurs** (demande de l'utilisateur, avec un
+  dessin : le message à droite du « ⓘ », quitte à déborder sur la carte voisine). D'où : **UNE seule bulle pour la
+  page**, `<div id="bulle-info" class="bulle-info fermee" role="status">` posée par `index.php` APRÈS la grille,
+  jamais dans une carte (la carte a `overflow: hidden` et la rognerait) ; la carte ne porte que
+  `<button class="card-info" aria-expanded aria-controls="bulle-info" data-aide="…">` après la mention — plus de
+  `<p>` d'explication, même caché. `js/app.js` (section « Le « ⓘ » de la mention ») pose le texte en `textContent`
+  (jamais en HTML) et la place en `position: fixed` par `left`/`top`/`width` **en CSSOM** (la CSP refuse l'attribut
+  `style`). **Où** : `Bibliotheque.placerBulle(ancre, fenetre, hauteurPour)` (pure, testée) — « droite » du « ⓘ » si 110 px
+  au moins y tiennent (le bas de la bulle sur le bas du « ⓘ » : elle monte, la mention à gauche reste lisible), sinon
+  « dessus » (centrée sur lui, jamais sur la mention), sinon « dessous » ; toujours à 8 px des bords. (Une première
+  version préférait la GAUCHE avec un minimum de 140 px : sur un téléphone, 138 px à droite la faisaient passer par-dessus
+  la mention elle-même.) **Quand elle se ferme** : un clic ailleurs (la bulle elle-même comprise), un second clic sur
+  son « ⓘ », Échap (qui rend le focus au « ⓘ », avant toute fenêtre), le défilement, le redimensionnement, le « ⓘ » qui
+  perd le focus. **Quand une carte est refaite ou filtrée** (`appliquerVue()` → `verifierBulle()`), elle ne se ferme que
+  si SON « ⓘ » a disparu ou se cache, sinon elle se replace : le relevé des nouveaux tomes refait des cartes juste après le
+  chargement, et les fermer toutes la faisait disparaître sous les yeux de qui venait de la lire (vu en essai). La bulle est
+  un `role="status"` **toujours présent, vidé et replié (`.fermee`) quand elle est fermée** : une zone « status » retirée puis
+  remise n'est pas toujours lue. Sans appel serveur et sans garde `BLOQUE` (un compte bloqué s'en sert : elle explique, elle
+  ne change rien). **Ni `data-action` ni sélection de la carte** (le clic est exclu du clic de sélection) ;
+  **`tabindex="-1"` comme tout ce qui se focalise dans une carte, rendu à la carte active** par `FOCUSABLES_CARTE` (qui
+  compte donc `.card-info`). **Essayer cela dans le navigateur intégré** : en mode téléphone (`resize_window mobile`), ses
+  CLICS RÉELS tombent à la moitié des coordonnées demandées (mesuré avec un écouteur `pointerdown` : (210, 409) donne
+  (105, 204)) — ouvrir un « ⓘ » par `element.click()` pour juger l'aspect, ou passer en mode ordinateur, où les clics sont
+  justes. Et une capture prise pendant un défilement doux montre la page d'avant. **Les données** : `publication` (migration 16, `VARCHAR(12)`, pas un
   `ENUM` : valeur contrôlée par `publication_connue()`), `tome_final` et `publication_le` (migration 17). Le
   relevé les lit — un appel `/manga`, la première fois puis toutes les `NOUVEAUTE_PUBLICATION_JOURS` jours
   (`nouveautes_publication_ecrire()`, `publication_perimee` dans la requête) — sans modifier la série

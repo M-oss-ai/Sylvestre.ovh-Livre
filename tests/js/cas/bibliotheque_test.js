@@ -419,3 +419,74 @@ test("des nombres absurdes sont ramenés à du sens, jamais NaN", () => {
   egale(60, B.pagesSeries("120", "30", "2").affichees, "des nombres en texte (attribut data-)");
   egale(30, B.pagesSeries(120, 30.9, 1).affichees, "décimaux : la partie entière");
 });
+
+groupe("Bibliotheque.placerBulle() — où poser la bulle d un ⓘ");
+
+/* Un ⓘ de 24 px sur 20, et une bulle dont la hauteur dépend de sa largeur
+   (le texte passe à la ligne : 3200 px² de texte). */
+const ancreA = (left, top) => ({ left, right: left + 24, top, bottom: top + 20 });
+const hauteurPour = (largeur) => Math.ceil(3200 / largeur / 17) * 17 + 16;
+const ecran = { largeur: 375, hauteur: 812 };
+
+test("à droite du ⓘ, son bas sur le bas du ⓘ : elle monte, comme dans le dessin", () => {
+  const ancre = ancreA(100, 600);
+  const p = Bibliotheque.placerBulle(ancre, ecran, hauteurPour);
+  egale("droite", p.cote, "à droite");
+  egale(ancre.right + 6, p.left, "à 6 px du ⓘ");
+  egale(200, p.largeur, "la largeur maximale, il y a la place");
+  egale(Math.round(ancre.bottom - hauteurPour(p.largeur)), p.top, "le bas de la bulle sur le bas du ⓘ");
+});
+
+test("elle ne dépasse jamais le bord droit : la largeur se réduit, dès 110 px de place", () => {
+  const ancre = ancreA(199, 600);          // le cas du téléphone : 375 - 8 - 229 = 138 px à droite
+  const p = Bibliotheque.placerBulle(ancre, ecran, hauteurPour);
+  egale("droite", p.cote, "encore à droite : 138 px suffisent (le dessin de l utilisateur)");
+  egale(138, p.largeur, "la place qui reste");
+  vrai(p.left + p.largeur <= ecran.largeur - 8, "à 8 px du bord");
+  const juste = Bibliotheque.placerBulle(ancreA(231, 600), ecran, hauteurPour); // 375 - 8 - 261 = 106 px
+  egale("dessus", juste.cote, "106 px : trop étroit, elle passe au-dessus");
+});
+
+test("pas assez de place à droite : au-dessus du ⓘ, jamais sur la mention à sa gauche", () => {
+  const ancre = ancreA(300, 600);          // 375 - 8 - 330 = 37 px à droite
+  const p = Bibliotheque.placerBulle(ancre, ecran, hauteurPour);
+  egale("dessus", p.cote, "au-dessus");
+  egale(200, p.largeur, "largeur maximale : il y a la place");
+  vrai(p.top + hauteurPour(p.largeur) <= ancre.top, "elle finit au-dessus du ⓘ : la ligne de la mention reste lisible");
+  vrai(p.left >= 8 && p.left + p.largeur <= ecran.largeur - 8, "dans la fenêtre");
+  vrai(p.left <= (ancre.left + ancre.right) / 2 && p.left + p.largeur >= (ancre.left + ancre.right) / 2, "au-dessus du ⓘ, pas à côté");
+});
+
+test("écran étroit : centrée sur le ⓘ autant que la fenêtre le permet", () => {
+  const etroit = { largeur: 200, hauteur: 600 };
+  const ancre = ancreA(90, 400);
+  const p = Bibliotheque.placerBulle(ancre, etroit, hauteurPour);
+  egale("dessus", p.cote, "au-dessus");
+  egale(184, p.largeur, "tout l écran moins les marges");
+  egale(8, p.left, "calée contre la marge gauche, pas au-delà");
+  vrai(p.top + hauteurPour(p.largeur) <= ancre.top, "au-dessus du ⓘ, sans le recouvrir");
+});
+
+test("ⓘ tout en haut de la fenêtre et pas de place à droite : au-dessous du ⓘ", () => {
+  const ancre = ancreA(300, 10);
+  const p = Bibliotheque.placerBulle(ancre, ecran, hauteurPour);
+  egale("dessous", p.cote, "au-dessous");
+  vrai(p.top >= ancre.bottom, "sous le ⓘ : au-dessus, il n y a pas la place");
+});
+test("jamais hors de la fenêtre : ni au-dessus ni au-dessous", () => {
+  const haut = Bibliotheque.placerBulle(ancreA(100, 5), ecran, hauteurPour);
+  vrai(haut.top >= 8, "ⓘ collé en haut : la bulle reste à 8 px du haut (" + haut.top + ")");
+  const bas = Bibliotheque.placerBulle(ancreA(100, 800), ecran, hauteurPour);
+  vrai(bas.top + hauteurPour(bas.largeur) <= ecran.hauteur - 8, "ⓘ collé en bas : la bulle reste dans la fenêtre");
+});
+
+test("une bulle plus haute que la fenêtre se cale en haut, sans valeur négative", () => {
+  const p = Bibliotheque.placerBulle(ancreA(100, 100), { largeur: 375, hauteur: 100 }, () => 500);
+  egale(8, p.top, "calée sur la marge haute");
+});
+
+test("des valeurs absurdes ne donnent jamais NaN", () => {
+  const p = Bibliotheque.placerBulle(ancreA(100, 100), { largeur: NaN, hauteur: undefined }, () => NaN);
+  for (const cle of ["left", "top", "largeur"]) vrai(Number.isFinite(p[cle]), cle + " est un nombre fini");
+  vrai(["droite", "dessus", "dessous"].includes(p.cote), "un côté connu");
+});

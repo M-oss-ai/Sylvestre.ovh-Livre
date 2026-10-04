@@ -207,6 +207,11 @@ $flash = flash_prendre();
   </div>
 </main>
 
+<!-- La bulle des « ⓘ » des cartes (js/app.js) : une seule pour la page, hors de toute carte
+     (une carte a « overflow: hidden » et la rognerait), vide et repliée tant qu'aucun « ⓘ »
+     n'est ouvert. « status » : le texte est lu quand il y est posé. -->
+<div id="bulle-info" class="bulle-info fermee" role="status"></div>
+
 <!-- Modale ajout / édition -->
 <div id="overlay" class="overlay hidden">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">

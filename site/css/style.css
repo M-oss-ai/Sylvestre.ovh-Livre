@@ -683,8 +683,9 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 }
 .card-fin-texte { min-width: 0; }
 
-/* Le « ⓘ » : déplie l'explication de la mention, juste dessous. Un <button> (clavier,
-   lecteur d'écran), remis à zéro pour qu'il ne ressemble pas à une commande. */
+/* Le « ⓘ » : ouvre la bulle d'explication de la mention (#bulle-info, plus bas). Un
+   <button> (clavier, lecteur d'écran), remis à zéro pour qu'il ne ressemble pas à une
+   commande. */
 .card-info {
   flex: none;
   appearance: none;
@@ -704,17 +705,42 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 .card-info:focus-visible { color: var(--gold-light); }
 .card-info[aria-expanded="true"] { color: var(--gold); }
 
-/* L'explication : en clair, pas en retrait comme la mention — c'est elle qu'on est
-   venu lire. */
-.card-fin-aide {
-  font-size: 12px;
-  line-height: 1.4;
+/* La bulle du « ⓘ » : une seule pour la page (index.php), hors de toute carte — une carte a
+   « overflow: hidden » et la rognerait. Fixe, posée par js/app.js (left, top, width, en
+   CSSOM : la CSP refuse l'attribut « style »). Elle ne prend aucune place dans la carte
+   (demande de l'utilisateur) et peut déborder sur la carte voisine. En clair, pas en retrait
+   comme la mention : c'est elle qu'on est venu lire. */
+.bulle-info {
+  position: fixed;
+  z-index: 30; /* au-dessus de la barre du haut (20), sous les fenêtres (100) */
+  box-sizing: border-box;
+  background: var(--bg-2);
   color: var(--text);
-  background: rgba(0, 0, 0, 0.25);
-  border-left: 2px solid var(--gold);
-  border-radius: 4px;
-  padding: 6px 8px;
-  margin-top: 4px;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.4;
+  cursor: pointer; /* un clic dessus la ferme */
+}
+
+/* Fermée : vide, hors de la vue, mais gardée dans la page — une zone « status » qu'on retire
+   puis qu'on remet n'est pas toujours lue. Aucun toucher, aucune place. */
+.bulle-info.fermee {
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: none;
 }
 
 .card-actions {
@@ -1873,7 +1899,7 @@ html.verification-session body { visibility: hidden; }
 
   .card-fin { font-size: 11.5px; }
 
-  .card-fin-aide { font-size: 11.5px; }
+  .bulle-info { font-size: 12px; }
 
   .card-actions { margin-top: 8px; gap: 6px; }
 
