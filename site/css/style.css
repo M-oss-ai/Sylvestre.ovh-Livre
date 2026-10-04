@@ -319,10 +319,10 @@ main.bibliotheque { padding-top: 0; }
 /* Cachés derrière la barre du haut, filet compris. */
 .barre-filtres.escamotee { transform: translateY(calc(-100% - 2px)); }
 
-/* Le total de la bibliothèque (« 42 séries · 318 tomes lus ») à gauche, le tri à droite,
-   sous les filtres. Ce n'est pas un filtre : la ligne ne se colle pas, elle défile avec la
-   page. Si elle ne tient pas sur une ligne (téléphone), le tri passe dessous, sur toute la
-   largeur. */
+/* Le total de la bibliothèque (« 42 séries · 318 tomes lus ») à gauche, le tri à droite, et sous eux
+   la phrase qui dit l'ordre obtenu. Ce n'est pas un filtre : la ligne ne se colle pas, elle défile
+   avec la page. Le tri est fait de trois boutons du même style que les filtres (.filter-btn),
+   un peu plus petits ; sur téléphone ils passent sous le total. */
 .ligne-outils {
   display: flex;
   flex-wrap: wrap;
@@ -341,15 +341,14 @@ main.bibliotheque { padding-top: 0; }
 
 .tri {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   min-width: 0;
-  max-width: 100%;
   margin-left: auto;
 }
 
-.tri label {
-  flex: none;
+.tri-titre {
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -357,51 +356,49 @@ main.bibliotheque { padding-top: 0; }
   color: var(--text-dim);
 }
 
-/* Le même habillage que les menus des fiches (.field select), en plus compact. */
-.tri select {
+.tri-btn {
+  padding: 6px 13px;
+  font-size: 13px;
+}
+
+/* La phrase qui dit, en clair, l'ordre obtenu (js/app.js, Bibliotheque.aideTri), et « Inverser ».
+   Sur toute la largeur, sous le total et les boutons. */
+.tri-explication {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 10px;
+}
+
+/* La phrase principale, en clair, avec « Inverser » à sa droite ; l'explication, plus petite,
+   dessous sur toute la largeur. */
+.tri-aide {
+  flex: 1 1 0;
   min-width: 0;
-  max-width: 100%;
-  padding: 8px 34px 8px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background-color: rgba(0, 0, 0, 0.28);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23c9a87c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 12px auto;
-  color: var(--text);
-  font-size: 14px;
-  font-family: inherit;
-  appearance: none;
-  -webkit-appearance: none;
-  color-scheme: dark;
-  cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s;
-}
-
-.tri select:hover { border-color: var(--border-strong); }
-
-.tri select:focus {
-  outline: none;
-  border-color: var(--gold);
-  background-color: rgba(0, 0, 0, 0.4);
-}
-
-.tri select option {
-  background: var(--bg-1);
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
   color: var(--text);
 }
 
-/* Sous 16 px, iOS agrandit la page dès qu'on touche un champ (voir .field input). */
-@media (pointer: coarse) {
-  .tri select { font-size: 16px; }
+.tri-aide-detail {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
 }
 
+.tri-inverser { flex: none; white-space: nowrap; }
+
+/* Sur téléphone, les trois boutons tiennent sur UNE ligne, sous le total (pas un seul tout seul
+   sur la suivante). */
 @media (max-width: 480px) {
   .tri { width: 100%; }
-  .tri select { flex: 1; }
+  .tri-btn { padding: 6px 10px; }
 }
-
 /* « il en reste 3 » : le nombre de tomes restants, sur sa propre ligne sous « Vous avez lu le tome x »,
    pour qui trie par tomes restants. Sur sa ligne et non à la suite : dans une carte étroite il se
    coupait en deux (« il en reste / 3 »). Caché le reste du temps : la carte ne prend pas de place

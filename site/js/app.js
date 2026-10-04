@@ -295,20 +295,74 @@ window.Bibliotheque = (() => {
 
   /**
    * Le tri de la grille (demande de l'utilisateur : « trier les séries par tomes restants
-   * jusqu'à la fin ou par tome actuel »). Les valeurs sont celles du menu #tri (index.php) :
-   * un test PHP compare les deux listes.
+   * jusqu'à la fin ou par tome actuel »). Un tri = un CRITÈRE (le bouton qu'on choisit) et un
+   * SENS (le bouton « Inverser ») ; la valeur mémorisée les réunit :
    *
    *   recentes      : l'ordre du serveur, la dernière modification d'abord (le défaut) ;
    *   restants-asc  : le moins de tomes restants d'abord (celles qui sont presque finies) ;
    *   restants-desc : le plus de tomes restants d'abord ;
    *   tome-desc     : le tome lu le plus haut d'abord ;
    *   tome-asc      : le tome lu le plus bas d'abord.
+   *
+   * Les critères (data-critere des boutons de index.php) sont CRITERES : un test PHP compare les deux.
    */
   const TRIS = ["recentes", "restants-asc", "restants-desc", "tome-desc", "tome-asc"];
+  const CRITERES = ["recentes", "restants", "tome"];
 
   /** Un tri connu, ou « recentes » : une mémoire du navigateur illisible ne casse rien. */
   function triValide(tri) {
     return TRIS.includes(tri) ? tri : "recentes";
+  }
+
+  /** Le critère d'un tri : « recentes », « restants » ou « tome » (le bouton qui s'allume). */
+  function critereTri(tri) {
+    return triValide(tri).split("-")[0];
+  }
+
+  /**
+   * Le tri après un clic sur le bouton d'un critère. Un AUTRE critère démarre dans le sens le plus
+   * parlant : « restants » par le moins de tomes (les séries presque finies), « tome » par le plus
+   * haut. Cliquer le critère déjà choisi ne change rien — l'autre sens est le bouton « Inverser »,
+   * à part : un clic de plus sur le bouton allumé qui retournerait la liste surprendrait.
+   */
+  function triApres(courant, critere) {
+    const t = triValide(courant);
+    if (!CRITERES.includes(critere) || critereTri(t) === critere) return t;
+    if (critere === "restants") return "restants-asc";
+    if (critere === "tome") return "tome-desc";
+    return "recentes";
+  }
+
+  /** Le même critère dans l'autre sens. « recentes » n'en a pas : il reste tel quel. */
+  function triInverse(tri) {
+    const t = triValide(tri);
+    if (t === "recentes") return t;
+    return t.endsWith("-asc") ? t.replace(/-asc$/, "-desc") : t.replace(/-desc$/, "-asc");
+  }
+
+  /**
+   * Ce qui dit, en clair, l'ordre obtenu — toujours visible sous les boutons (demande de
+   * l'utilisateur : « les tris ne sont pas assez clairs »). Retourne { sens, detail } :
+   * `sens` est la phrase principale (qui passe en premier), `detail` ce qu'il faut savoir en
+   * plus — pour les tomes restants, ce que c'est et où vont les séries dont on ne le sait pas ;
+   * '' quand il n'y a rien à ajouter. La page les montre l'un sous l'autre, le second en retrait.
+   */
+  function aideTri(tri) {
+    const t = triValide(tri);
+    const detail = "« Tomes restants » : les tomes déjà parus (d'après MangaDex) que vous n'avez pas lus. "
+      + "Les séries dont on ne le sait pas sont à la fin.";
+    switch (t) {
+      case "restants-asc":
+        return { sens: "Les séries où il reste le moins de tomes à lire sont en premier.", detail };
+      case "restants-desc":
+        return { sens: "Les séries où il reste le plus de tomes à lire sont en premier.", detail };
+      case "tome-desc":
+        return { sens: "Les séries dont vous avez lu le tome le plus haut sont en premier.", detail: "" };
+      case "tome-asc":
+        return { sens: "Les séries dont vous avez lu le tome le plus bas sont en premier.", detail: "" };
+      default:
+        return { sens: "Les séries modifiées en dernier sont en premier.", detail: "" };
+    }
   }
 
   // Les tomes restants d'une carte, ou null quand on ne le sait pas (data-restants vide).
@@ -363,7 +417,7 @@ window.Bibliotheque = (() => {
     voisine, suiviDefilement, annonceQuota, texteQuotaRecherche, pagesSeries,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
     panneauApres, panneauMemorise, aucunFiltre, bordsDefilement, placerBulle,
-    TRIS, triValide, comparerTri, statistiques,
+    TRIS, CRITERES, triValide, critereTri, triApres, triInverse, aideTri, comparerTri, statistiques,
   };
 })();
 
@@ -399,7 +453,10 @@ window.Bibliotheque = (() => {
   let favorisSeuls = false;
   let panneauOuvert = ""; // "statut", "image", ou "" : un seul groupe déplié
   let tri = "recentes"; // un des Bibliotheque.TRIS ; mémorisé avec les filtres
-  const $tri = document.getElementById("tri");
+  const $triBoutons = Array.from(document.querySelectorAll(".tri-btn"));
+  const $triSens = document.getElementById("tri-aide-sens");
+  const $triDetail = document.getElementById("tri-aide-detail");
+  const $triInverser = document.getElementById("tri-inverser");
   const $ligneOutils = document.getElementById("ligne-outils");
   const $stats = document.getElementById("stats-bibliotheque");
   let recherche = "";
@@ -1115,7 +1172,7 @@ window.Bibliotheque = (() => {
     allumer($btnFiltreFavori, favorisSeuls);
     // « Toutes » s'allume quand aucun filtre, de quelque genre que ce soit, n'est posé.
     allumer($btnToutes, B.aucunFiltre({ statut: filtresStatut, image: filtresImage, favoris: favorisSeuls }));
-    if ($tri) $tri.value = tri;
+    refleterTri();
 
     GROUPES.forEach(([nom, rangee, bouton]) => {
       const ouvert = panneauOuvert === nom;
@@ -1192,14 +1249,40 @@ window.Bibliotheque = (() => {
 
   /* Le tri n'est pas un filtre : « Toutes » ne le remet pas à zéro, aucune exception de carte
      ne s'efface. Il se mémorise avec les filtres (même clé, par compte) et la liste se relit
-     depuis son début, comme après un filtre. */
-  if ($tri) {
-    $tri.addEventListener("change", () => {
-      tri = B.triValide($tri.value);
-      filtresChanges();
-      revenirEnHaut();
+     depuis son début, comme après un filtre.
+
+     Trois boutons choisissent le critère (Récentes, Tomes restants, Tome lu) ; « Inverser »
+     met le critère choisi dans l'autre sens ; une phrase sous eux dit l'ordre obtenu
+     (Bibliotheque.aideTri) — le menu déroulant d'avant, « Tomes restants (moins d'abord) »,
+     n'était pas assez clair. */
+  function refleterTri() {
+    const critere = B.critereTri(tri);
+    $triBoutons.forEach((b) => {
+      const actif = b.dataset.critere === critere;
+      b.classList.toggle("active", actif);
+      b.setAttribute("aria-pressed", actif ? "true" : "false");
     });
+    const aide = B.aideTri(tri);
+    if ($triSens) $triSens.textContent = aide.sens;
+    if ($triDetail) {
+      $triDetail.textContent = aide.detail;
+      $triDetail.classList.toggle("hidden", aide.detail === "");
+    }
+    // « Récentes » n'a pas d'autre sens : rien à inverser.
+    if ($triInverser) $triInverser.classList.toggle("hidden", tri === "recentes");
   }
+
+  function triChange(nouveau) {
+    if (nouveau === tri) return;
+    tri = nouveau;
+    filtresChanges();
+    revenirEnHaut();
+  }
+
+  $triBoutons.forEach((b) => {
+    b.addEventListener("click", () => triChange(B.triApres(tri, b.dataset.critere)));
+  });
+  if ($triInverser) $triInverser.addEventListener("click", () => triChange(B.triInverse(tri)));
 
   $filtresStatut.addEventListener("click", (e) => {
     const btn = e.target.closest(".filter-btn[data-filter]");

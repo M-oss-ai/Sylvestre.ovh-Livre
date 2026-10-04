@@ -432,13 +432,17 @@ MangaDex, le cron sans `fonctions.php`, la migration 13 rejouable.
 nombres absurdes). Le branchement sur la page (recherche, filtres, « Afficher plus » à l'écran) se vérifie
 à la main : le banc ne charge pas la grille.
 
-**Couvert, le total et le tri** — `carte_tri_test.php` et `Bibliotheque.triValide()`, `comparerTri()`, `statistiques()` dans
+**Couvert, le total et le tri** — `carte_tri_test.php` et `Bibliotheque.triValide()`, `critereTri()`, `triApres()`,
+`triInverse()`, `aideTri()`, `comparerTri()`, `statistiques()` dans
 `tests/js/cas/bibliotheque_test.js`. `serie_restants()` (le plus haut tome connu moins le tome lu ; `null` quand on ne
 sait pas — pas liée, ou lue au-delà de MangaDex —, jamais 0 ni négatif), `serie_restants_texte()`, `statistiques_series()` et
 son miroir JavaScript sur les mêmes cas (0 et 1 au singulier), `data-restants` et « il en reste N » dans `carte_html()`,
-les valeurs du menu `#tri` de `index.php` comparées à `Bibliotheque.TRIS`. Côté navigateur : les cinq tris sur des
-séries à jour, inconnues, ex aequo ; **l'inconnu passe toujours après, dans les deux sens** ; l'antisymétrie. Le branchement
-(menu, mémoire, recherche combinée, total qui bouge au « → ») s'est vérifié à la main dans le navigateur.
+les boutons de tri de `index.php` (`data-critere`) comparés à `Bibliotheque.CRITERES`, un seul bouton allumé au départ, la phrase
+visible et « Inverser » caché sous « Récentes ». Côté navigateur : les cinq tris sur des séries à jour, inconnues, ex aequo ;
+**l'inconnu passe toujours après, dans les deux sens** ; l'antisymétrie ; **le clic sur le critère déjà choisi ne retourne pas
+la liste**, « Inverser » deux fois revient au tri d'origine ; une phrase par tri, toutes différentes, qui dit le sens. Le
+branchement (boutons, « Inverser », mémoire, recherche combinée, total qui bouge au « → ») s'est vérifié à la main dans le
+navigateur.
 
 **Couvert, notifications push** — `push_test.php`, `tests/js/cas/push_test.js`,
 `tests/js/cas/sw_test.js`. Le chiffrement contre l'exemple de la RFC 8291

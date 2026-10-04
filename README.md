@@ -314,14 +314,18 @@ Sous les filtres, une ligne dit **« 42 séries · 318 tomes lus »** : le nombr
 tomes lus — la somme du « Vous avez lu le tome x » de chaque série. Elle se met à jour à chaque série qui
 bouge (→, ←, création, suppression), sans appel au serveur, et disparaît tant qu'il n'y a aucune série.
 
-À droite, un menu **« Trier par »** :
+À droite, **« Trier par »** : trois boutons, du même style que les filtres — **Récentes**, **Tomes restants**,
+**Tome lu**. Une **phrase toujours visible** dit en clair l'ordre obtenu (« Les séries où il reste le moins de
+tomes à lire sont en premier »), avec en dessous ce que veut dire « tomes restants », et un bouton **⇅ Inverser**
+met le critère choisi dans l'autre sens (il n'apparaît pas pour « Récentes », qui n'en a pas) :
 
-| Tri | Ordre |
-|---|---|
-| Dernière modification | celui du serveur, le défaut |
-| Tomes restants (moins d'abord) | celles qui sont presque finies en premier ; « à jour » (0) tout en tête |
-| Tomes restants (plus d'abord) | celles qui ont le plus de tomes devant elles |
-| Tome lu (plus haut / plus bas d'abord) | d'après le dernier tome lu |
+| Bouton | Au premier clic | Après « Inverser » |
+|---|---|---|
+| Récentes | les dernières séries modifiées en premier (l'ordre du serveur, le défaut) | — |
+| Tomes restants | le moins de tomes à lire en premier : les séries presque finies, « à jour » (0) tout en tête | le plus de tomes à lire en premier |
+| Tome lu | le tome lu le plus haut en premier | le tome lu le plus bas en premier |
+
+Cliquer le bouton déjà allumé ne retourne pas la liste : l'autre sens, c'est « Inverser ».
 
 Les **tomes restants** sont ceux que MangaDex connaît (le plus haut tome connu, ou le dernier volume déclaré
 pour une série finie) et que vous n'avez pas lus. Pour une série qui continue, c'est donc le dernier tome

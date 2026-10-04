@@ -494,8 +494,9 @@ test("des valeurs absurdes ne donnent jamais NaN", () => {
 
 groupe("Bibliotheque.triValide() — un tri connu, ou le défaut");
 
-test("les cinq tris, dans l ordre du menu #tri", () => {
-  egale(["recentes", "restants-asc", "restants-desc", "tome-desc", "tome-asc"], B.TRIS, "la liste (un test PHP la compare au menu de index.php)");
+test("les cinq tris, et les trois critères des boutons de index.php", () => {
+  egale(["recentes", "restants-asc", "restants-desc", "tome-desc", "tome-asc"], B.TRIS, "les tris mémorisés");
+  egale(["recentes", "restants", "tome"], B.CRITERES, "les critères (un test PHP les compare aux boutons de index.php)");
   for (const t of B.TRIS) egale(t, B.triValide(t), t + " reste tel quel");
 });
 
@@ -503,6 +504,93 @@ test("une mémoire illisible ou étrangère vaut « recentes », l ordre du serv
   for (const v of [undefined, null, "", "Restants-asc", "titre", 3, {}, ["recentes"]]) {
     egale("recentes", B.triValide(v), "valeur " + JSON.stringify(v));
   }
+});
+
+groupe("Bibliotheque.critereTri(), triApres(), triInverse() — les boutons du tri");
+
+test("le critère d un tri, et « recentes » pour tout ce qui est inconnu", () => {
+  egale("recentes", B.critereTri("recentes"), "recentes");
+  egale("restants", B.critereTri("restants-asc"), "restants-asc");
+  egale("restants", B.critereTri("restants-desc"), "restants-desc");
+  egale("tome", B.critereTri("tome-desc"), "tome-desc");
+  egale("tome", B.critereTri("tome-asc"), "tome-asc");
+  egale("recentes", B.critereTri("n importe quoi"), "un tri inconnu");
+  egale("recentes", B.critereTri(undefined), "rien");
+  for (const t of B.TRIS) vrai(B.CRITERES.includes(B.critereTri(t)), t + " a un bouton");
+});
+
+test("choisir un autre critère démarre dans le sens le plus parlant", () => {
+  egale("restants-asc", B.triApres("recentes", "restants"), "tomes restants : le moins d abord (les séries presque finies)");
+  egale("tome-desc", B.triApres("recentes", "tome"), "tome lu : le plus haut d abord");
+  egale("restants-asc", B.triApres("tome-asc", "restants"), "depuis un autre critère, quel que soit son sens");
+  egale("tome-desc", B.triApres("restants-desc", "tome"), "idem");
+  egale("recentes", B.triApres("restants-desc", "recentes"), "Récentes revient à l ordre du serveur");
+  egale("recentes", B.triApres("tome-asc", "recentes"), "idem");
+});
+
+test("cliquer le critère déjà choisi ne retourne PAS la liste : l autre sens est le bouton Inverser", () => {
+  for (const t of B.TRIS) egale(t, B.triApres(t, B.critereTri(t)), t + " : rien ne change");
+  egale("restants-desc", B.triApres("restants-desc", "restants"), "le sens choisi est conservé");
+});
+
+test("un critère inconnu ne change rien", () => {
+  for (const t of B.TRIS) egale(t, B.triApres(t, "titre"), t);
+  egale("restants-asc", B.triApres("restants-asc", undefined), "sans critère");
+  egale("recentes", B.triApres("mémoire illisible", "titre"), "et une mémoire illisible retombe sur le défaut");
+});
+
+test("Inverser : le même critère dans l autre sens, deux fois = le tri d origine", () => {
+  egale("restants-desc", B.triInverse("restants-asc"), "restants asc → desc");
+  egale("restants-asc", B.triInverse("restants-desc"), "restants desc → asc");
+  egale("tome-asc", B.triInverse("tome-desc"), "tome desc → asc");
+  egale("tome-desc", B.triInverse("tome-asc"), "tome asc → desc");
+  for (const t of B.TRIS) egale(t, B.triInverse(B.triInverse(t)), t + " : aller-retour");
+  for (const t of B.TRIS) egale(B.critereTri(t), B.critereTri(B.triInverse(t)), t + " : le critère ne change pas");
+});
+
+test("« recentes » n a pas d autre sens : Inverser le laisse tel quel", () => {
+  egale("recentes", B.triInverse("recentes"), "recentes");
+  egale("recentes", B.triInverse("inconnu"), "un tri inconnu");
+});
+
+groupe("Bibliotheque.aideTri() — la phrase qui dit l ordre obtenu");
+
+test("une phrase claire pour chacun des cinq tris, toutes différentes", () => {
+  const phrases = B.TRIS.map((t) => B.aideTri(t).sens);
+  for (let i = 0; i < phrases.length; i++) {
+    vrai(typeof phrases[i] === "string" && phrases[i].length > 20, B.TRIS[i] + " a une vraie phrase");
+    vrai(phrases[i].endsWith("."), B.TRIS[i] + " : une phrase qui finit");
+  }
+  egale(B.TRIS.length, new Set(phrases).size, "deux tris ne se décrivent jamais pareil : le sens se lit");
+});
+
+test("elle dit le sens : le moins / le plus de tomes à lire, le tome le plus haut / le plus bas", () => {
+  contient("le moins de tomes à lire", B.aideTri("restants-asc").sens, "restants-asc");
+  contient("le plus de tomes à lire", B.aideTri("restants-desc").sens, "restants-desc");
+  contient("le tome le plus haut", B.aideTri("tome-desc").sens, "tome-desc");
+  contient("le tome le plus bas", B.aideTri("tome-asc").sens, "tome-asc");
+  contient("modifiées en dernier", B.aideTri("recentes").sens, "recentes");
+  for (const t of B.TRIS) contient("sont en premier", B.aideTri(t).sens, t + " : dit qui passe en premier");
+});
+
+test("pour les tomes restants le détail dit ce que c est, et où vont les séries sans information", () => {
+  for (const t of ["restants-asc", "restants-desc"]) {
+    const d = B.aideTri(t).detail;
+    contient("déjà parus", d, t + " : ce que c est");
+    contient("MangaDex", d, t + " : d où ça vient");
+    contient("à la fin", d, t + " : les séries dont on ne le sait pas");
+  }
+  for (const t of ["recentes", "tome-desc", "tome-asc"]) egale("", B.aideTri(t).detail, t + " : rien à expliquer de plus");
+});
+
+test("le détail du sens « moins d abord » et du sens « plus d abord » est le même : inverser ne change que la première phrase", () => {
+  egale(B.aideTri("restants-asc").detail, B.aideTri("restants-desc").detail, "même explication");
+  differe(B.aideTri("restants-asc").sens, B.aideTri("restants-desc").sens, "mais le sens, lui, change");
+});
+
+test("un tri inconnu se décrit comme le défaut", () => {
+  egale(B.aideTri("recentes"), B.aideTri("n importe quoi"), "inconnu");
+  egale(B.aideTri("recentes"), B.aideTri(undefined), "rien");
 });
 
 groupe("Bibliotheque.comparerTri() — trier par tomes restants ou par tome lu");

@@ -151,22 +151,30 @@ $flash = flash_prendre();
 
   <!-- Le total de la bibliothèque (séries, tomes lus : js/app.js le tient à jour à chaque
        série qui bouge) et le tri. Hors de la barre collée : ce n'est pas un filtre, on ne le
-       cherche pas en descendant. Caché tant qu'il n'y a aucune série. Les valeurs du menu
-       sont celles de Bibliotheque.TRIS (js/app.js) : un test les compare. -->
+       cherche pas en descendant. Caché tant qu'il n'y a aucune série.
+       Le tri : trois boutons (le critère) du même style que les filtres, une phrase TOUJOURS
+       visible qui dit en clair l'ordre obtenu, et « Inverser » pour l'autre sens. Les
+       critères (data-critere) sont ceux de Bibliotheque.CRITERES (js/app.js) : un test les
+       compare. La phrase de départ est celle du tri par défaut ; js/app.js la remplace par
+       celle du tri mémorisé. -->
   <div id="ligne-outils" class="ligne-outils<?= $series ? '' : ' hidden' ?>">
     <p id="stats-bibliotheque" class="stats-bibliotheque"
        title="Les tomes lus : la somme du dernier tome lu de chaque série"><?= e($stats['texte']) ?></p>
-    <div class="tri">
-      <label for="tri">Trier par</label>
-      <select id="tri" aria-describedby="tri-aide">
-        <option value="recentes">Dernière modification</option>
-        <option value="restants-asc">Tomes restants (moins d'abord)</option>
-        <option value="restants-desc">Tomes restants (plus d'abord)</option>
-        <option value="tome-desc">Tome lu (plus haut d'abord)</option>
-        <option value="tome-asc">Tome lu (plus bas d'abord)</option>
-      </select>
+    <div class="tri" role="group" aria-labelledby="tri-titre">
+      <span id="tri-titre" class="tri-titre">Trier par</span>
+      <button type="button" class="filter-btn tri-btn active" data-critere="recentes" aria-pressed="true"
+              title="Les séries modifiées en dernier d'abord">Récentes</button>
+      <button type="button" class="filter-btn tri-btn" data-critere="restants" aria-pressed="false"
+              title="Combien de tomes il vous reste à lire (d'après MangaDex)">Tomes restants</button>
+      <button type="button" class="filter-btn tri-btn" data-critere="tome" aria-pressed="false"
+              title="Le dernier tome que vous avez lu">Tome lu</button>
     </div>
-    <p id="tri-aide" class="visually-hidden">Les tomes restants sont ceux que MangaDex connaît et que vous n'avez pas lus ; les séries où on ne le sait pas viennent en dernier.</p>
+    <div class="tri-explication">
+      <p id="tri-aide-sens" class="tri-aide" aria-live="polite">Les séries modifiées en dernier sont en premier.</p>
+      <button type="button" id="tri-inverser" class="btn btn-ghost small tri-inverser hidden"
+              title="Mettre l'ordre dans l'autre sens">⇅ Inverser</button>
+      <p id="tri-aide-detail" class="tri-aide-detail hidden"></p>
+    </div>
   </div>
 
   <!-- La place restante, annoncée à l'approche de la limite (voir

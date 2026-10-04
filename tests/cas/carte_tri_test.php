@@ -131,25 +131,41 @@ test('un compte bloqué (consultation seule) voit les mêmes tomes restants', fu
     contient('il en reste 3', $html, 'la mention aussi');
 });
 
-groupe('La page — le menu de tri et le total');
+groupe('La page — les boutons de tri et le total');
 
 $index = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/index.php'));
 $js    = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/js/app.js'));
 $css   = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
 
-test('les valeurs du menu #tri sont exactement celles de Bibliotheque.TRIS', function () use ($index, $js) {
-    preg_match('~<select id="tri"[^>]*>(.*?)</select>~s', $index, $menu);
-    vrai(isset($menu[1]), 'index.php a un menu #tri');
-    preg_match_all('~<option value="([^"]+)"~', $menu[1] ?? '', $options);
-    preg_match('~const TRIS = \[([^\]]*)\]~', $js, $liste);
-    vrai(isset($liste[1]), 'app.js déclare TRIS');
+test('les boutons de tri (data-critere) sont exactement les critères de Bibliotheque.CRITERES', function () use ($index, $js) {
+    preg_match_all('~<button type="button" class="filter-btn tri-btn[^"]*" data-critere="([^"]+)"~', $index, $boutons);
+    preg_match('~const CRITERES = \[([^\]]*)\]~', $js, $liste);
+    vrai(isset($liste[1]), 'app.js déclare CRITERES');
     preg_match_all('~"([^"]+)"~', $liste[1] ?? '', $valeurs);
-    egale($valeurs[1], $options[1], 'même liste, même ordre : un tri ajouté d un côté s ajoute de l autre');
-    egale('recentes', $options[1][0] ?? '', 'le premier est le défaut : l ordre du serveur');
+    egale($valeurs[1], $boutons[1], 'même liste, même ordre : un critère ajouté d un côté s ajoute de l autre');
+    egale('recentes', $boutons[1][0] ?? '', 'le premier est le défaut : l ordre du serveur');
+    // Et chaque tri mémorisé a son critère : « restants-asc » → « restants ».
+    preg_match('~const TRIS = \[([^\]]*)\]~', $js, $tris);
+    preg_match_all('~"([^"]+)"~', $tris[1] ?? '', $valeursTris);
+    $criteres = array_values(array_unique(array_map(static fn (string $t): string => explode('-', $t)[0], $valeursTris[1])));
+    egale($criteres, $valeurs[1], 'les critères sont ceux qu on déduit des tris : aucun bouton sans tri, aucun tri sans bouton');
 });
 
-test('le menu a son étiquette, et le total son emplacement', function () use ($index) {
-    contient('<label for="tri">', $index, 'une étiquette liée au menu (lecteurs d écran)');
+test('un seul bouton de tri est allumé au départ, et le groupe est nommé (aria-pressed, role=group)', function () use ($index) {
+    vrai(substr_count($index, 'class="filter-btn tri-btn active"') === 1, 'un seul actif : « Récentes »');
+    vrai(substr_count($index, 'class="filter-btn tri-btn') === 3, 'trois boutons');
+    contient('data-critere="recentes" aria-pressed="true"', $index, 'dit aux lecteurs d écran lequel est choisi');
+    contient('role="group" aria-labelledby="tri-titre"', $index, 'le groupe est nommé « Trier par »');
+});
+
+test('la phrase qui dit l ordre est toujours là, et « Inverser » est caché tant que le tri est « Récentes »', function () use ($index) {
+    contient('id="tri-aide-sens" class="tri-aide" aria-live="polite"', $index, 'visible (pas visually-hidden), annoncée quand elle change');
+    sans('visually-hidden', substr($index, (int) strpos($index, 'id="tri-aide-sens"'), 400), 'pas réservée aux lecteurs d écran : tout le monde la lit');
+    contient('id="tri-aide-detail" class="tri-aide-detail hidden"', $index, 'l explication, cachée tant qu il n y en a pas');
+    contient('id="tri-inverser" class="btn btn-ghost small tri-inverser hidden"', $index, 'caché au départ : le tri par défaut n a pas d autre sens');
+});
+
+test('le total a son emplacement', function () use ($index) {
     contient('id="stats-bibliotheque"', $index, 'le total, que js/app.js tient à jour');
     contient('statistiques_series($series)', $index, 'rendu par la même fonction que celle testée plus haut');
     contient('id="ligne-outils" class="ligne-outils<?= $series ? \'\' : \' hidden\' ?>"', $index, 'caché tant qu il n y a aucune série');

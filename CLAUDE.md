@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1235 tests : 1017 PHP en 59 fichiers, 218 JavaScript)
+php tests/lancer.php              # toute la suite (1248 tests : 1019 PHP en 59 fichiers, 229 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -338,7 +338,7 @@ Rien n'est mémorisé d'une visite à l'autre : le nombre de pages montrées rep
 **Le total de la bibliothèque et le tri** (demande de l'utilisateur : « voir le nombre de mes séries, le nombre de
 livres que j'ai lu au total, trier par tomes restants jusqu'à la fin ou par tome actuel »). Une ligne
 `#ligne-outils`, **sous la barre de filtres et hors d'elle** (la barre reste le PREMIER élément de `<main>` ; un test
-le garde) : à gauche « 42 séries · 318 tomes lus » (`#stats-bibliotheque`), à droite le menu `#tri` « Trier par ».
+le garde) : à gauche « 42 séries · 318 tomes lus » (`#stats-bibliotheque`), à droite « Trier par » et ses boutons.
 - **« Tomes lus » = la somme de `tome_actuel`** (« Vous avez lu le tome 5 » en compte 5) — une hypothèse : on ne sait
   pas si les tomes d'avant ont été lus un à un. **Le texte est fabriqué deux fois, testé sur les mêmes cas** :
   `statistiques_series()` (`includes/carte.php`, rendu de `index.php`) et `Bibliotheque.statistiques()` (`js/app.js`).
@@ -350,23 +350,39 @@ le garde) : à gauche « 42 séries · 318 tomes lus » (`#stats-bibliotheque`),
   connaît. **`null` quand on ne sait pas** (pas liée à MangaDex, ou lue AU-DELÀ de ce que MangaDex connaît : la règle de
   `fin_de_serie()`, « MangaDex est en retard ») ; **0 est une vraie réponse** (« à jour »), jamais confondu avec
   l'inconnu. La carte le porte dans `data-restants` (vide = inconnu).
-- **Cinq tris**, `Bibliotheque.TRIS` : `recentes` (l'ordre du serveur, le défaut), `restants-asc`, `restants-desc`,
-  `tome-desc`, `tome-asc`. **Les valeurs du menu `#tri` (`index.php`) sont celles de `TRIS`** : un test PHP compare les
-  deux listes. `comparerTri()` est pure et testée ; **une série aux tomes restants inconnus passe TOUJOURS après, dans
-  les deux sens** (la placer en tête du « moins d'abord » ferait croire qu'il ne lui reste rien à lire), et les ex
-  aequo gardent l'ordre du serveur (`_ordre`).
+- **Cinq tris, trois boutons.** `Bibliotheque.TRIS` : `recentes` (l'ordre du serveur, le défaut), `restants-asc`,
+  `restants-desc`, `tome-desc`, `tome-asc` — la valeur mémorisée. L'interface les range en trois CRITÈRES
+  (`Bibliotheque.CRITERES` : `recentes`, `restants`, `tome`, les `data-critere` des boutons `.tri-btn` de `index.php` ;
+  **un test PHP compare les deux listes**) et un SENS (le bouton « ⇅ Inverser »). La première version était un menu
+  déroulant (« Tomes restants (moins d'abord) ») : l'utilisateur l'a trouvée **pas assez claire** (« améliore
+  l'interface »). **Ne pas la remettre en menu.**
+  - `triApres(courant, critere)` : un AUTRE critère démarre dans le sens le plus parlant (`restants-asc`, les séries
+    presque finies ; `tome-desc`, le plus haut) ; **cliquer le critère déjà allumé ne change rien** — retourner la liste
+    à un clic de plus sur le bouton allumé surprendrait, l'autre sens est « Inverser », à part. `triInverse(tri)` : le
+    même critère dans l'autre sens, deux fois = le tri d'origine ; « Récentes » n'en a pas (le bouton est caché).
+  - **Une phrase toujours visible** dit l'ordre obtenu : `aideTri(tri)` rend `{ sens, detail }` — `sens` (« Les séries
+    où il reste le moins de tomes à lire sont en premier. », en gras, avec « Inverser » à sa droite) et `detail` (ce
+    qu'est « tomes restants », d'après MangaDex, et que les séries sans information sont à la fin ; '' pour les autres
+    tris, et alors caché). Deux tris ne se décrivent jamais pareil (testé) : le sens se lit.
+  - **Sur téléphone** (375 px) : « TRIER PAR » et les trois boutons tiennent sur UNE ligne (boutons resserrés sous
+    480 px), la phrase et « Inverser » dessous, le détail dessous sur toute la largeur. Les boutons réutilisent
+    `.filter-btn` mais vivent HORS de `#filters` : aucun écouteur de filtre ne les voit.
+  - `comparerTri()` est pure et testée ; **une série aux tomes restants inconnus passe TOUJOURS après, dans les deux
+    sens** (la placer en tête du « moins d'abord » ferait croire qu'il ne lui reste rien à lire), et les ex aequo gardent
+    l'ordre du serveur (`_ordre`).
 - **Dans `appliquerVue()`** : le tri et la recherche bousculent ensemble l'ordre du serveur (`ordreBouscule`) ; la
   PERTINENCE passe d'abord, le tri départage, l'ordre d'origine départage les ex aequo. Le tri est dans la signature de
-  la vue (changer de tri repart de la première page), et le menu ramène en haut de la liste comme un filtre.
+  la vue (changer de tri repart de la première page), et les boutons ramènent en haut de la liste comme un filtre.
 - **Ce n'est pas un filtre** : « Toutes » ne le remet pas à zéro, aucune exception de carte ne s'efface. Il se mémorise
   avec les filtres (`tri`, même clé, par compte) et `triValide()` ramène une mémoire illisible à `recentes`.
 - **« il en reste N » / « à jour »** : un `<span class="card-restants">` dans `.card-progress`, **caché par défaut** et
   montré, sur sa propre ligne, seulement quand la grille porte `.tri-restants` (`restants-asc` / `restants-desc`).
   L'utilisateur tient à ce que la carte ne prenne pas de place pour rien : le reste du temps, la carte est celle
   d'avant. (Première version : à la suite de la ligne, « il en reste / 2 » se coupait en deux dans une carte étroite.)
-- **Vérifié dans le navigateur** (ordinateur et 375 px, sans débordement) : les cinq tris sur huit séries (à jour,
-  inconnues, lue au-delà), recherche combinée, mémoire au rechargement, retour au défaut = l'ordre exact du serveur,
-  total qui passe de 309 à 310 au « → », ligne cachée sans série.
+- **Vérifié dans le navigateur** (ordinateur et 375 px, sans débordement) avec de vrais clics : les trois boutons,
+  « Inverser », les cinq tris sur huit séries (à jour, inconnues, lue au-delà), la phrase qui suit chaque tri, « Inverser »
+  caché sous « Récentes », recherche combinée, mémoire au rechargement (bouton et phrase restaurés), retour au défaut =
+  l'ordre exact du serveur, total qui passe de 309 à 310 au « → », ligne cachée sans série.
 
 **Les filtres tiennent sur UNE rangée au repos : « Toutes », « Statut ▾ »,
 « ★ Favoris », « Image ▾ »** (demande de l'utilisateur : la barre était
