@@ -315,15 +315,17 @@ function nouveautes_statut_ecrit(PDO $pdo, int $id, string $attendu): bool
  * site (le cron). $limite : combien, au plus ; 0 = sans limite (voir
  * nouveautes_limite_sql()).
  *
- * Une série est candidate quand elle est :
- *   - « En cours » ou « En attente », et liée à MangaDex ;
- *   - à jour — son tome lu a atteint le dernier connu — ou jamais vérifiée
+ * Une série liée à MangaDex est candidate quand :
+ *   - POUR SES NOUVEAUX TOMES : elle est « En cours » ou « En attente », et à jour
+ *     — son tome lu a atteint le dernier connu — ou jamais vérifiée
  *     (dernier_tome = 0) : la première vérification ne fait qu'apprendre le
- *     nombre de tomes, sans rien annoncer (nouveaute_evaluer()) ; OU son état de
- *     publication est à (re)lire (jamais lu, ou plus ancien que
- *     NOUVEAUTE_PUBLICATION_JOURS) : la carte le dit même quand on est au tome 2,
- *     un appel de plus, mais seulement cette fois-là ;
- *   - pas vérifiée depuis NOUVEAUTE_MINUTES.
+ *     nombre de tomes, sans rien annoncer (nouveaute_evaluer()) ;
+ *   - OU POUR SA MENTION : son état de publication est à (re)lire (jamais lu, ou
+ *     plus ancien que NOUVEAUTE_PUBLICATION_JOURS), QUEL QUE SOIT SON STATUT
+ *     (« Terminée », « Abandonnée » et « Envie » aussi : toute série liée a son
+ *     message — demande de l'utilisateur). Une telle série ne cherche jamais de
+ *     nouveau tome : un seul appel, et elle n'est relue que passé ce délai ;
+ *   - et dans les deux cas, pas vérifiée depuis NOUVEAUTE_MINUTES.
  * Jamais celles d'un compte bloqué : la consultation seule ne sollicite pas
  * MangaDex (voir ACTIONS_BLOQUEES).
  *
@@ -339,9 +341,9 @@ function nouveautes_series_a_verifier(PDO $pdo, ?int $utilisateur_id, int $limit
                    s.tome_final, " . $perimee . " AS publication_perimee
               FROM serie s
               JOIN utilisateur u ON u.id = s.utilisateur_id
-             WHERE s.statut IN ('cours', 'attente')
-               AND s.mangadex_id <> ''
-               AND (s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome OR " . $perimee . ")
+             WHERE s.mangadex_id <> ''
+               AND ((s.statut IN ('cours', 'attente') AND (s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome))
+                    OR " . $perimee . ")
                AND (s.verifie_le IS NULL OR s.verifie_le < NOW() - INTERVAL " . (int) NOUVEAUTE_MINUTES . " MINUTE)
                AND u.forfait <> 'bloque'"
         . ($utilisateur_id !== null ? ' AND s.utilisateur_id = ' . $utilisateur_id : '')
@@ -375,6 +377,9 @@ function nouveautes_noter_verification(PDO $pdo, int $id, int $utilisateur_id): 
  * Vérifie UNE série (un appel à MangaDex, deux quand un tome nouveau lui
  * cherche sa couverture) et écrit ce qu'il faut.
  *
+ * $publication_lue (par référence) : vrai quand l'état de publication de la série
+ * vient d'être lu — sa carte porte alors sa mention, à rafraîchir à l'écran.
+ *
  * Retourne ['etat' => …] :
  *   'nouveau'    : un tome de plus à emprunter — la couverture est prise, la
  *                  série repasse « En cours » si elle attendait, la date de
@@ -402,8 +407,9 @@ function nouveautes_noter_verification(PDO $pdo, int $id, int $utilisateur_id): 
  * relus) : deux onglets, ou le cron et une visite, qui vérifient la même série
  * au même instant ne l'annoncent qu'une fois.
  */
-function nouveautes_verifier_serie(PDO $pdo, array $s): array
+function nouveautes_verifier_serie(PDO $pdo, array $s, ?bool &$publication_lue = null): array
 {
+    $publication_lue = false;
     $id    = (int) $s['id'];
     $uid   = (int) $s['utilisateur_id'];
     $lien  = (string) $s['mangadex_id'];
@@ -423,14 +429,31 @@ function nouveautes_verifier_serie(PDO $pdo, array $s): array
         $infos = mangadex_statut_serie($lien);
         if ($infos !== null) {
             nouveautes_publication_ecrire($pdo, $id, $uid, $lien, $infos);
+            $publication_lue = true;
         } elseif (mangadex_attente_suggeree() > 0) {
             return ['etat' => 'file_pleine'];
         }
     }
 
     /* Une série qui n'est pas au bout des tomes n'a pas de nouveau tome à
-       attendre : on n'interroge pas ses couvertures pour rien. */
-    if ($connu > 0 && $tome < $connu) {
+       attendre : on n'interroge pas ses couvertures pour rien. Une série ni « En
+       cours » ni « En attente » (« Terminée », « Abandonnée », « Envie ») n'en
+       cherche JAMAIS : elle n'était candidate que pour sa mention. */
+    $suit_les_tomes = in_array((string) ($s['statut'] ?? ''), ['cours', 'attente'], true);
+    if (!$suit_les_tomes || ($connu > 0 && $tome < $connu)) {
+        /* Une série qui ne suit pas les tomes et dont on ne connaît pas encore le
+           dernier lit ses couvertures UNE fois : c'est le « X » de « En pause au tome
+           X ». Sans cela, la mention ne saurait pas de quel tome parler. Ensuite,
+           seul l'état est relu. Ce n'est pas une modification (maj_le = maj_le). */
+        if (!$suit_les_tomes && $connu === 0 && $infos !== null) {
+            $lu = mangadex_dernier_tome($lien);
+            if ($lu !== null && $lu['tome'] > 0) {
+                $pdo->prepare(
+                    'UPDATE serie SET dernier_tome = ?, maj_le = maj_le
+                      WHERE id = ? AND utilisateur_id = ? AND mangadex_id = ? AND dernier_tome = 0'
+                )->execute([$lu['tome'], $id, $uid, $lien]);
+            }
+        }
         nouveautes_noter_verification($pdo, $id, $uid);
         return ['etat' => $infos !== null ? 'publication' : 'echec'];
     }
@@ -536,12 +559,16 @@ const NOUVEAUTE_ECHECS_DE_SUITE = 3;
  *   'statuts'    : les séries qui ont CHANGÉ DE STATUT (« En attente »,
  *                  « Terminée »), [['id', 'utilisateur_id', 'titre', 'statut']] —
  *                  à rafraîchir à l'écran, rien à annoncer ;
+ *   'publications' : les séries dont seul l'ÉTAT DE PUBLICATION vient d'être lu,
+ *                  [['id', 'utilisateur_id']] — leur carte porte maintenant sa
+ *                  mention : à rafraîchir à l'écran, sans quoi elle n'apparaîtrait
+ *                  qu'au chargement suivant ;
  *   'interrompu' : '' si tout est passé, sinon 'file', 'echecs' ou 'temps'.
  */
 function nouveautes_verifier(PDO $pdo, array $series, float $budget_secondes): array
 {
     $debut  = microtime(true);
-    $bilan  = ['verifiees' => 0, 'nouveaux' => [], 'statuts' => [], 'interrompu' => ''];
+    $bilan  = ['verifiees' => 0, 'nouveaux' => [], 'statuts' => [], 'publications' => [], 'interrompu' => ''];
     $echecs = 0;
 
     foreach ($series as $s) {
@@ -550,12 +577,20 @@ function nouveautes_verifier(PDO $pdo, array $series, float $budget_secondes): a
             break;
         }
 
-        $r = nouveautes_verifier_serie($pdo, $s);
+        $lue = false;
+        $r = nouveautes_verifier_serie($pdo, $s, $lue);
         if ($r['etat'] === 'file_pleine') {
             $bilan['interrompu'] = 'file';
             break;
         }
         $bilan['verifiees']++;
+
+        /* Toute série dont l'état de publication vient d'être lu a maintenant sa
+           mention : sa carte est à rafraîchir à l'écran (celles d'un tome nouveau ou
+           d'un changement de statut le sont déjà, plus bas). */
+        if ($lue && !in_array($r['etat'], ['nouveau', 'statut'], true)) {
+            $bilan['publications'][] = ['id' => (int) $s['id'], 'utilisateur_id' => (int) $s['utilisateur_id']];
+        }
 
         if ($r['etat'] === 'echec') {
             if (++$echecs >= NOUVEAUTE_ECHECS_DE_SUITE) {

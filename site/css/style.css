@@ -615,25 +615,6 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
-/* « Tome N en attente », « En pause au tome N », « Se termine au tome N »,
-   « Arrêtée au tome N » (serie_fin_etiquette()) : la série est au bout des tomes
-   parus. Même place que « à emprunter », mais en retrait — rien à faire pour le
-   moment. */
-.next-tag-avenir {
-  color: var(--text-dim);
-  font-weight: 600;
-  font-style: italic;
-}
-
-/* Deux lignes : « Tome N à emprunter » puis la mention de la série (« Se termine
-   au tome 50 »…), en retrait comme ci-dessus. Chacune sur sa ligne. */
-.next-tag-ligne { display: block; }
-.next-tag-serie {
-  margin-top: 2px;
-  color: var(--text-dim);
-  font-weight: 600;
-  font-style: italic;
-}
 .card-body {
   padding: 12px 14px 14px;
   display: flex;
@@ -668,6 +649,18 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 }
 
 .card-progress b { color: var(--gold); font-weight: 700; }
+
+/* La mention de la série (serie_fin_etiquette()) : « Tome 44 en attente »,
+   « En pause au tome 43 », « Se termine au tome 50 », « Arrêtée au tome 43 »…
+   Sous « Vous avez lu le tome x », avant les boutons. En retrait : c'est une
+   information sur la série, pas une action. */
+.card-fin {
+  font-size: 12.5px;
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
 
 .card-actions {
   display: flex;
@@ -1772,6 +1765,8 @@ html.verification-session body { visibility: hidden; }
   .card-subtitle { font-size: 11px; }
 
   .card-progress { font-size: 11.5px; }
+
+  .card-fin { font-size: 11.5px; }
 
   .card-actions { margin-top: 8px; gap: 6px; }
 

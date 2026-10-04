@@ -40,13 +40,13 @@ function serie_a_venir(array $s): bool
 }
 
 /**
- * La mention que la couverture d'une série porte sur ce qu'on sait de sa
- * PUBLICATION, ou '' quand on ne sait rien (demande de l'utilisateur : la voir
- * « même si je suis au tome 2 »).
+ * La mention qu'une série liée à MangaDex porte dans sa carte, entre « Vous avez
+ * lu le tome x » et les boutons — ou '' quand on ne sait encore rien d'elle
+ * (demande de l'utilisateur : toute série liée à MangaDex a son message, même au
+ * tome 2).
  *
  * Elle vient de l'état de publication que MangaDex donne à la série
- * (serie.publication) et de ses tomes connus — jamais de la position du lecteur,
- * sauf pour une raison :
+ * (serie.publication) et de ses tomes connus :
  *
  *   ongoing    → « Tome N en attente »   (N : le tome qui n'est pas encore paru)
  *   hiatus     → « En pause au tome X »
@@ -56,11 +56,18 @@ function serie_a_venir(array $s): bool
  * X est le plus haut tome connu : la dernière couverture (serie.dernier_tome) ou,
  * pour une série finie, le dernier volume que MangaDex DÉCLARE (serie.tome_final).
  *
- * Quand la personne a lu PLUS de tomes que MangaDex n'en connaît, MangaDex est en
- * retard — elle en est la preuve — et la mention ne dit rien : « Tome 44 en
- * attente » à qui lit le 44 serait faux. Une série « En attente » sans mention (à la
- * main, ou état pas encore connu) dit « Tome N en attente » (N : le tome suivant
- * celui qu'on a lu) : c'est le choix de la personne.
+ * Cas qui ne suivent pas cette règle, dans l'ordre :
+ *   - la personne a lu PLUS de tomes que MangaDex n'en connaît : MangaDex est en
+ *     retard, elle en est la preuve. « Tome 44 en attente » à qui lit le 44 serait
+ *     faux : la carte dit alors « MangaDex s'arrête au tome X » ;
+ *   - une série « En attente » (choisie à la main, ou état pas encore connu) dit
+ *     « Tome N en attente » (N : le suivant du tome lu) : c'est le choix de la
+ *     personne ;
+ *   - l'état est lu mais on ne connaît aucun tome (aucune couverture, pas de
+ *     dernier volume déclaré) : l'état sans numéro — « En cours de publication »,
+ *     « En pause », « Série terminée », « Série arrêtée » ;
+ *   - rien de lu (liée depuis quelques secondes, ou pas liée) : ''. Le relevé
+ *     (includes/nouveautes.php) le lira, une fois.
  */
 function serie_fin_etiquette(array $s): string
 {
@@ -69,32 +76,47 @@ function serie_fin_etiquette(array $s): string
     $dernier     = max(0, (int) ($s['dernier_tome'] ?? 0));
     $connu       = max($dernier, max(0, (int) ($s['tome_final'] ?? 0)));
     $publication = (string) ($s['publication'] ?? '');
+    $lu          = in_array($publication, ['ongoing', 'hiatus', 'completed', 'cancelled'], true);
 
-    $mention = '';
-    if ($connu > 0 && $tome <= $connu) {
+    if ($lu && $connu > 0 && $tome <= $connu) {
         $mention = match ($publication) {
             'ongoing'   => $dernier > 0 ? 'Tome ' . ($dernier + 1) . ' en attente' : '',
             'hiatus'    => 'En pause au tome ' . $connu,
             'completed' => 'Se termine au tome ' . $connu,
-            'cancelled' => 'Arrêtée au tome ' . $connu,
-            default     => '',
+            default     => 'Arrêtée au tome ' . $connu,
+        };
+        if ($mention !== '') {
+            return $mention;
+        }
+    }
+    if ($statut === 'attente') {
+        return 'Tome ' . ($tome + 1) . ' en attente';
+    }
+    if ($connu > 0 && $tome > $connu) {
+        return "MangaDex s'arrête au tome " . $connu;
+    }
+    if ($lu && $connu === 0) {
+        return match ($publication) {
+            'ongoing'   => 'En cours de publication',
+            'hiatus'    => 'En pause',
+            'completed' => 'Série terminée',
+            default     => 'Série arrêtée',
         };
     }
-    if ($mention === '' && $statut === 'attente') {
-        $mention = 'Tome ' . ($tome + 1) . ' en attente';
-    }
-    return $mention;
+    return '';
 }
 
 /**
- * La personne a-t-elle lu tout ce que MangaDex connaît de la série ? Alors le
- * tome suivant n'a pas de couverture chez lui : la carte ne propose plus un
- * « Tome N à emprunter » dont on ne sait pas qu'il existe.
+ * La personne a-t-elle lu exactement tout ce que MangaDex connaît de la série ?
+ * Alors le tome suivant n'a pas de couverture chez lui : la carte ne propose plus
+ * un « Tome N à emprunter » dont on ne sait pas qu'il existe. Il faut pour cela
+ * connaître l'état de la série : sans lui, on ne prétend rien.
  */
 function serie_au_bout(array $s): bool
 {
     $connu = max(max(0, (int) ($s['dernier_tome'] ?? 0)), max(0, (int) ($s['tome_final'] ?? 0)));
-    return serie_fin_etiquette($s) !== '' && $connu > 0 && (int) ($s['tome_actuel'] ?? 0) >= $connu;
+    $lu    = in_array((string) ($s['publication'] ?? ''), ['ongoing', 'hiatus', 'completed', 'cancelled'], true);
+    return $lu && $connu > 0 && (int) ($s['tome_actuel'] ?? 0) === $connu;
 }
 
 /**
@@ -119,35 +141,26 @@ function carte_html(array $s, bool $lecture_seule = false): string
     $titre      = (string) $s['titre'];
     $auteur     = (string) ($s['auteur'] ?? '');
 
-    /* Deux lignes possibles sur le bas de la couverture (serie_fin_etiquette()) :
-         - « Tome N à emprunter », pour une série qu'on continue, tant que MangaDex
-           connaît des tomes plus loin que celui qu'on a lu ;
-         - la MENTION de la série : « Tome N en attente », « En pause au tome X »,
-           « Se termine au tome X », « Arrêtée au tome X » — même quand on est au
-           tome 2. Quand on est au bout des tomes connus, elle remplace la première
-           (la couverture montre alors le dernier tome paru). */
+    /* Sur le bas de la couverture : « Tome N à emprunter », pour une série qu'on
+       continue, tant que MangaDex connaît des tomes plus loin que celui qu'on a lu
+       (serie_au_bout()). Ailleurs, la couverture montre le dernier tome paru et ne
+       porte rien.
+
+       La MENTION de la série (« Tome N en attente », « En pause au tome X », « Se
+       termine au tome X », « Arrêtée au tome X »…) est dans le corps de la carte,
+       sous « Vous avez lu le tome x » (serie_fin_etiquette()), pour TOUTE série liée
+       à MangaDex et même au tome 2. */
     $mention   = serie_fin_etiquette($s);
     $emprunter = $en_cours && !serie_au_bout($s);
 
     $alt = $emprunter ? "Couverture du tome {$suivant} de {$titre}" : "Couverture de {$titre} — dernier tome lu {$tome}";
-    if ($mention !== '') {
-        $alt .= $emprunter ? " — {$mention}" : " ({$mention})";
-    }
 
     $image = $couverture !== ''
         ? '<img class="card-cover-img" src="' . e($couverture) . '" alt="' . e($alt) . '" loading="lazy">'
         : '<span class="no-cover" aria-hidden="true">📕</span>';
 
-    if ($emprunter && $mention !== '') {
-        $etiquette = '<div class="next-tag next-tag-deux"><span class="next-tag-ligne">Tome ' . $suivant . ' à emprunter</span>'
-            . '<span class="next-tag-ligne next-tag-serie">' . e($mention) . '</span></div>';
-    } elseif ($mention !== '') {
-        $etiquette = '<div class="next-tag next-tag-avenir">' . e($mention) . '</div>';
-    } elseif ($emprunter) {
-        $etiquette = '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>';
-    } else {
-        $etiquette = '';
-    }
+    $etiquette = $emprunter ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>' : '';
+    $fin_html  = $mention !== '' ? '<p class="card-fin">' . e($mention) . '</p>' : '';
 
     /* Le même libellé quel que soit le statut : c'est le dernier tome
        TERMINÉ, ce que « Vous en êtes au tome » ne disait pas. À 0, aucun
@@ -211,6 +224,7 @@ function carte_html(array $s, bool $lecture_seule = false): string
           <h3 class="card-title">' . e($titre) . '</h3>
           <p class="card-subtitle">' . e($auteur) . '</p>
           <p class="card-progress">' . $progression . '</p>
+          ' . $fin_html . '
           ' . $actions_html . '
         </div>
       </article>';

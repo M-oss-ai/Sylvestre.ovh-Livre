@@ -381,8 +381,8 @@ MangaDex, sur des réponses fabriquées : `mangadex_dernier_tome_depuis` (volume
 décimaux, comparés comme des nombres, préférence de langue, plafond),
 `mangadex_statut_depuis`, `mangadex_id_valide`. `serie_a_venir` (le statut « En attente », et rien d'autre),
 `serie_fin_etiquette` (« Tome N en attente », « En pause au tome N », « Se termine au tome N »,
-« Arrêtée au tome N », même au tome 2, et rien quand on ne sait pas ou quand MangaDex est en retard sur le
-lecteur), `serie_au_bout`, `statut_apres_avance` (« → » au-delà de MangaDex), `statut_apres_recul` (« ← » depuis « En attente » ou
+« Arrêtée au tome N », même au tome 2 et pour tout statut ; « MangaDex s'arrête au tome X » quand MangaDex est en
+retard sur le lecteur ; l'état sans numéro quand aucun tome n'est connu ; rien quand on ne sait pas), `serie_au_bout`, `statut_apres_avance` (« → » au-delà de MangaDex), `statut_apres_recul` (« ← » depuis « En attente » ou
 « Terminée » : « En cours » seulement en quittant le dernier tome connu), `publication_connue`,
 la mention dans `carte_html`, le compteur du filtre, la couleur, les migrations 15 et 16, la
 carte INCHANGÉE dans tous les autres cas.

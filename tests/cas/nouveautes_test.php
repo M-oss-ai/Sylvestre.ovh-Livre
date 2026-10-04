@@ -576,12 +576,20 @@ test('le relevé lit l\'état de publication de TOUTE série liée (la mention s
     $q = corps_de($src, 'nouveautes_series_a_verifier');
     contient('NOUVEAUTE_PUBLICATION_JOURS', $q, 'la période de relecture');
     contient('s.publication_le IS NULL OR s.publication_le < NOW() - INTERVAL', $q, 'jamais lu, ou trop ancien');
-    contient('s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome OR', $q, 'une série pas encore au bout est candidate POUR CELA, pas pour ses couvertures');
+    contient("(s.statut IN ('cours', 'attente') AND (s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome))\n                    OR \" . \$perimee", $q,
+        'les couvertures : « En cours » / « En attente » au bout seulement ; la mention : toute série dont l\'état est à relire, QUEL QUE SOIT SON STATUT');
+    sans('s.statut IN (\'cours\', \'attente\')' . "\n               AND s.mangadex_id", $q, 'le statut n\'est plus un filtre global : « Terminée », « Abandonnée » et « Envie » ont aussi leur message');
     $releve = corps_de($src, 'nouveautes_verifier_serie');
     contient("!empty(\$s['publication_perimee'])", $releve, 'le relevé lit l\'état quand la requête le dit à relire');
     contient('nouveautes_publication_ecrire($pdo, $id, $uid, $lien, $infos);', $releve, 'et le range');
     contient("\$connu > 0 && \$tome < \$connu", $releve, 'une série pas au bout n\'interroge pas ses couvertures pour rien');
     contient("'etat' => \$infos !== null ? 'publication' : 'echec'", $releve, 'et le dit');
+    contient("\$suit_les_tomes = in_array((string) (\$s['statut'] ?? ''), ['cours', 'attente'], true);", $releve,
+        'une série ni « En cours » ni « En attente » ne cherche JAMAIS de nouveau tome');
+    contient('if (!$suit_les_tomes || ($connu > 0 && $tome < $connu)) {', $releve, 'elle s\'arrête après la lecture de son état');
+    contient('if (!$suit_les_tomes && $connu === 0 && $infos !== null) {', $releve,
+        'sauf UNE lecture de ses couvertures, pour le « X » de « En pause au tome X » (sinon on ne saurait pas de quel tome parler)');
+    contient('AND mangadex_id = ? AND dernier_tome = 0', $releve, 'gardée : jamais écraser un dernier tome déjà connu');
     $ecrire = corps_de($src, 'nouveautes_publication_ecrire');
     contient('maj_le = maj_le', $ecrire, 'lire un état n\'est pas modifier la série');
     contient('AND mangadex_id = ?', $ecrire, 'gardé par le lien : une série qui a changé de MangaDex n\'hérite pas de l\'état de l\'autre');
@@ -659,4 +667,19 @@ test('livre.sql : migration 17, rejouable, deux colonnes qui ne touchent aucune 
     sans('ADD COLUMN IF NOT EXISTS', substr($m17, (int) strpos($m17, 'SET @c')), 'jamais cette extension MariaDB');
     sans('UPDATE', substr($m17, (int) strpos($m17, 'SET @c')), 'aucune donnée n\'est touchée');
     vrai(strpos($sql, '--  17. Mention') > strpos($sql, '--  16. État'), 'après la migration 16');
+});
+
+test('les séries dont seul l\'état vient d\'être lu sont rendues à l\'écran, pour que leur mention apparaisse tout de suite', function () {
+    $src = source('includes/nouveautes.php');
+    $v = corps_de($src, 'nouveautes_verifier');
+    contient("'publications' => []", $v, 'le bilan porte la liste');
+    contient('$r = nouveautes_verifier_serie($pdo, $s, $lue);', $v, 'chaque série dit si son état vient d\'être lu');
+    contient("if (\$lue && !in_array(\$r['etat'], ['nouveau', 'statut'], true)) {", $v,
+        'remplie pour TOUTE série dont l\'état vient d\'être lu (celles d\'un tome nouveau ou d\'un changement de statut sont déjà rendues)');
+    contient('$publication_lue = true;', corps_de(source('includes/nouveautes.php'), 'nouveautes_verifier_serie'), 'le drapeau est levé quand l\'état est rangé');
+    $api = source('api.php');
+    $bloc = substr($api, (int) strpos($api, "case 'serie.nouveautes': {"), 3600);
+    contient("foreach (\$bilan['publications'] as \$c)", $bloc, 'api.php les parcourt');
+    contient("\$changements[] = ['id' => \$c['id'], 'carte' => carte_html(ma_serie(\$pdo, \$mon_id, \$c['id']))];", substr($bloc, (int) strpos($bloc, "\$bilan['publications']")),
+        'et renvoie leur carte, comme pour un changement de statut : le navigateur la pose sans recharger la page');
 });

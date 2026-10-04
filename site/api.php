@@ -1268,6 +1268,11 @@ switch ($action) {
         foreach ($bilan['statuts'] as $c) {
             $changements[] = ['id' => $c['id'], 'carte' => carte_html(ma_serie($pdo, $mon_id, $c['id']))];
         }
+        /* Celles dont on vient de lire l'état de publication : leur carte porte
+           désormais sa mention (« Tome 44 en attente »…), à montrer tout de suite. */
+        foreach ($bilan['publications'] as $c) {
+            $changements[] = ['id' => $c['id'], 'carte' => carte_html(ma_serie($pdo, $mon_id, $c['id']))];
+        }
         reponse_json([
             'ok'          => true,
             'verifiees'   => $bilan['verifiees'],

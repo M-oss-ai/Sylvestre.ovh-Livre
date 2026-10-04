@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1096 tests : 929 PHP en 55 fichiers, 167 JavaScript)
+php tests/lancer.php              # toute la suite (1100 tests : 933 PHP en 55 fichiers, 167 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -495,7 +495,7 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   `termine` (jamais `abandon`, demande de l'utilisateur) et couverture du dernier
   tome. `ongoing` / `hiatus` : la série passe **« En attente »** (statut `attente`, demande de
   l'utilisateur), `dernier_tome` est mémorisé, et la carte le dit (voir « La mention de la
-  couverture » plus bas : « Tome N en attente », « En pause au tome N »…). Des tomes
+  carte » plus bas : « Tome N en attente », « En pause au tome N »…). Des tomes
   plus loin (`en_route`) ou une réponse sans sens (`inconnu`) : rien ne change — la
   couverture du tome suivant manque souvent AU MILIEU d'une série, ce n'est pas la fin.
   **Le dernier tome est le plus haut entre la dernière couverture et `lastVolume`**
@@ -504,9 +504,9 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
 - **Un tome de plus** — `serie.nouveautes` (api.php), appelée par `js/app.js` APRÈS
   l'affichage de la bibliothèque, et seulement si `index.php` a vu des séries à
   vérifier (`data-nouveautes`) ; et `purger.php`, à chaque passage. Une série est
-  candidate quand elle est « En cours » ou « En attente », liée, « à jour » (`tome_actuel >=
-  dernier_tome`) ou jamais vérifiée (`dernier_tome = 0`) — ou dont l'état de publication est
-  à relire (voir « La mention de la couverture ») —, pas vue depuis
+  candidate quand elle est liée ET : « En cours » ou « En attente », « à jour » (`tome_actuel >=
+  dernier_tome`) ou jamais vérifiée (`dernier_tome = 0`) ; OU son état de publication est à relire,
+  quel que soit son statut (voir « La mention de la carte ») —, pas vue depuis
   `NOUVEAUTE_MINUTES`, et que son compte n'est pas bloqué. **La première vérification
   apprend sans annoncer** (`nouveaute_evaluer()` : `memoriser`) : sinon toute série
   d'avant la fonction annoncerait tout ce qui est paru. Un tome nouveau : couverture
@@ -544,7 +544,7 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   bout avant cette fonction : `nouveautes_verifier_serie()` rend alors l'état `statut`, la page
   refait la carte sans rien annoncer). Levé par un tome nouveau (`statut = 'cours'`, gardé par le
   statut lu) et par « ← » (`serie.reculer`, `statut_apres_recul()`, voir plus bas). Une série
-  « Terminée » ou « Abandonnée » n'est jamais revérifiée. Les compteurs (`compter_lignes()`) se déduisent de
+  « Terminée » ou « Abandonnée » ne cherche jamais de nouveau tome (son état de publication est relu, c'est tout). Les compteurs (`compter_lignes()`) se déduisent de
   `STATUTS` : un statut de plus n'oublie pas de liste. **La migration 15 se joue AVANT le code** :
   hors mode strict, MySQL range `''` si la valeur manque à l'ENUM, sans erreur — d'où
   `nouveautes_statut_ecrit()`, qui relit ce qu'on vient d'écrire, rétablit « En cours » et le dit au
@@ -574,31 +574,38 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   Berserk, One Piece). Rien chez eux ne donne « le dernier tome SORTI » d'une série en cours. Pile
   au dernier tome connu alors que le suivant est sorti, le site ne peut pas le savoir : « → » (règle 2)
   ou « En cours » à la main (règle 3) suffisent.
-- **La mention de la couverture** (demande de l'utilisateur : « Tome 44 en attente », « En pause au
-  tome 43 », « Se termine au tome 50 », « Arrêtée au tome 43 », à voir « même si je suis au tome 2 »).
-  `serie_fin_etiquette()` (carte.php, pure) la tire de l'état de publication MangaDex
-  (`serie.publication`) et des tomes connus, **jamais de la position du lecteur** — sauf une fois :
-  `ongoing` → « Tome {dernier_tome + 1} en attente », `hiatus` → « En pause au tome X »,
-  `completed` → « Se termine au tome X », `cancelled` → « Arrêtée au tome X », X = le plus haut
-  entre la dernière couverture (`dernier_tome`) et le dernier volume DÉCLARÉ (`tome_final` : le
-  « 50 » quand les dernières couvertures manquent). **Si le lecteur a lu plus que MangaDex ne
-  connaît (`tome_actuel > X`), elle se tait** (règle 1 plus haut : « Tome 4 en attente » à qui a lu le
-  5 serait faux). Pas de mention connue : « En attente » dit « Tome N en attente » (N = tome lu + 1,
-  c'est le choix de la personne), tout autre statut ne dit rien. Le statut ne change pas la mention.
-  **Deux lignes sur la couverture** : « Tome N à emprunter » (`serie_au_bout()` faux : MangaDex connaît
-  des tomes plus loin) puis la mention (`span.next-tag-serie`, en retrait) ; au bout des tomes connus,
-  la mention SEULE remplace la première (`next-tag-avenir`, comme avant). **Les données** : `publication`
-  (migration 16, `VARCHAR(12)`, pas un `ENUM` : valeur contrôlée par `publication_connue()`),
-  `tome_final` et `publication_le` (migration 17). Le relevé les lit pour TOUTE série liée
-  « En cours » ou « En attente » — un appel `/manga` de plus, la première fois puis toutes les
-  `NOUVEAUTE_PUBLICATION_JOURS` jours (`nouveautes_publication_ecrire()`, `publication_perimee` dans la
-  requête) — SANS interroger les couvertures d'une série qui n'est pas au bout, et sans modifier la série
-  (`maj_le = maj_le`). `nouveautes_fin_de_serie()` les range aussi, avec le statut. Changer de série
-  MangaDex les remet à zéro. **Limites** : une série « Terminée » ou « Abandonnée » n'est jamais relue
-  (pas de mention tant qu'on ne la connaît pas) ; « En attente » ne devient pas « Terminée » si MangaDex la
-  dit finie plus tard. **Les migrations 16 et 17 se jouent AVANT le code** (`index.php`, `ma_serie()` et le
-  cron lisent les colonnes), et dès l'envoi chaque série liée est relue UNE fois : un appel chacune, étalés
-  sur les visites et les passages du cron.
+- **La mention de la carte** (demande de l'utilisateur : « Tome 44 en attente », « En pause au tome 43 »,
+  « Se termine au tome 50 », « Arrêtée au tome 43 » ; d'abord sur la couverture, puis « plus bas entre le
+  “Vous avez lu le tome x” et les boutons » ; et « toutes les séries liées à MangaDex devraient avoir le
+  message »). `serie_fin_etiquette()` (carte.php, pure) la tire de l'état de publication MangaDex
+  (`serie.publication`) et des tomes connus, dans cet ordre : **(a)** état lu et lecteur pas au-delà
+  → `ongoing` « Tome {dernier_tome + 1} en attente », `hiatus` « En pause au tome X », `completed` « Se
+  termine au tome X », `cancelled` « Arrêtée au tome X » (X = le plus haut entre `dernier_tome` et le
+  dernier volume DÉCLARÉ `tome_final`, le « 50 » quand les dernières couvertures manquent) ; **(b)** statut
+  « En attente » : « Tome N en attente » (N = tome lu + 1, le choix de la personne) ; **(c)** lecteur AU-DELÀ
+  de ce que MangaDex connaît : « MangaDex s'arrête au tome X » (règle 1 plus haut : « Tome 4 en attente »
+  à qui a lu le 5 serait faux) ; **(d)** état lu mais aucun tome connu : l'état sans numéro (« En cours de
+  publication », « En pause », « Série terminée », « Série arrêtée ») ; **(e)** sinon rien (pas lue encore,
+  ou pas liée). Jamais d'affirmation qu'on ne sait pas : « Aucun tome illustré » a été écarté, il disait
+  faux d'une série dont on n'avait pas lu les couvertures. Le message est un `p.card-fin` du CORPS de la carte,
+  entre `.card-progress` et `.card-actions` ; la couverture ne garde que « Tome N à emprunter » quand
+  `serie_au_bout()` est faux. **Pour TOUTE série liée, quel que soit son statut** (« Terminée »,
+  « Abandonnée », « Envie » aussi). **Les données** : `publication` (migration 16, `VARCHAR(12)`, pas un
+  `ENUM` : valeur contrôlée par `publication_connue()`), `tome_final` et `publication_le` (migration 17). Le
+  relevé les lit — un appel `/manga`, la première fois puis toutes les `NOUVEAUTE_PUBLICATION_JOURS` jours
+  (`nouveautes_publication_ecrire()`, `publication_perimee` dans la requête) — sans modifier la série
+  (`maj_le = maj_le`). Une série « En cours » / « En attente » pas au bout n'interroge pas ses couvertures
+  pour autant. **Une série qui ne suit pas les tomes** (« Terminée », « Abandonnée », « Envie ») ne cherche
+  JAMAIS de nouveau tome ; elle lit en plus ses couvertures UNE fois (`dernier_tome = 0` → le « X » de la
+  mention). Effet voulu : un « Terminée » dont `dernier_tome` est connu repasse « En cours » en quittant
+  ce tome avec « ← » (`statut_apres_recul()`). `nouveautes_fin_de_serie()` range aussi ces colonnes. **La
+  carte se rafraîchit seule** : `nouveautes_verifier_serie()` lève `$publication_lue`, le bilan porte
+  `publications`, `serie.nouveautes` les renvoie dans `changements` (sans quoi la mention n'apparaissait
+  qu'au chargement suivant). Changer de série MangaDex remet tout à zéro. **Limite** : « En attente » ne
+  devient pas « Terminée » si MangaDex la dit finie plus tard. **Les migrations 16 et 17 se jouent AVANT le
+  code** (`index.php`, `ma_serie()` et le cron lisent les colonnes), et dès l'envoi chaque série liée est
+  relue UNE fois (deux appels pour une série qui ne suit pas les tomes) : étalés sur les visites et les
+  passages du cron.
 - **On n'annonce que si la personne est arrivée AU BOUT des tomes** (demande de
   l'utilisateur) : au tome 1 d'une série dont le tome 4 est le dernier, le tome 5 qui sort
   ne dit rien. C'est la sélection des séries à vérifier (`tome_actuel >= dernier_tome`) ET
@@ -870,7 +877,7 @@ peut exister, inutilisée, dans une base qui l'a jouée. Rien ne la lit, rien ne
 « sans perdre de données ».) Migration 14 : la table `abonnement_push` (un appareil de
 notification par ligne, `ON DELETE CASCADE`). Migration 15 : la valeur `attente` de
 `serie.statut` (voir « Règles tacites » : à jouer AVANT le code). Migration 16 : la colonne
-`serie.publication` (état de publication MangaDex, voir « La mention de la couverture » : AVANT le
+`serie.publication` (état de publication MangaDex, voir « La mention de la carte » : AVANT le
 code aussi). Migration 17 : `serie.tome_final` (dernier volume déclaré par MangaDex) et
 `serie.publication_le` (dernière lecture de l'état) : AVANT le code aussi. `utilisateur.forfait` : `standard`, `illimite` ou
 `bloque` (consultation seule, voir « Règles tacites »). `utilisateur.admin`

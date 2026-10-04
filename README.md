@@ -597,15 +597,16 @@ tome de plus sort — et se choisit aussi à la main dans la fiche.
 
 **« ← » depuis « En attente » ou « Terminée »** : quitter le dernier tome connu remet la série
 « En cours ». Un statut choisi à la main au milieu des tomes (on attend l'édition française, on a
-lâché) ne bouge pas. Une série « Terminée » ou « Abandonnée » n'est jamais revérifiée.
+lâché) ne bouge pas. Une série « Terminée » ou « Abandonnée » ne cherche jamais de nouveau tome.
 
-**La mention de la couverture** se voit même au tome 2 : elle décrit la série, pas la lecture.
-« Tome 44 en attente » (en cours de publication), « En pause au tome 43 », « Se termine au tome 50 »,
-« Arrêtée au tome 43 ». Elle s'ajoute à « Tome N à emprunter » (deux lignes), et le remplace quand on est
-au bout des tomes connus. L'état de publication et le dernier volume déclaré sont rangés dans
-`serie.publication`, `serie.tome_final` et `serie.publication_le` (migrations 16 et 17), lus une fois puis
-relus chaque semaine.
-
+**La mention** que porte chaque série liée à MangaDex, sous « Vous avez lu le tome x » et avant les
+boutons : « Tome 44 en attente » (en cours de publication), « En pause au tome 43 », « Se termine au
+tome 50 », « Arrêtée au tome 43 ». Elle décrit la série, pas la lecture : on la voit même au tome 2, et
+quel que soit le statut (« Terminée », « Abandonnée » et « Envie » aussi). Si vous avez lu plus de tomes
+que MangaDex n'en connaît, elle dit « MangaDex s'arrête au tome 3 ». La couverture ne garde que « Tome N à
+emprunter ». L'état de publication et le dernier volume déclaré sont rangés dans `serie.publication`,
+`serie.tome_final` et `serie.publication_le` (migrations 16 et 17), lus une fois puis relus chaque semaine ;
+les cartes se mettent à jour d'elles-mêmes pendant que le relevé lit.
 **MangaDex est en retard ? La personne a le dernier mot.** Les couvertures et l'état sont saisis par des
 bénévoles ; rien ne dit « MangaDex est à jour ». Si la personne a lu plus de tomes que MangaDex n'en
 connaît (HORION : lu le 5, MangaDex en a 3), le site ne change pas son statut, ne dit rien sur la
