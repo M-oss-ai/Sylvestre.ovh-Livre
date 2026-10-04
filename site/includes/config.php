@@ -199,8 +199,14 @@ define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
    nombre. Le découpage se fait dans le navigateur : toutes les séries restent
    chargées, si bien que la recherche, les filtres et les compteurs portent sur
    TOUTES les séries et non sur la seule page affichée. Changer de filtre ou de
-   recherche revient à la première page. */
-define('SERIES_PAGES_MAX', min(100, max(1, (int) env('SERIES_PAGES_MAX', '30'))));
+   recherche revient à la première page.
+
+   ZÉRO veut dire « pas de pages » (demande de l'utilisateur) : toutes les séries
+   sur une seule page, comme avant cette fonction. Comme les quotas de recherche
+   et les nombres de séries du relevé des nouveaux tomes, c'est une exception
+   voulue au plancher : le réglage ne protège rien, il ne fait que découper un
+   affichage. Un nombre négatif vaut 0. La clé absente donne 30, pas 0. */
+define('SERIES_PAGES_MAX', min(100, max(0, (int) env('SERIES_PAGES_MAX', '30'))));
 
 /* Connexion avec Google (voir google.php et includes/google.php).
    L'identifiant et le secret se créent dans la console Google Cloud

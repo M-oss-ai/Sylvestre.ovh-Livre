@@ -43,6 +43,7 @@ putenv('RAPPORT_HEURES=-3');
 putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait muette sans le dire
 putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
 putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait mort avant d'être lu
+putenv('SERIES_PAGES_MAX=-5');            // jamais un nombre négatif : lu comme 0, une seule page
 putenv('NOUVEAUTE_MINUTES=0');            // 0 min : MangaDex interrogé à chaque page, pour chaque série
 putenv('NOUVEAUTE_PUBLICATION_JOURS=0');  // 0 jour : l'état de publication relu à chaque passage, pour toutes les séries
 putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 : sans limite de nombre (le budget de temps garde)
@@ -175,6 +176,14 @@ test('CLE_ACCES_MAX ne descend jamais sous 1', function () {
 
 test('CLE_ACCES_DEFI_DUREE ne descend jamais sous une minute', function () {
     egale(60, CLE_ACCES_DEFI_DUREE, 'le .env demandait 1 seconde');
+});
+
+groupe('Bibliothèque par pages');
+
+test('SERIES_PAGES_MAX : un nombre négatif vaut 0 (pas de pages), jamais une valeur étrange', function () {
+    /* Exception voulue au plancher, comme les quotas de recherche : 0 veut dire
+       « toutes les séries sur une seule page ». Le réglage ne protège rien. */
+    egale(0, SERIES_PAGES_MAX, 'le .env demandait -5');
 });
 
 groupe('Nouveaux tomes');

@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1114 tests : 942 PHP en 56 fichiers, 172 JavaScript)
+php tests/lancer.php              # toute la suite (1117 tests : 945 PHP en 56 fichiers, 172 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -270,7 +270,11 @@ Importée, Pas d'image), que `index.php` parcourt, comme il parcourt
 `STATUTS` pour les statuts.
 
 **La bibliothèque s'affiche par pages : `SERIES_PAGES_MAX` séries, puis « Afficher plus »**
-(demande de l'utilisateur, 1 à 100, défaut 30, `.env` ET `admin.php`, groupe « Quotas »). Réponses de
+(demande de l'utilisateur, 1 à 100, défaut 30, `.env` ET `admin.php`, groupe « Quotas »). **`0` = pas de
+pages : toutes les séries sur une seule page, comme avant** (demande de l'utilisateur ; exception voulue
+au plancher, comme les quotas de recherche — le réglage ne protège rien ; un nombre négatif vaut 0 ;
+la clé ABSENTE donne 30, pas 0 ; l'administration l'écrit « toutes sur une seule page », clé `zero`).
+`pagesSeries()` avec une taille de 0 ne coupe rien et le bouton ne se montre jamais. Réponses de
 l'utilisateur aux questions posées : le réglage est un nombre de séries PAR PAGE (pas un nombre de
 pages) ; le découpage est fait **dans le navigateur** (pas par le serveur) ; la navigation est un
 bouton « Afficher plus », pas des numéros de page. **Conséquence voulue : `index.php` rend TOUJOURS

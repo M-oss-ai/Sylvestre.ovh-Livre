@@ -75,7 +75,7 @@ const REGLAGES = [
     'SERIES_PAGES_MAX' => [
         'groupe' => 'quotas', 'libelle' => 'Séries affichées par page',
         'aide' => "La bibliothèque montre ce nombre de séries, puis un bouton « Afficher plus » pour les suivantes. La recherche et les filtres portent sur toutes les séries, pas seulement sur la page affichée.",
-        'min' => 1, 'max' => 100, 'defaut' => 30, 'unite' => 'séries',
+        'min' => 0, 'max' => 100, 'defaut' => 30, 'unite' => 'séries', 'zero' => 'toutes sur une seule page',
     ],
 
     // ---- Recherche de couverture ----

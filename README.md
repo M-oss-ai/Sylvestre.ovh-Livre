@@ -177,7 +177,7 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `UPLOAD_SECRET` | Sel des noms de fichiers envoyés |
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |
-| `SERIES_PAGES_MAX` | Séries affichées par page dans la bibliothèque (30, de 1 à 100), puis un bouton « Afficher plus ». Modifiable depuis l'administration |
+| `SERIES_PAGES_MAX` | Séries affichées par page dans la bibliothèque (30, de 1 à 100), puis un bouton « Afficher plus ». **0 : pas de pages**, toutes les séries sur une seule page. Modifiable depuis l'administration |
 | `ASSETS_VERSION` | Version des URL `css/` et `js/`. À incrémenter au déploiement |
 | `COUVERTURE_CANDIDATS` · `COUVERTURE_MAX_SERIES` | Séries examinées / proposées à la recherche de couverture |
 | `COUVERTURE_QUOTA` · `COUVERTURE_FENETRE` | Recherches autorisées par compte et par tranche |

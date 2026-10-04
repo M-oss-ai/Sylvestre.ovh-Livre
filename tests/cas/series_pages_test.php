@@ -14,7 +14,7 @@
 
 declare(strict_types=1);
 
-putenv('SERIES_PAGES_MAX=0');   // une page sans aucune série n'afficherait jamais rien
+putenv('SERIES_PAGES_MAX=0');   // 0 : pas de pages, toutes les séries sur une seule page (comme avant)
 
 require __DIR__ . '/../lanceur.php';
 
@@ -25,15 +25,26 @@ function source_series_pages(string $chemin): string
 
 groupe('SERIES_PAGES_MAX — bornes et défaut');
 
-test('le .env demandait 0 : relevé à 1 série par page, jamais une page vide', function () {
-    egale(1, SERIES_PAGES_MAX, 'plancher à 1');
+test('le .env dit 0 : « pas de pages », conservé tel quel — toutes les séries sur une seule page', function () {
+    egale(0, SERIES_PAGES_MAX, 'zéro est une intention, pas une valeur absurde à relever');
 });
 
-test('le défaut est 30, le plafond 100 — dans le code comme dans l\'administration', function () {
-    contient("define('SERIES_PAGES_MAX', min(100, max(1, (int) env('SERIES_PAGES_MAX', '30'))));", source_series_pages('includes/config.php'),
-        'min 1, max 100, défaut 30');
-    egale([1, 100, 30], [REGLAGES['SERIES_PAGES_MAX']['min'], REGLAGES['SERIES_PAGES_MAX']['max'], REGLAGES['SERIES_PAGES_MAX']['defaut']],
-        'l\'administration : de 1 à 100, défaut 30');
+test('le défaut est 30 (clé absente), les bornes 0 à 100 — dans le code comme dans l\'administration', function () {
+    contient("define('SERIES_PAGES_MAX', min(100, max(0, (int) env('SERIES_PAGES_MAX', '30'))));", source_series_pages('includes/config.php'),
+        'min 0, max 100, défaut 30 : la clé absente donne 30, pas 0');
+    egale([0, 100, 30], [REGLAGES['SERIES_PAGES_MAX']['min'], REGLAGES['SERIES_PAGES_MAX']['max'], REGLAGES['SERIES_PAGES_MAX']['defaut']],
+        'l\'administration : de 0 à 100, défaut 30');
+    egale('toutes sur une seule page', REGLAGES['SERIES_PAGES_MAX']['zero'], 'et dit ce que veut dire 0');
+});
+
+test('l\'administration accepte 0 (une seule page) et 1 à 100, refuse le reste', function () {
+    egale(['0', ''], reglage_valider('SERIES_PAGES_MAX', '0'), '0 : pas de pages');
+    egale(['1', ''], reglage_valider('SERIES_PAGES_MAX', '1'), '1 : une série par page');
+    egale(['30', ''], reglage_valider('SERIES_PAGES_MAX', '30'), '30');
+    egale(['100', ''], reglage_valider('SERIES_PAGES_MAX', '100'), '100');
+    estNul(reglage_valider('SERIES_PAGES_MAX', '101')[0], '101 : au-delà du plafond');
+    estNul(reglage_valider('SERIES_PAGES_MAX', '-1')[0], '-1 : négatif');
+    estNul(reglage_valider('SERIES_PAGES_MAX', 'abc')[0], 'pas un nombre');
 });
 
 test('l\'administration : un réglage du groupe « quotas », en séries, avec son aide', function () {
@@ -49,6 +60,12 @@ test('.env.example documente le réglage', function () {
 });
 
 groupe('SERIES_PAGES_MAX — le branchement');
+
+test('js/app.js : 0 (ou rien) veut dire « pas de découpage »', function () {
+    $js = source_series_pages('js/app.js');
+    contient('const SERIES_PAR_PAGE = parseInt(document.body.dataset.seriesParPage || "0", 10) || 0;', $js, '0, absent ou illisible : 0');
+    contient('const limite = taille > 0 ? taille * p : n;', $js, 'une taille nulle ne coupe rien : la limite est le total');
+});
 
 test('index.php : la taille d\'une page vient de la constante, le bouton est caché au départ', function () {
     $page = source_series_pages('index.php');
