@@ -607,7 +607,8 @@ define('COUVERTURE_QUOTA_ILLIMITE', couverture_quota_illimite(
    Une série « à jour » (le tome lu est le dernier que MangaDex illustre)
    est revérifiée : à l'arrivée sur la bibliothèque, et à chaque passage du
    cron. Chaque vérification est UN appel à MangaDex, donc une part du débit
-   que tous les comptes se partagent : NOUVEAUTE_MINUTES l'encadre, et la file
+   que tous les comptes se partagent : NOUVEAUTE_MINUTES et NOUVEAUTE_PUBLICATION_JOURS
+   l'encadrent, et la file
    d'attente (COUVERTURE_ESPACEMENT) espace de toute façon les appels.
 
    NOUVEAUTE_MINUTES a son plancher (une heure), comme partout : un « 0 »
@@ -621,6 +622,12 @@ define('COUVERTURE_QUOTA_ILLIMITE', couverture_quota_illimite(
 /* Minutes minimales entre deux vérifications de la MÊME série : de 60 (une
    heure) à 10 080 (une semaine). Modifiable depuis admin.php. */
 define('NOUVEAUTE_MINUTES', min(10080, max(60, (int) env('NOUVEAUTE_MINUTES', '60'))));
+
+/* Jours entre deux lectures de l'ÉTAT DE PUBLICATION d'une série (en cours, en
+   pause, finie, arrêtée) et de son dernier volume déclaré : c'est ce qui fait dire
+   à la carte « Se termine au tome N », « En pause au tome N »… même quand on est
+   au tome 2. Un appel de plus par série et par période : de 1 à 90 jours. */
+define('NOUVEAUTE_PUBLICATION_JOURS', min(90, max(1, (int) env('NOUVEAUTE_PUBLICATION_JOURS', '7'))));
 
 /* Séries vérifiées au plus par arrivée sur la bibliothèque. 0 = sans limite :
    la vérification part en arrière-plan, et s'arrête à son budget de temps. Un

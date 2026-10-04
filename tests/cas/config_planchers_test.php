@@ -44,6 +44,7 @@ putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait mu
 putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
 putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait mort avant d'être lu
 putenv('NOUVEAUTE_MINUTES=0');            // 0 min : MangaDex interrogé à chaque page, pour chaque série
+putenv('NOUVEAUTE_PUBLICATION_JOURS=0');  // 0 jour : l'état de publication relu à chaque passage, pour toutes les séries
 putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 : sans limite de nombre (le budget de temps garde)
 putenv('NOUVEAUTE_MAX_CRON=-5');          // jamais un nombre négatif : lu comme 0
 putenv('PUSH_TTL=0');                     // un message non remis serait jeté à l'instant
@@ -182,6 +183,12 @@ test('NOUVEAUTE_MINUTES ne descend jamais sous 60 minutes', function () {
     /* À 0, chaque arrivée sur la bibliothèque interrogerait MangaDex pour
        chaque série à jour : le débit que tous les comptes se partagent. */
     egale(60, NOUVEAUTE_MINUTES, 'le .env demandait 0');
+});
+
+test('NOUVEAUTE_PUBLICATION_JOURS ne descend jamais sous 1 jour', function () {
+    /* À 0, chaque passage relirait l'état de publication de TOUTES les séries
+       liées : un appel de plus chacune, à chaque fois. */
+    egale(1, NOUVEAUTE_PUBLICATION_JOURS, 'le .env demandait 0');
 });
 
 test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON : 0 et les nombres négatifs valent « sans limite »', function () {

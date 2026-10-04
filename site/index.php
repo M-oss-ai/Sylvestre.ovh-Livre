@@ -14,7 +14,7 @@ $moi = exiger_connexion();
 
 $req = $pdo->prepare(
     'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori,
-            dernier_tome, nouveau_tome, publication
+            dernier_tome, nouveau_tome, publication, tome_final
        FROM serie
       WHERE utilisateur_id = ?
       ORDER BY maj_le DESC, id DESC'

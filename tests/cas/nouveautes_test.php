@@ -57,11 +57,15 @@ test('série en cours ou en pause au dernier tome : le suivant n\'est pas paru',
     egale('a_venir', fin_de_serie('hiatus', 0, 20, 20), 'hiatus');
 });
 
-test('un tome lu au-delà du dernier connu compte comme l\'avoir atteint', function () {
-    /* La personne a saisi son tome à la main, ou MangaDex est en retard sur
-       les sorties : elle n'a certainement pas plus à lire que ce qu'on sait. */
-    egale('termine', fin_de_serie('completed', 34, 34, 40), 'finie, tome 40 sur 34');
-    egale('a_venir', fin_de_serie('ongoing', 0, 43, 50), 'en cours, tome 50 sur 43');
+test('un tome lu AU-DELÀ du dernier connu : MangaDex est en retard, on ne dit rien', function () {
+    /* La personne a lu plus de tomes que MangaDex n'en connaît (couvertures pas
+       encore ajoutées : HORION, lu au tome 5, n'en a que 3 chez MangaDex) : elle en
+       est la preuve. Seul le tome EXACT du dernier connu est une fin. */
+    egale('inconnu', fin_de_serie('completed', 34, 34, 40), 'finie, tome 40 sur 34');
+    egale('inconnu', fin_de_serie('ongoing', 0, 43, 50), 'en cours, tome 50 sur 43');
+    egale('inconnu', fin_de_serie('hiatus', 0, 3, 5), 'en pause, tome 5 sur 3');
+    egale('inconnu', fin_de_serie('cancelled', 0, 12, 13), 'arrêtée, tome 13 sur 12');
+    egale('a_venir', fin_de_serie('ongoing', 0, 43, 43), 'mais le tome exact reste une fin');
 });
 
 test('des tomes existent plus loin : on est en route, rien ne change', function () {
@@ -274,6 +278,7 @@ groupe('Les bornes du .env');
 
 test('NOUVEAUTE_MINUTES vaut 60 par défaut, _MAX_VISITE et _MAX_CRON « sans limite »', function () {
     egale(60, NOUVEAUTE_MINUTES, 'une heure entre deux vérifications d\'une même série');
+    egale(7, NOUVEAUTE_PUBLICATION_JOURS, 'l\'état de publication est relu chaque semaine');
     faux(defined('NOUVEAUTE_HEURES'), 'l\'ancien nom n\'existe plus');
     egale(0, NOUVEAUTE_MAX_VISITE, 'ligne absente du .env : 0, donc autant de séries que le temps le permet');
     egale(0, NOUVEAUTE_MAX_CRON, 'idem pour un passage du cron');
@@ -316,7 +321,13 @@ test('le relevé lit dans sa requête chaque colonne que les fonctions utilisent
     $requete = corps_de($src, 'nouveautes_series_a_verifier');
     preg_match('/SELECT (.*?)\s+FROM serie/s', $requete, $m);
     vrai(isset($m[1]), 'la requête est lisible');
-    $colonnes = array_map(static fn ($c) => trim(preg_replace('/^s\./', '', trim($c))), explode(',', $m[1]));
+    /* « s.titre » → titre ; une colonne calculée (« … AS publication_perimee ») → son alias. */
+    $colonnes = array_map(static function ($c) {
+        $c = trim($c);
+        return preg_match('/ AS ([a-z_]+)$/', $c, $a) ? $a[1] : trim(preg_replace('/^s\./', '', $c));
+    }, explode(',', $m[1]));
+    vrai(in_array('publication_perimee', $colonnes, true), 'la requête dit, ligne par ligne, si l\'état de publication est à relire');
+    vrai(in_array('tome_final', $colonnes, true), 'et rend le dernier volume déclaré');
 
     foreach (['nouveautes_verifier_serie', 'nouveautes_verifier'] as $fonction) {
         preg_match_all("/\\\$s\\['([a-z_]+)'\\]/", corps_de($src, $fonction), $cles);
@@ -417,7 +428,7 @@ test('purger.php : le cron charge nouveautes.php, jamais fonctions.php', functio
 test('purger.php : un schéma pas migré devient une anomalie bruyante, pas un plantage', function () {
     $cron = source('purger.php');
     contient('catch (PDOException $e)', $cron, 'l\'erreur est attrapée');
-    contient('migrations 13 à 16', $cron, 'et dit quoi faire');
+    contient('migrations 13 à 17', $cron, 'et dit quoi faire');
 });
 
 test('purger.php : la ligne du bilan ne contient pas « e-mail » (le rapport les écarte)', function () {
@@ -482,11 +493,12 @@ test('un tome nouveau fait repasser « En cours » une série qui attendait', fu
     contient('AND dernier_tome = ? AND statut = ?', $nouveau, 'gardé par le statut lu : un statut changé pendant l\'appel n\'est pas écrasé');
 });
 
-test('le relevé range les séries déjà au bout : « En cours » seulement, et quand MangaDex ne dit rien, rien ne change', function () {
+test('le relevé range les séries déjà au bout : « En cours », la PREMIÈRE fois seulement, et quand MangaDex ne dit rien, rien ne change', function () {
     $c = corps_de(source('includes/nouveautes.php'), 'nouveautes_verifier_serie');
     contient("(string) (\$s['statut'] ?? '') === 'cours'", $c, 'seule une série « En cours » est reclassée');
-    contient('$tome >= max($connu, $dernier[\'tome\'])', $c, 'et seulement si le tome lu est le dernier connu');
-    contient('nouveautes_fin_de_serie($pdo, $uid, $s, $dernier)', $c, 'avec les couvertures déjà lues : un appel de moins');
+    contient('$connu === 0 &&', $c, 'à la première vérification seulement : une personne qui remet « En cours » garde le dernier mot');
+    contient('$tome >= $dernier[\'tome\']', $c, 'et seulement si le tome lu est le dernier connu');
+    contient('nouveautes_fin_de_serie($pdo, $uid, $s, $dernier, $infos)', $c, 'avec les couvertures ET l\'état déjà lus : deux appels de moins');
     contient("'etat' => 'statut', 'statut' => 'termine'", $c, 'finie ou abandonnée : « Terminée »');
     contient("'etat' => 'statut', 'statut' => 'attente'", $c, 'qui continue : « En attente »');
     $apres = substr($c, (int) strpos($c, "'etat' => 'statut', 'statut' => 'attente'"));
@@ -550,16 +562,59 @@ test('les quatre mots de MangaDex, et rien d\'autre', function () {
     }
 });
 
-test('l\'état de publication est rangé avec « Terminée » et « En attente », et appris une fois par le relevé', function () {
+test('l\'état de publication est rangé avec « Terminée » et « En attente », avec le dernier volume déclaré', function () {
     $src = source('includes/nouveautes.php');
     $fin = corps_de($src, 'nouveautes_fin_de_serie');
     contient('$publication = publication_connue($infos[\'statut\']);', $fin, 'lu dans la réponse de MangaDex, contrôlé');
     contient("verifie_le = NOW(), publication = ?,\n", $fin, '« Terminée » le range');
+    contient('tome_final = ?, publication_le = NOW()', $fin, 'avec le dernier volume déclaré et le moment de la lecture');
+    contient('$infos[\'dernier_volume\']', $fin, 'le dernier volume vient de la réponse de MangaDex');
+});
+
+test('le relevé lit l\'état de publication de TOUTE série liée (la mention se voit au tome 2), une fois puis toutes les NOUVEAUTE_PUBLICATION_JOURS', function () {
+    $src = source('includes/nouveautes.php');
+    $q = corps_de($src, 'nouveautes_series_a_verifier');
+    contient('NOUVEAUTE_PUBLICATION_JOURS', $q, 'la période de relecture');
+    contient('s.publication_le IS NULL OR s.publication_le < NOW() - INTERVAL', $q, 'jamais lu, ou trop ancien');
+    contient('s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome OR', $q, 'une série pas encore au bout est candidate POUR CELA, pas pour ses couvertures');
     $releve = corps_de($src, 'nouveautes_verifier_serie');
-    contient("=== 'attente' && (string) (\$s['publication'] ?? '') === ''", $releve, 'une série « En attente » qui ne sait pas pourquoi l\'apprend…');
-    contient("SET publication = ?, maj_le = maj_le", $releve, '… sans que ce soit une modification de la série…');
-    contient("AND statut = 'attente'", substr($releve, (int) strpos($releve, 'SET publication = ?')), '… et sans toucher à une série qui a changé de statut pendant l\'appel');
-    contient('s.publication', corps_de($src, 'nouveautes_series_a_verifier'), 'la requête du relevé la sélectionne');
+    contient("!empty(\$s['publication_perimee'])", $releve, 'le relevé lit l\'état quand la requête le dit à relire');
+    contient('nouveautes_publication_ecrire($pdo, $id, $uid, $lien, $infos);', $releve, 'et le range');
+    contient("\$connu > 0 && \$tome < \$connu", $releve, 'une série pas au bout n\'interroge pas ses couvertures pour rien');
+    contient("'etat' => \$infos !== null ? 'publication' : 'echec'", $releve, 'et le dit');
+    $ecrire = corps_de($src, 'nouveautes_publication_ecrire');
+    contient('maj_le = maj_le', $ecrire, 'lire un état n\'est pas modifier la série');
+    contient('AND mangadex_id = ?', $ecrire, 'gardé par le lien : une série qui a changé de MangaDex n\'hérite pas de l\'état de l\'autre');
+    contient('publication_connue($infos[\'statut\'])', $ecrire, 'et seul un état connu est rangé');
+});
+
+test('changer de série MangaDex remet aussi à zéro l\'état de publication', function () {
+    $api = source('api.php');
+    $bloc = substr($api, (int) strpos($api, 'if ($lien !== $ancien_lien) {'), 520);
+    contient("publication = '', tome_final = 0, publication_le = NULL", $bloc, 'l\'état de l\'ancienne série ne vaut rien pour la nouvelle');
+});
+
+groupe('statut_apres_avance() — lire AU-DELÀ de MangaDex : il est en retard');
+
+test('« En attente » : un tome lu au-delà du dernier connu → « En cours »', function () {
+    egale('cours', statut_apres_avance('attente', 43, 44), 'au tome 44 alors que MangaDex n\'en connaît que 43');
+    egale('cours', statut_apres_avance('attente', 3, 5), 'HORION : lu le 5, MangaDex en a 3');
+});
+
+test('pas au-delà, ou rien de connu, ou un autre statut : rien ne change', function () {
+    egale('attente', statut_apres_avance('attente', 43, 43), 'au dernier tome exactement : on y est, pas au-delà');
+    egale('attente', statut_apres_avance('attente', 43, 20), 'au milieu des tomes (mise à la main)');
+    egale('attente', statut_apres_avance('attente', 0, 8), 'dernier tome inconnu : un statut mis à la main reste');
+    foreach (['cours', 'envie', 'termine', 'abandon'] as $statut) {
+        egale($statut, statut_apres_avance($statut, 43, 50), $statut . ' : pas la décision de cette fonction');
+    }
+});
+
+test('serie.avancer : un tome au-delà de MangaDex remet « En cours », et le dit', function () {
+    $api = source('api.php');
+    $bloc = substr($api, (int) strpos($api, "case 'serie.avancer': {"), 2200);
+    contient("statut_apres_avance((string) \$statut, (int) \$s['dernier_tome'], \$tome)", $bloc, 'la décision est celle de la fonction pure');
+    contient('($demarre || $repasse)', $bloc, 'le message dit « passée en « En cours » »');
 });
 
 test('livre.sql : migration 16, rejouable, une colonne texte contrôlée par le code', function () {
@@ -587,4 +642,21 @@ test('livre.sql : migration 15, rejouable, l\'ENUM porte « attente » en fin de
     sans('ADD COLUMN IF NOT EXISTS', substr($m15, (int) strpos($m15, 'SET @c')), 'jamais cette extension MariaDB');
     sans('UPDATE', substr($m15, (int) strpos($m15, 'SET @c')), 'aucune donnée n\'est touchée');
     vrai(strpos($sql, "COLUMN_NAME = 'statut'") > strpos($sql, 'CREATE TABLE IF NOT EXISTS `serie`'), 'après la création de la table');
+});
+
+test('livre.sql : migration 17, rejouable, deux colonnes qui ne touchent aucune donnée', function () {
+    $sql = source('livre.sql');
+    contient("`tome_final`     INT UNSIGNED NOT NULL DEFAULT 0", $sql, 'le schéma neuf : le dernier volume déclaré');
+    contient("`publication_le` DATETIME     NULL DEFAULT NULL", $sql, 'le schéma neuf : le moment de la lecture');
+    $m17 = substr($sql, (int) strpos($sql, '--  17. Mention de la couverture'));
+    vrai($m17 !== '', 'la migration 17 existe');
+    foreach (['tome_final', 'publication_le'] as $colonne) {
+        contient("TABLE_NAME = 'serie' AND COLUMN_NAME = '" . $colonne . "'", $m17, 'elle interroge information_schema pour ' . $colonne);
+    }
+    contient("'DO 0'", $m17, 'et ne fait rien si la colonne est là');
+    contient("ADD COLUMN `tome_final` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `publication`", $m17, 'tome_final après publication');
+    contient("ADD COLUMN `publication_le` DATETIME NULL DEFAULT NULL AFTER `tome_final`", $m17, 'publication_le après tome_final');
+    sans('ADD COLUMN IF NOT EXISTS', substr($m17, (int) strpos($m17, 'SET @c')), 'jamais cette extension MariaDB');
+    sans('UPDATE', substr($m17, (int) strpos($m17, 'SET @c')), 'aucune donnée n\'est touchée');
+    vrai(strpos($sql, '--  17. Mention') > strpos($sql, '--  16. État'), 'après la migration 16');
 });

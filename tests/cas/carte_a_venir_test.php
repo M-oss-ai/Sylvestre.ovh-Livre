@@ -119,57 +119,126 @@ test('en lecture seule (compte bloqué), l\'étiquette « en attente » se lit t
     sans('<button', $html, 'et toujours aucun bouton');
 });
 
-groupe('serie_fin_etiquette() — ce que dit une série arrivée au bout des tomes');
+groupe('serie_fin_etiquette() — la mention de la série, même au tome 2');
 
-test('« En attente » : « Tome N en attente » quand la série continue, « En pause au tome N » quand elle est en pause', function () {
-    egale('Tome 44 en attente', serie_fin_etiquette(serie_en_attente(['publication' => 'ongoing'])), 'en cours de publication : le tome QUI N\'EST PAS PARU');
-    egale('En pause au tome 43', serie_fin_etiquette(serie_en_attente(['publication' => 'hiatus'])), 'en pause chez MangaDex : le dernier tome paru');
+/** Une série suivie chez MangaDex : ce qu'il en dit, et le tome qu'on en a lu. */
+function serie_mangadex(string $publication, int $lu, int $dernier, int $final = 0, string $statut = 'cours'): array
+{
+    return serie_en_attente([
+        'statut' => $statut, 'tome_actuel' => $lu, 'dernier_tome' => $dernier, 'tome_final' => $final, 'publication' => $publication,
+    ]);
+}
+
+test('les quatre mentions demandées, au bout des tomes', function () {
+    egale('Tome 44 en attente', serie_fin_etiquette(serie_mangadex('ongoing', 43, 43)), 'en cours de publication : le tome QUI N\'EST PAS PARU');
+    egale('En pause au tome 43', serie_fin_etiquette(serie_mangadex('hiatus', 43, 43)), 'en pause chez MangaDex');
+    egale('Se termine au tome 50', serie_fin_etiquette(serie_mangadex('completed', 50, 50)), 'finie');
+    egale('Arrêtée au tome 43', serie_fin_etiquette(serie_mangadex('cancelled', 43, 43)), 'arrêtée');
 });
 
-test('« En attente » sans état connu : « Tome N en attente » — vrai dans tous les cas', function () {
-    egale('Tome 44 en attente', serie_fin_etiquette(serie_en_attente()), 'aucune clé publication (ligne d\'avant la migration 16)');
-    egale('Tome 44 en attente', serie_fin_etiquette(serie_en_attente(['publication' => ''])), 'état pas encore su');
-    egale('Tome 21 en attente', serie_fin_etiquette(serie_en_attente(['tome_actuel' => 20, 'dernier_tome' => 0])), 'choisie à la main : rien de connu');
-    egale('Tome 21 en attente', serie_fin_etiquette(serie_en_attente(['tome_actuel' => 20, 'dernier_tome' => 0, 'publication' => 'hiatus'])),
-        '« en pause » ne se dit pas sans savoir où : pas de dernier tome connu');
+test('MÊME AU TOME 2 : la mention ne dépend pas de la position du lecteur (demande de l\'utilisateur)', function () {
+    egale('Tome 44 en attente', serie_fin_etiquette(serie_mangadex('ongoing', 2, 43)), 'ongoing, tome 2 sur 43');
+    egale('En pause au tome 43', serie_fin_etiquette(serie_mangadex('hiatus', 2, 43)), 'hiatus, tome 2 sur 43');
+    egale('Se termine au tome 50', serie_fin_etiquette(serie_mangadex('completed', 2, 50, 50)), 'completed, tome 2 sur 50');
+    egale('Arrêtée au tome 43', serie_fin_etiquette(serie_mangadex('cancelled', 2, 43)), 'cancelled, tome 2 sur 43');
 });
 
-test('« Terminée » : « Se termine au tome N » si elle est finie, « Arrêtée au tome N » si elle est arrêtée', function () {
-    egale('Se termine au tome 34', serie_fin_etiquette(serie_en_attente(['statut' => 'termine', 'tome_actuel' => 34, 'dernier_tome' => 34, 'publication' => 'completed'])), 'finie');
-    egale('Arrêtée au tome 12', serie_fin_etiquette(serie_en_attente(['statut' => 'termine', 'tome_actuel' => 12, 'dernier_tome' => 12, 'publication' => 'cancelled'])), 'arrêtée');
+test('le dernier volume DÉCLARÉ donne le « 50 » quand les dernières couvertures manquent', function () {
+    egale('Se termine au tome 50', serie_fin_etiquette(serie_mangadex('completed', 2, 45, 50)), 'couvertures jusqu\'au 45, lastVolume 50');
+    egale('Se termine au tome 50', serie_fin_etiquette(serie_mangadex('completed', 2, 0, 50)), 'aucune couverture numérotée, lastVolume 50');
+    egale('Arrêtée au tome 12', serie_fin_etiquette(serie_mangadex('cancelled', 2, 10, 12)), 'arrêtée : même règle');
 });
 
-test('« Terminée » sans état connu, ou sans dernier tome : rien — on ne devine pas', function () {
-    egale('', serie_fin_etiquette(serie_en_attente(['statut' => 'termine'])), 'état inconnu : finie ou arrêtée ?');
-    egale('', serie_fin_etiquette(serie_en_attente(['statut' => 'termine', 'publication' => 'ongoing'])), 'ongoing sur une série terminée à la main : rien à dire');
-    egale('', serie_fin_etiquette(serie_en_attente(['statut' => 'termine', 'publication' => 'completed', 'dernier_tome' => 0])), 'finie, mais à quel tome ?');
+test('MangaDex est en retard sur le lecteur (il a lu PLUS de tomes que MangaDex n\'en connaît) : la mention se tait', function () {
+    /* HORION : lu le tome 5, MangaDex n'en connaît que 3. « Tome 4 en attente » serait faux. */
+    egale('', serie_fin_etiquette(serie_mangadex('ongoing', 5, 3)), 'ongoing, tome 5 sur 3');
+    egale('', serie_fin_etiquette(serie_mangadex('hiatus', 44, 43)), 'hiatus, tome 44 sur 43');
+    egale('', serie_fin_etiquette(serie_mangadex('completed', 51, 45, 50)), 'completed, tome 51 sur 50');
+    egale('', serie_fin_etiquette(serie_mangadex('cancelled', 13, 12)), 'cancelled, tome 13 sur 12');
+    egale('Tome 4 en attente', serie_fin_etiquette(serie_mangadex('ongoing', 3, 3)), 'pile au dernier connu : la mention reste');
 });
 
-test('aucun autre statut ne dit rien, quel que soit l\'état rangé', function () {
-    foreach (['cours', 'envie', 'abandon', '', 'inconnu'] as $statut) {
-        foreach (['', 'ongoing', 'completed', 'hiatus', 'cancelled'] as $publication) {
-            egale('', serie_fin_etiquette(serie_en_attente(['statut' => $statut, 'publication' => $publication])), $statut . ' / ' . $publication);
-        }
-    }
+test('rien de connu : rien à dire', function () {
+    egale('', serie_fin_etiquette(serie_mangadex('', 5, 43)), 'état de publication pas encore lu');
+    egale('', serie_fin_etiquette(serie_mangadex('inconnu', 5, 43)), 'un état qui n\'est pas l\'un des quatre');
+    egale('', serie_fin_etiquette(serie_mangadex('ongoing', 5, 0)), 'ongoing sans aucune couverture : de quel tome parler ?');
+    egale('', serie_fin_etiquette(serie_mangadex('hiatus', 5, 0)), 'hiatus sans aucun tome connu');
     egale('', serie_fin_etiquette([]), 'une ligne vide');
 });
 
-test('la carte « Terminée » porte la mention, avec la classe en retrait, et un état inventé ne devient jamais du HTML', function () {
-    $finie = carte_html(serie_en_attente(['statut' => 'termine', 'tome_actuel' => 34, 'dernier_tome' => 34, 'publication' => 'completed']));
-    contient('<div class="next-tag next-tag-avenir">Se termine au tome 34</div>', $finie, 'finie');
-    contient('dernier tome lu 34 (Se termine au tome 34)', $finie, 'et le lecteur d\'écran');
-    contient('<span class="badge">Terminée</span>', $finie, 'la pastille reste « Terminée »');
-    $arretee = carte_html(serie_en_attente(['statut' => 'termine', 'tome_actuel' => 12, 'dernier_tome' => 12, 'publication' => 'cancelled']));
-    contient('Arrêtée au tome 12', $arretee, 'arrêtée');
-    $pause = carte_html(serie_en_attente(['publication' => 'hiatus']));
-    contient('<div class="next-tag next-tag-avenir">En pause au tome 43</div>', $pause, 'en pause');
-    contient('<span class="badge">En attente</span>', $pause, 'la pastille reste « En attente »');
-    sans('Tome 44', $pause, 'et ne parle plus du tome 44');
-    $piege = carte_html(serie_en_attente(['statut' => 'termine', 'dernier_tome' => 34, 'publication' => '<script>alert(1)</script>']));
-    sans('<script>', $piege, 'un état inventé ne devient jamais du HTML');
-    sans('next-tag', $piege, 'et, inconnu, ne dit rien');
+test('« En attente » sans mention (à la main, ou rien de connu) : « Tome N en attente », N = le suivant du tome lu', function () {
+    egale('Tome 21 en attente', serie_fin_etiquette(serie_mangadex('', 20, 0, 0, 'attente')), 'choisie à la main : rien de connu');
+    egale('Tome 6 en attente', serie_fin_etiquette(serie_mangadex('ongoing', 5, 3, 0, 'attente')), 'MangaDex en retard, la personne a choisi d\'attendre');
 });
 
+test('le statut ne change pas la mention : « Terminée » ou « En cours », la série se termine au tome 50', function () {
+    foreach (['cours', 'termine', 'attente', 'abandon'] as $statut) {
+        egale('Se termine au tome 50', serie_fin_etiquette(serie_mangadex('completed', 50, 50, 50, $statut)), $statut);
+    }
+});
+
+groupe('serie_au_bout() — a-t-on lu tout ce que MangaDex connaît ?');
+
+test('au dernier tome connu, ou au-delà d\'un dernier volume déclaré : oui — seulement quand il y a une mention', function () {
+    vrai(serie_au_bout(serie_mangadex('ongoing', 43, 43)), 'tome 43 sur 43');
+    vrai(serie_au_bout(serie_mangadex('completed', 50, 45, 50)), 'tome 50 sur un dernier volume déclaré 50');
+});
+
+test('avant le bout, ou sans mention, ou en retard : non', function () {
+    faux(serie_au_bout(serie_mangadex('ongoing', 2, 43)), 'tome 2 sur 43');
+    faux(serie_au_bout(serie_mangadex('completed', 45, 45, 50)), 'tome 45, mais le volume final est le 50 : il reste à lire');
+    faux(serie_au_bout(serie_mangadex('', 43, 43)), 'état inconnu : on ne sait pas qu\'on est au bout');
+    faux(serie_au_bout(serie_mangadex('ongoing', 5, 3)), 'en retard : la mention se tait, le tome suivant est à emprunter');
+});
+
+groupe('carte_html() — les lignes du bas de la couverture');
+
+test('au tome 2 : « Tome 3 à emprunter » ET la mention, sur deux lignes', function () {
+    $html = carte_html(serie_mangadex('completed', 2, 50, 50));
+    contient('<div class="next-tag next-tag-deux">', $html, 'deux lignes');
+    contient('<span class="next-tag-ligne">Tome 3 à emprunter</span>', $html, 'la première : l\'action');
+    contient('<span class="next-tag-ligne next-tag-serie">Se termine au tome 50</span>', $html, 'la seconde : la série');
+    contient('Couverture du tome 3 de Berserk — Se termine au tome 50', $html, 'le lecteur d\'écran aussi');
+});
+
+test('au bout des tomes : une seule ligne, la mention, à la place de « à emprunter »', function () {
+    $html = carte_html(serie_mangadex('ongoing', 43, 43));
+    contient('<div class="next-tag next-tag-avenir">Tome 44 en attente</div>', $html, 'une ligne');
+    sans('à emprunter', $html, 'plus de « à emprunter » : le suivant n\'existe pas encore');
+    sans('next-tag-deux', $html, 'pas de seconde ligne');
+    contient('dernier tome lu 43 (Tome 44 en attente)', $html, 'le lecteur d\'écran');
+});
+
+test('en pause ou arrêtée au bout des tomes : une ligne aussi', function () {
+    contient('<div class="next-tag next-tag-avenir">En pause au tome 43</div>', carte_html(serie_mangadex('hiatus', 43, 43)), 'en pause');
+    contient('<div class="next-tag next-tag-avenir">Arrêtée au tome 43</div>', carte_html(serie_mangadex('cancelled', 43, 43)), 'arrêtée');
+});
+
+test('MangaDex en retard : la carte revient à « Tome N à emprunter », sans mention', function () {
+    $html = carte_html(serie_mangadex('ongoing', 5, 3));
+    contient('<div class="next-tag">Tome 6 à emprunter</div>', $html, 'comme avant la fonction');
+    sans('en attente', $html, 'aucune mention qui contredirait la lecture');
+    sans('next-tag-deux', $html, 'une seule ligne');
+});
+
+test('sans mention connue : la carte est INCHANGÉE (une ligne, « à emprunter »)', function () {
+    $html = carte_html(serie_mangadex('', 2, 43));
+    contient('<div class="next-tag">Tome 3 à emprunter</div>', $html, 'comme avant');
+    sans('next-tag-deux', $html, 'pas de seconde ligne');
+});
+
+test('« Terminée » : la mention seule, avec la pastille « Terminée »', function () {
+    $html = carte_html(serie_mangadex('completed', 34, 34, 34, 'termine'));
+    contient('<div class="next-tag next-tag-avenir">Se termine au tome 34</div>', $html, 'finie');
+    contient('<span class="badge">Terminée</span>', $html, 'la pastille reste « Terminée »');
+    contient('<div class="next-tag next-tag-avenir">Arrêtée au tome 12</div>', carte_html(serie_mangadex('cancelled', 12, 12, 0, 'termine')), 'arrêtée');
+});
+
+test('un état inventé ne devient jamais du HTML (et ne dit rien)', function () {
+    $html = carte_html(serie_mangadex('<script>alert(1)</script>', 2, 43));
+    sans('<script>', $html, 'aucune balise injectée');
+    contient('<div class="next-tag">Tome 3 à emprunter</div>', $html, 'et la carte reste celle d\'avant');
+});
 groupe('compter_lignes() — le compteur du filtre « En attente »');
 
 test('chaque statut a son compteur, « En attente » compris', function () {

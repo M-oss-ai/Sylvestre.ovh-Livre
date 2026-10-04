@@ -180,6 +180,11 @@ CREATE TABLE IF NOT EXISTS `serie` (
   -- quand on arrive au dernier tome ; la carte en tire « Se termine au tome N »,
   -- « Arretee au tome N », « En pause au tome N » ou « Tome N en attente ».
   `publication`    VARCHAR(12)  NOT NULL DEFAULT '',
+  -- Migration 17 : le dernier volume que MangaDex DECLARE (lastVolume, rempli
+  -- pour une serie finie ; 0 sinon), et le moment ou l'etat de publication a ete
+  -- lu pour la derniere fois (NULL = jamais : le releve le lira).
+  `tome_final`     INT UNSIGNED NOT NULL DEFAULT 0,
+  `publication_le` DATETIME     NULL DEFAULT NULL,
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -724,4 +729,41 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
               AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'publication');
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `serie` ADD COLUMN `publication` VARCHAR(12) NOT NULL DEFAULT '''' AFTER `nouveau_tome`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  17. Mention de la couverture « même au tome 2 » (`serie.tome_final`,
+--      `serie.publication_le`).
+--
+--      La couverture dit « Tome 44 en attente », « En pause au tome 43 »,
+--      « Se termine au tome 50 » ou « Arrêtée au tome 43 » (voir carte.php),
+--      quel que soit le tome lu. Il faut donc connaître ces deux choses pour
+--      TOUTE série liée à MangaDex, pas seulement celles arrivées au bout :
+--
+--      `serie.tome_final`     : le dernier volume que MangaDex DÉCLARE
+--                       (lastVolume). Rempli pour une série finie, 0 sinon. C'est
+--                       lui qui donne le « 50 » de « Se termine au tome 50 » quand
+--                       les dernières couvertures ne sont pas encore ajoutées.
+--      `serie.publication_le` : le moment où l'état de publication
+--                       (`serie.publication`, migration 16) a été lu pour la
+--                       dernière fois. NULL = jamais : le relevé le lira, une fois,
+--                       puis le relira tous les NOUVEAUTE_PUBLICATION_JOURS jours.
+--
+--      Aucune donnée n'est touchée : chaque série garde son tome, son statut et
+--      son image. ⚠️ À exécuter AVANT d'envoyer le code : pages et cron lisent ces
+--      colonnes. Dès l'envoi, chaque série liée sera relue UNE fois (un appel à
+--      MangaDex chacune, étalés sur les visites et les passages du cron).
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'tome_final');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `tome_final` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `publication`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'publication_le');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `publication_le` DATETIME NULL DEFAULT NULL AFTER `tome_final`');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

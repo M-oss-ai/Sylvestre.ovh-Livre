@@ -624,6 +624,16 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   font-weight: 600;
   font-style: italic;
 }
+
+/* Deux lignes : « Tome N à emprunter » puis la mention de la série (« Se termine
+   au tome 50 »…), en retrait comme ci-dessus. Chacune sur sa ligne. */
+.next-tag-ligne { display: block; }
+.next-tag-serie {
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-style: italic;
+}
 .card-body {
   padding: 12px 14px 14px;
   display: flex;

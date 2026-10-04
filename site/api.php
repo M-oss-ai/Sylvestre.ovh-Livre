@@ -168,7 +168,7 @@ function ma_serie(PDO $pdo, int $mon_id, int $id): array
 {
     $req = $pdo->prepare(
         'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori,
-                dernier_tome, nouveau_tome, publication
+                dernier_tome, nouveau_tome, publication, tome_final
            FROM serie WHERE id = ? AND utilisateur_id = ?'
     );
     $req->execute([$id, $mon_id]);
@@ -288,8 +288,9 @@ switch ($action) {
                tomes de l'autre. */
             if ($lien !== $ancien_lien) {
                 $pdo->prepare(
-                    'UPDATE serie SET dernier_tome = 0, verifie_le = NULL, nouveau_tome = 0
-                      WHERE id = ? AND utilisateur_id = ?'
+                    "UPDATE serie SET dernier_tome = 0, verifie_le = NULL, nouveau_tome = 0,
+                            publication = '', tome_final = 0, publication_le = NULL
+                      WHERE id = ? AND utilisateur_id = ?"
                 )->execute([$id, $mon_id]);
             }
         } else {
@@ -353,6 +354,12 @@ switch ($action) {
         // elle passe automatiquement « En cours ».
         $demarre = ($s['statut'] === 'envie');
         $statut  = $demarre ? 'cours' : $s['statut'];
+        /* Un tome lu AU-DELÀ du dernier que MangaDex connaît, sur une série « En
+           attente » : ce tome existe, MangaDex est en retard — elle repasse « En
+           cours » (statut_apres_avance()). */
+        $statut_avant = $statut;
+        $statut       = statut_apres_avance((string) $statut, (int) $s['dernier_tome'], $tome);
+        $repasse      = $statut !== $statut_avant;
 
         /* « nouveau_tome = 0 » : en avançant, on a vu l'annonce d'un nouveau
            tome — elle ne doit pas revenir au prochain chargement. */
@@ -366,7 +373,7 @@ switch ($action) {
             'ok'      => true,
             'carte'   => carte_html($s),
             'compte'  => compter_series($pdo, $mon_id),
-            'message' => $demarre
+            'message' => ($demarre || $repasse)
                 ? '« ' . $s['titre'] . ' » → tome ' . $tome . ' 📖 (passée en « En cours »)'
                 : '« ' . $s['titre'] . ' » → tome ' . $tome . ' 📖',
         ]);

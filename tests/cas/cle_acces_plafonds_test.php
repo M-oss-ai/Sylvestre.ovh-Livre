@@ -15,6 +15,7 @@ putenv('ADMIN_SUPPRESSION_DUREE=99999999'); // un lien oublié dans une boîte m
 putenv('CRON_HEURES=99999');           // un cron plus espacé qu'une semaine, .env compris
 putenv('RAPPORT_HEURES=99999');
 putenv('NOUVEAUTE_MINUTES=99999999');  // une série jamais revérifiée n'annoncerait plus jamais rien
+putenv('NOUVEAUTE_PUBLICATION_JOURS=99999'); // une mention jamais relue resterait fausse des années
 putenv('NOUVEAUTE_MAX_VISITE=99999');  // pas de plafond : 0 les rend déjà illimitées, un plafond n'aurait aucun sens
 putenv('NOUVEAUTE_MAX_CRON=99999');
 putenv('PUSH_TTL=99999999');           // les services refusent au-delà de quatre semaines
@@ -26,6 +27,10 @@ groupe('Nouveaux tomes — plafonds');
 
 test('NOUVEAUTE_MINUTES est plafonné à une semaine (10 080 minutes)', function () {
     egale(10080, NOUVEAUTE_MINUTES, 'le .env demandait 99999999 minutes');
+});
+
+test('NOUVEAUTE_PUBLICATION_JOURS est plafonné à 90 jours', function () {
+    egale(90, NOUVEAUTE_PUBLICATION_JOURS, 'le .env demandait 99999 jours');
 });
 
 groupe('Notifications push — plafonds');

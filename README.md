@@ -184,6 +184,7 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `VAPID_PUBLIC` · `VAPID_PRIVATE` | Clés des notifications push, à générer une fois (`php outils/vapid.php`). Vides : pas de notifications. **La privée est un secret** |
 | `PUSH_TTL` · `PUSH_TIMEOUT` | Durée de garde d'un message non remis (86 400 s, de 60 à 2 419 200), délai d'un envoi (5 s, de 1 à 20) |
+| `NOUVEAUTE_PUBLICATION_JOURS` | Jours entre deux lectures de l'état de publication d'une série, affiché sur la couverture (7, de 1 à 90) |
 | `NOUVEAUTE_MINUTES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : minutes minimales entre deux vérifications d'une même série (60, de 60 à 10 080 ; modifiable depuis l'administration), séries vérifiées au plus par arrivée sur la page et par passage du cron (**0 = sans limite**, c'est la valeur par défaut : le relevé s'arrête alors à son budget de temps) |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
@@ -598,9 +599,18 @@ tome de plus sort — et se choisit aussi à la main dans la fiche.
 « En cours ». Un statut choisi à la main au milieu des tomes (on attend l'édition française, on a
 lâché) ne bouge pas. Une série « Terminée » ou « Abandonnée » n'est jamais revérifiée.
 
-L'état de publication que MangaDex donne à la série est rangé dans `serie.publication`
-(migration 16) : c'est lui qui fait choisir la mention de la carte. Une série « Terminée » dont
-on ne le connaît pas (posée avant la migration) ne dit rien plutôt que de deviner.
+**La mention de la couverture** se voit même au tome 2 : elle décrit la série, pas la lecture.
+« Tome 44 en attente » (en cours de publication), « En pause au tome 43 », « Se termine au tome 50 »,
+« Arrêtée au tome 43 ». Elle s'ajoute à « Tome N à emprunter » (deux lignes), et le remplace quand on est
+au bout des tomes connus. L'état de publication et le dernier volume déclaré sont rangés dans
+`serie.publication`, `serie.tome_final` et `serie.publication_le` (migrations 16 et 17), lus une fois puis
+relus chaque semaine.
+
+**MangaDex est en retard ? La personne a le dernier mot.** Les couvertures et l'état sont saisis par des
+bénévoles ; rien ne dit « MangaDex est à jour ». Si la personne a lu plus de tomes que MangaDex n'en
+connaît (HORION : lu le 5, MangaDex en a 3), le site ne change pas son statut, ne dit rien sur la
+couverture, et « → » remet « En cours » une série « En attente » qui dépasse MangaDex. Le relevé ne
+remet pas « En attente » une série qu'on a remise « En cours ».
 
 Le dernier tome est le plus haut de deux sources : la dernière couverture, et le
 « dernier volume » que MangaDex déclare pour une série finie. Si des tomes
@@ -705,7 +715,7 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migrations 13 à 16 : nouveaux tomes, appareils de notification, statut « En attente », état de publication) |
+| `livre.sql` | Schéma complet, rejouable (migrations 13 à 17 : nouveaux tomes, appareils de notification, statut « En attente », état de publication) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
