@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1200 tests : 997 PHP en 58 fichiers, 203 JavaScript)
+php tests/lancer.php              # toute la suite (1235 tests : 1017 PHP en 59 fichiers, 218 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -334,6 +334,39 @@ avait le focus, celui-ci passe à la première série qui vient d'apparaître, s
 Rien n'est mémorisé d'une visite à l'autre : le nombre de pages montrées repart à 1 au chargement.
 **Ce que le découpage n'allège PAS** : le HTML et le DOM contiennent toujours toutes les séries
 (`content-visibility: auto` fait déjà le gros du travail de rendu) ; seul l'affichage est réduit.
+
+**Le total de la bibliothèque et le tri** (demande de l'utilisateur : « voir le nombre de mes séries, le nombre de
+livres que j'ai lu au total, trier par tomes restants jusqu'à la fin ou par tome actuel »). Une ligne
+`#ligne-outils`, **sous la barre de filtres et hors d'elle** (la barre reste le PREMIER élément de `<main>` ; un test
+le garde) : à gauche « 42 séries · 318 tomes lus » (`#stats-bibliotheque`), à droite le menu `#tri` « Trier par ».
+- **« Tomes lus » = la somme de `tome_actuel`** (« Vous avez lu le tome 5 » en compte 5) — une hypothèse : on ne sait
+  pas si les tomes d'avant ont été lus un à un. **Le texte est fabriqué deux fois, testé sur les mêmes cas** :
+  `statistiques_series()` (`includes/carte.php`, rendu de `index.php`) et `Bibliotheque.statistiques()` (`js/app.js`).
+  0 et 1 sont au singulier (« 0 série », « 1 tome lu »). Côté navigateur il se **tire des cartes** (toutes sont dans la
+  page, `poserCarte()` les remplace à chaque série qui bouge) : aucune réponse du serveur à interpréter, il ne peut pas
+  diverger de ce qu'on voit. Sans série, la ligne entière est cachée.
+- **Les tomes restants** = `serie_restants()` : le plus haut tome connu (`dernier_tome`, ou `tome_final` pour une série
+  finie) moins le tome lu. Pour une série qui CONTINUE, c'est donc le dernier tome PARU, pas une fin que personne ne
+  connaît. **`null` quand on ne sait pas** (pas liée à MangaDex, ou lue AU-DELÀ de ce que MangaDex connaît : la règle de
+  `fin_de_serie()`, « MangaDex est en retard ») ; **0 est une vraie réponse** (« à jour »), jamais confondu avec
+  l'inconnu. La carte le porte dans `data-restants` (vide = inconnu).
+- **Cinq tris**, `Bibliotheque.TRIS` : `recentes` (l'ordre du serveur, le défaut), `restants-asc`, `restants-desc`,
+  `tome-desc`, `tome-asc`. **Les valeurs du menu `#tri` (`index.php`) sont celles de `TRIS`** : un test PHP compare les
+  deux listes. `comparerTri()` est pure et testée ; **une série aux tomes restants inconnus passe TOUJOURS après, dans
+  les deux sens** (la placer en tête du « moins d'abord » ferait croire qu'il ne lui reste rien à lire), et les ex
+  aequo gardent l'ordre du serveur (`_ordre`).
+- **Dans `appliquerVue()`** : le tri et la recherche bousculent ensemble l'ordre du serveur (`ordreBouscule`) ; la
+  PERTINENCE passe d'abord, le tri départage, l'ordre d'origine départage les ex aequo. Le tri est dans la signature de
+  la vue (changer de tri repart de la première page), et le menu ramène en haut de la liste comme un filtre.
+- **Ce n'est pas un filtre** : « Toutes » ne le remet pas à zéro, aucune exception de carte ne s'efface. Il se mémorise
+  avec les filtres (`tri`, même clé, par compte) et `triValide()` ramène une mémoire illisible à `recentes`.
+- **« il en reste N » / « à jour »** : un `<span class="card-restants">` dans `.card-progress`, **caché par défaut** et
+  montré, sur sa propre ligne, seulement quand la grille porte `.tri-restants` (`restants-asc` / `restants-desc`).
+  L'utilisateur tient à ce que la carte ne prenne pas de place pour rien : le reste du temps, la carte est celle
+  d'avant. (Première version : à la suite de la ligne, « il en reste / 2 » se coupait en deux dans une carte étroite.)
+- **Vérifié dans le navigateur** (ordinateur et 375 px, sans débordement) : les cinq tris sur huit séries (à jour,
+  inconnues, lue au-delà), recherche combinée, mémoire au rechargement, retour au défaut = l'ordre exact du serveur,
+  total qui passe de 309 à 310 au « → », ligne cachée sans série.
 
 **Les filtres tiennent sur UNE rangée au repos : « Toutes », « Statut ▾ »,
 « ★ Favoris », « Image ▾ »** (demande de l'utilisateur : la barre était

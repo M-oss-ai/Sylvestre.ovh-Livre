@@ -5,7 +5,8 @@
    le suivi du défilement qui cache et ramène les filtres, le groupe de
    filtres déplié, le moment où « Toutes » s allume, les bords qui ont de
    la suite quand une rangée coulisse, les textes des
-   quotas, la touche qui supprime et les champs où elle efface du texte.
+   quotas, la touche qui supprime et les champs où elle efface du texte,
+   le tri (tomes restants, tome lu) et le total « N séries · N tomes lus ».
    Le reste d'app.js branche ces décisions sur la page ; il se
    vérifie dans un navigateur, sur une vraie bibliothèque.
    ===================================================================== */
@@ -489,4 +490,124 @@ test("des valeurs absurdes ne donnent jamais NaN", () => {
   const p = Bibliotheque.placerBulle(ancreA(100, 100), { largeur: NaN, hauteur: undefined }, () => NaN);
   for (const cle of ["left", "top", "largeur"]) vrai(Number.isFinite(p[cle]), cle + " est un nombre fini");
   vrai(["droite", "dessus", "dessous"].includes(p.cote), "un côté connu");
+});
+
+groupe("Bibliotheque.triValide() — un tri connu, ou le défaut");
+
+test("les cinq tris, dans l ordre du menu #tri", () => {
+  egale(["recentes", "restants-asc", "restants-desc", "tome-desc", "tome-asc"], B.TRIS, "la liste (un test PHP la compare au menu de index.php)");
+  for (const t of B.TRIS) egale(t, B.triValide(t), t + " reste tel quel");
+});
+
+test("une mémoire illisible ou étrangère vaut « recentes », l ordre du serveur", () => {
+  for (const v of [undefined, null, "", "Restants-asc", "titre", 3, {}, ["recentes"]]) {
+    egale("recentes", B.triValide(v), "valeur " + JSON.stringify(v));
+  }
+});
+
+groupe("Bibliotheque.comparerTri() — trier par tomes restants ou par tome lu");
+
+const serie = (tome, restants) => ({ tome, restants });
+
+/** Le tri d une liste de séries, ex aequo départagés par leur rang d origine (ce que fait appliquerVue). */
+const trier = (tri, series) => series
+  .map((s, rang) => [s, rang])
+  .sort((a, b) => B.comparerTri(tri, a[0], b[0]) || a[1] - b[1])
+  .map(([s]) => s.nom);
+
+const SERIES = [
+  { nom: "A", tome: 10, restants: 5 },
+  { nom: "B", tome: 3, restants: 0 },
+  { nom: "C", tome: 25, restants: null },
+  { nom: "D", tome: 7, restants: 12 },
+  { nom: "E", tome: 3, restants: 5 },
+  { nom: "F", tome: 40, restants: null },
+];
+
+test("par défaut : aucune préférence, l ordre du serveur décide", () => {
+  egale(0, B.comparerTri("recentes", serie(1, 9), serie(50, 0)), "recentes");
+  egale(0, B.comparerTri("inconnu", serie(1, 9), serie(50, 0)), "un tri inconnu vaut le défaut");
+  egale(["A", "B", "C", "D", "E", "F"], trier("recentes", SERIES), "la liste ne bouge pas");
+});
+
+test("tomes restants, le moins d abord : à jour (0) en tête, puis 5, 5, 12 ; l inconnu à la fin", () => {
+  egale(["B", "A", "E", "D", "C", "F"], trier("restants-asc", SERIES), "A et E (5 chacun) restent dans leur ordre d origine");
+});
+
+test("tomes restants, le plus d abord : 12, 5, 5, 0 ; l inconnu AUSSI à la fin", () => {
+  egale(["D", "A", "E", "B", "C", "F"], trier("restants-desc", SERIES), "l inconnu ne remonte pas en tête dans ce sens");
+});
+
+test("une série dont on ne sait pas les tomes restants passe toujours après, dans les deux sens", () => {
+  for (const tri of ["restants-asc", "restants-desc"]) {
+    vrai(B.comparerTri(tri, serie(1, null), serie(1, 0)) > 0, tri + " : inconnu après 0 (0 est une vraie réponse, pas un inconnu)");
+    vrai(B.comparerTri(tri, serie(1, 0), serie(1, null)) < 0, tri + " : et dans l autre sens");
+    egale(0, B.comparerTri(tri, serie(1, null), serie(9, null)), tri + " : deux inconnus sont à égalité");
+  }
+});
+
+test("restants vide, non numérique ou absent : inconnu, jamais 0", () => {
+  for (const v of [null, undefined, "", "abc", NaN]) {
+    vrai(B.comparerTri("restants-asc", serie(1, v), serie(1, 0)) > 0, "valeur " + String(v) + " : après une série à jour");
+  }
+  egale(0, B.comparerTri("restants-asc", serie(1, "4"), serie(1, 4)), "un nombre lu d un attribut (texte) vaut le même nombre");
+});
+
+test("tome lu, le plus haut d abord / le plus bas d abord ; les ex aequo gardent leur ordre d origine", () => {
+  egale(["F", "C", "A", "D", "B", "E"], trier("tome-desc", SERIES), "40, 25, 10, 7, puis 3 et 3 (B avant E)");
+  egale(["B", "E", "D", "A", "C", "F"], trier("tome-asc", SERIES), "3 et 3 (B avant E), 7, 10, 25, 40");
+});
+
+test("le tome lu ne dépend pas des tomes restants : même les séries pas liées se trient", () => {
+  vrai(B.comparerTri("tome-desc", serie(30, null), serie(2, 1)) < 0, "30 avant 2, quoi qu on sache de la fin");
+  vrai(B.comparerTri("tome-asc", serie(30, null), serie(2, 1)) > 0, "et l inverse");
+  egale(0, B.comparerTri("tome-desc", serie(4, null), serie(4, 9)), "à égalité de tome : 0");
+});
+
+test("un tome absent ou absurde vaut 0, jamais NaN", () => {
+  for (const t of ["tome-asc", "tome-desc"]) {
+    const r = B.comparerTri(t, serie(undefined, null), serie("x", null));
+    vrai(Number.isFinite(r) && r === 0, t + " : deux tomes illisibles sont à égalité (" + r + ")");
+  }
+});
+
+test("antisymétrique : a avant b si et seulement si b après a", () => {
+  for (const tri of B.TRIS) {
+    for (const a of SERIES) {
+      for (const b of SERIES) {
+        egale(Math.sign(B.comparerTri(tri, a, b)), -Math.sign(B.comparerTri(tri, b, a)), tri + " : " + a.nom + "/" + b.nom);
+      }
+    }
+  }
+});
+
+groupe("Bibliotheque.statistiques() — le total de la bibliothèque");
+
+test("le nombre de séries et la somme des tomes lus", () => {
+  const s = B.statistiques([5, 3, 0]);
+  egale(3, s.series, "trois séries");
+  egale(8, s.tomes, "5 + 3 + 0");
+  egale("3 séries · 8 tomes lus", s.texte, "le texte, au pluriel");
+});
+
+test("0 et 1 sont au singulier, en français — les mêmes cas que statistiques_series() côté PHP", () => {
+  egale("0 série · 0 tome lu", B.statistiques([]).texte, "bibliothèque vide");
+  egale("1 série · 1 tome lu", B.statistiques([1]).texte, "une série, un tome");
+  egale("1 série · 0 tome lu", B.statistiques([0]).texte, "une série pas commencée");
+  egale("2 séries · 1 tome lu", B.statistiques([1, 0]).texte, "deux séries, un tome");
+  egale("1 série · 12 tomes lus", B.statistiques([12]).texte, "une série, douze tomes");
+});
+
+test("un tome négatif, absent ou illisible ne retire rien et ne donne jamais NaN", () => {
+  const s = B.statistiques([5, -9, undefined, "abc", null, NaN]);
+  egale(5, s.tomes, "seul ce qui est lu compte");
+  egale(6, s.series, "mais chaque série compte");
+  egale(12, B.statistiques(["12"]).tomes, "un nombre lu d un attribut (texte)");
+  egale(2, B.statistiques([1.9, 1.2]).tomes, "un tome est un entier : on tronque (1 + 1)");
+});
+
+test("autre chose qu une liste : rien", () => {
+  for (const v of [undefined, null, "abc", 5, {}]) {
+    egale("0 série · 0 tome lu", B.statistiques(v).texte, JSON.stringify(v));
+  }
 });

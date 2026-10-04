@@ -23,6 +23,7 @@ $req->execute([(int) $moi['id']]);
 $series = $req->fetchAll();
 
 $compte  = compter_series($pdo, (int) $moi['id']);
+$stats   = statistiques_series($series);   // « 42 séries · 318 tomes lus » (carte.php)
 $photo   = url_image_sure($moi['photo']);
 $csrf    = jeton_csrf();
 
@@ -146,6 +147,26 @@ $flash = flash_prendre();
       <button class="filter-btn" data-image="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?><span class="count" id="count-image-<?= e($cle) ?>"><?= (int) $compte['image-' . $cle] ?></span></button>
     <?php endforeach; ?>
   </div>
+  </div>
+
+  <!-- Le total de la bibliothèque (séries, tomes lus : js/app.js le tient à jour à chaque
+       série qui bouge) et le tri. Hors de la barre collée : ce n'est pas un filtre, on ne le
+       cherche pas en descendant. Caché tant qu'il n'y a aucune série. Les valeurs du menu
+       sont celles de Bibliotheque.TRIS (js/app.js) : un test les compare. -->
+  <div id="ligne-outils" class="ligne-outils<?= $series ? '' : ' hidden' ?>">
+    <p id="stats-bibliotheque" class="stats-bibliotheque"
+       title="Les tomes lus : la somme du dernier tome lu de chaque série"><?= e($stats['texte']) ?></p>
+    <div class="tri">
+      <label for="tri">Trier par</label>
+      <select id="tri" aria-describedby="tri-aide">
+        <option value="recentes">Dernière modification</option>
+        <option value="restants-asc">Tomes restants (moins d'abord)</option>
+        <option value="restants-desc">Tomes restants (plus d'abord)</option>
+        <option value="tome-desc">Tome lu (plus haut d'abord)</option>
+        <option value="tome-asc">Tome lu (plus bas d'abord)</option>
+      </select>
+    </div>
+    <p id="tri-aide" class="visually-hidden">Les tomes restants sont ceux que MangaDex connaît et que vous n'avez pas lus ; les séries où on ne le sait pas viennent en dernier.</p>
   </div>
 
   <!-- La place restante, annoncée à l'approche de la limite (voir

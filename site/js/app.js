@@ -292,10 +292,78 @@ window.Bibliotheque = (() => {
     top = Math.max(BULLE_MARGE, Math.min(top, H - BULLE_MARGE - hauteur));
     return { cote, left: Math.round(left), top: Math.round(top), largeur: Math.round(largeur) };
   }
+
+  /**
+   * Le tri de la grille (demande de l'utilisateur : « trier les séries par tomes restants
+   * jusqu'à la fin ou par tome actuel »). Les valeurs sont celles du menu #tri (index.php) :
+   * un test PHP compare les deux listes.
+   *
+   *   recentes      : l'ordre du serveur, la dernière modification d'abord (le défaut) ;
+   *   restants-asc  : le moins de tomes restants d'abord (celles qui sont presque finies) ;
+   *   restants-desc : le plus de tomes restants d'abord ;
+   *   tome-desc     : le tome lu le plus haut d'abord ;
+   *   tome-asc      : le tome lu le plus bas d'abord.
+   */
+  const TRIS = ["recentes", "restants-asc", "restants-desc", "tome-desc", "tome-asc"];
+
+  /** Un tri connu, ou « recentes » : une mémoire du navigateur illisible ne casse rien. */
+  function triValide(tri) {
+    return TRIS.includes(tri) ? tri : "recentes";
+  }
+
+  // Les tomes restants d'une carte, ou null quand on ne le sait pas (data-restants vide).
+  function restantsConnus(x) {
+    const v = x ? x.restants : null;
+    if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) return null;
+    return Number(v);
+  }
+
+  /**
+   * Compare deux séries pour un tri : négatif si `a` passe avant `b`, positif après, 0 à
+   * égalité — l'appelant départage alors par l'ordre du serveur, pour que le résultat ne change
+   * pas d'un affichage à l'autre. `a` et `b` : { tome, restants } — le tome lu, et les tomes
+   * restants (null quand on ne le sait pas : série pas liée à MangaDex, ou lue plus loin que
+   * MangaDex ne connaît).
+   *
+   * **Une série dont les tomes restants sont inconnus passe toujours après les autres**, dans
+   * l'un ou l'autre sens : la placer en tête du « moins d'abord » ferait croire qu'il ne
+   * lui reste rien à lire.
+   */
+  function comparerTri(tri, a, b) {
+    const t = triValide(tri);
+    if (t === "recentes") return 0;
+    if (t === "tome-asc" || t === "tome-desc") {
+      const ecart = (Number(a.tome) || 0) - (Number(b.tome) || 0);
+      return t === "tome-asc" ? ecart : -ecart;
+    }
+    const ra = restantsConnus(a);
+    const rb = restantsConnus(b);
+    if (ra === null || rb === null) return ra === rb ? 0 : ra === null ? 1 : -1;
+    return t === "restants-asc" ? ra - rb : rb - ra;
+  }
+
+  /**
+   * Le total de la bibliothèque (demande de l'utilisateur : « voir le nombre de mes séries, le
+   * nombre de livres que j'ai lu au total »). `tomes` : le tome lu de chaque série. Retourne
+   * { series, tomes, texte } ; le texte est celui de statistiques_series() (includes/carte.php),
+   * les deux testés sur les mêmes cas. 0 et 1 sont au singulier.
+   */
+  function statistiques(tomes) {
+    const liste = Array.isArray(tomes) ? tomes : [];
+    const n = liste.length;
+    const total = liste.reduce((somme, t) => somme + Math.max(0, Math.floor(Number(t)) || 0), 0);
+    return {
+      series: n,
+      tomes: total,
+      texte: n + (n > 1 ? " séries" : " série") + " · " + total + (total > 1 ? " tomes lus" : " tome lu"),
+    };
+  }
+
   return {
     voisine, suiviDefilement, annonceQuota, texteQuotaRecherche, pagesSeries,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
     panneauApres, panneauMemorise, aucunFiltre, bordsDefilement, placerBulle,
+    TRIS, triValide, comparerTri, statistiques,
   };
 })();
 
@@ -330,6 +398,10 @@ window.Bibliotheque = (() => {
   const filtresImage = new Set();
   let favorisSeuls = false;
   let panneauOuvert = ""; // "statut", "image", ou "" : un seul groupe déplié
+  let tri = "recentes"; // un des Bibliotheque.TRIS ; mémorisé avec les filtres
+  const $tri = document.getElementById("tri");
+  const $ligneOutils = document.getElementById("ligne-outils");
+  const $stats = document.getElementById("stats-bibliotheque");
   let recherche = "";
   // La grille est-elle actuellement rangée par pertinence plutôt que
   // dans l'ordre du serveur ? Voir appliquerVue().
@@ -399,6 +471,15 @@ window.Bibliotheque = (() => {
     return Array.from($grid.querySelectorAll(".card"));
   }
 
+  /** Ce que le tri lit sur une carte : son tome lu, et ses tomes restants (data-restants, vide quand on ne les connaît pas). */
+  function donneesTri(carte) {
+    const restants = carte.dataset.restants;
+    return {
+      tome: parseInt(carte.dataset.tome, 10) || 0,
+      restants: restants === undefined || restants === "" ? null : parseInt(restants, 10),
+    };
+  }
+
   function appliquerVue() {
     const toutes = cartes();
     const prep = L.prepareRecherche(recherche);
@@ -430,17 +511,19 @@ window.Bibliotheque = (() => {
       if (visible) visibles++;
     });
 
-    if (prep.q) {
-      /* Les ex aequo gardent leur ordre d'origine : à pertinence égale,
-         la série modifiée en dernier reste devant. */
+    /* Deux choses bousculent l'ordre du serveur : une recherche (par pertinence) et le tri
+       choisi (tomes restants, tome lu). Les deux se combinent : la pertinence passe d'abord,
+       le tri départage les séries qui répondent aussi bien, et l'ordre d'origine départage les
+       ex aequo — la série modifiée en dernier reste devant. */
+    if (prep.q || tri !== "recentes") {
       toutes
         .filter((c) => !c.classList.contains("hidden"))
-        .map((c) => [pertinence(c, prep.q), c._ordre, c])
-        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
-        .forEach(([, , c]) => $grid.appendChild(c));
+        .map((c) => [prep.q ? pertinence(c, prep.q) : 0, donneesTri(c), c._ordre, c])
+        .sort((a, b) => a[0] - b[0] || B.comparerTri(tri, a[1], b[1]) || a[2] - b[2])
+        .forEach(([, , , c]) => $grid.appendChild(c));
       ordreBouscule = true;
     } else if (ordreBouscule) {
-      // Recherche effacée : la grille retrouve exactement l'ordre du serveur.
+      // Recherche effacée et tri par défaut : la grille retrouve exactement l'ordre du serveur.
       toutes
         .slice()
         .sort((a, b) => a._ordre - b._ordre)
@@ -453,7 +536,7 @@ window.Bibliotheque = (() => {
        suivantes se cachent comme n'importe quelle carte filtrée (« hidden »), si
        bien que la navigation au clavier ne les voit pas non plus. Une vue
        différente — autre filtre, autre recherche — repart de la première page. */
-    const signature = JSON.stringify([[...filtresStatut].sort(), [...filtresImage].sort(), favorisSeuls, prep.q]);
+    const signature = JSON.stringify([[...filtresStatut].sort(), [...filtresImage].sort(), favorisSeuls, prep.q, tri]);
     if (signature !== signatureVue) {
       signatureVue = signature;
       pagesAffichees = 1;
@@ -476,6 +559,18 @@ window.Bibliotheque = (() => {
     $emptyCollection.classList.toggle("hidden", toutes.length !== 0);
     $emptySearch.classList.toggle("hidden", !(toutes.length > 0 && visibles === 0));
     $grid.classList.toggle("hidden", visibles === 0);
+
+    /* Le total de la bibliothèque : tiré des cartes elles-mêmes, qui sont TOUTES dans la page
+       (index.php les rend toutes) et que poserCarte() remplace à chaque série qui bouge — il
+       ne peut donc pas diverger de ce qu'on voit, et n'a besoin d'aucune réponse du serveur.
+       Sans série, la ligne (total + tri) disparaît : « 0 série » n'apprend rien. */
+    if ($stats) {
+      const texte = B.statistiques(toutes.map((c) => parseInt(c.dataset.tome, 10) || 0)).texte;
+      if ($stats.textContent !== texte) $stats.textContent = texte;
+    }
+    if ($ligneOutils) $ligneOutils.classList.toggle("hidden", toutes.length === 0);
+    // Le « il en reste N » des cartes ne se montre que sous ce tri (style.css).
+    $grid.classList.toggle("tri-restants", tri === "restants-asc" || tri === "restants-desc");
 
     // La carte active a pu disparaître sous un filtre : la grille doit
     // garder son arrêt au clavier.
@@ -984,6 +1079,7 @@ window.Bibliotheque = (() => {
       (Array.isArray(f.image) ? f.image : []).forEach((v) => filtresImage.add(v));
       favorisSeuls = !!f.favoris;
       panneauOuvert = B.panneauMemorise(f);
+      tri = B.triValide(f.tri);
     } catch (e) {
       /* Illisible ou indisponible : on repart sans filtre. */
     }
@@ -996,6 +1092,7 @@ window.Bibliotheque = (() => {
         image: [...filtresImage],
         favoris: favorisSeuls,
         panneau: panneauOuvert,
+        tri,
       }));
     } catch (e) {
       /* Sans mémoire, les filtres ne valent que pour cette visite. */
@@ -1018,6 +1115,7 @@ window.Bibliotheque = (() => {
     allumer($btnFiltreFavori, favorisSeuls);
     // « Toutes » s'allume quand aucun filtre, de quelque genre que ce soit, n'est posé.
     allumer($btnToutes, B.aucunFiltre({ statut: filtresStatut, image: filtresImage, favoris: favorisSeuls }));
+    if ($tri) $tri.value = tri;
 
     GROUPES.forEach(([nom, rangee, bouton]) => {
       const ouvert = panneauOuvert === nom;
@@ -1091,6 +1189,17 @@ window.Bibliotheque = (() => {
     filtresChanges();
     revenirEnHaut();
   });
+
+  /* Le tri n'est pas un filtre : « Toutes » ne le remet pas à zéro, aucune exception de carte
+     ne s'efface. Il se mémorise avec les filtres (même clé, par compte) et la liste se relit
+     depuis son début, comme après un filtre. */
+  if ($tri) {
+    $tri.addEventListener("change", () => {
+      tri = B.triValide($tri.value);
+      filtresChanges();
+      revenirEnHaut();
+    });
+  }
 
   $filtresStatut.addEventListener("click", (e) => {
     const btn = e.target.closest(".filter-btn[data-filter]");

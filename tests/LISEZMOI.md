@@ -432,6 +432,14 @@ MangaDex, le cron sans `fonctions.php`, la migration 13 rejouable.
 nombres absurdes). Le branchement sur la page (recherche, filtres, « Afficher plus » à l'écran) se vérifie
 à la main : le banc ne charge pas la grille.
 
+**Couvert, le total et le tri** — `carte_tri_test.php` et `Bibliotheque.triValide()`, `comparerTri()`, `statistiques()` dans
+`tests/js/cas/bibliotheque_test.js`. `serie_restants()` (le plus haut tome connu moins le tome lu ; `null` quand on ne
+sait pas — pas liée, ou lue au-delà de MangaDex —, jamais 0 ni négatif), `serie_restants_texte()`, `statistiques_series()` et
+son miroir JavaScript sur les mêmes cas (0 et 1 au singulier), `data-restants` et « il en reste N » dans `carte_html()`,
+les valeurs du menu `#tri` de `index.php` comparées à `Bibliotheque.TRIS`. Côté navigateur : les cinq tris sur des
+séries à jour, inconnues, ex aequo ; **l'inconnu passe toujours après, dans les deux sens** ; l'antisymétrie. Le branchement
+(menu, mémoire, recherche combinée, total qui bouge au « → ») s'est vérifié à la main dans le navigateur.
+
 **Couvert, notifications push** — `push_test.php`, `tests/js/cas/push_test.js`,
 `tests/js/cas/sw_test.js`. Le chiffrement contre l'exemple de la RFC 8291
 (octet pour octet), un aller-retour avec un déchiffrement écrit à part, un message

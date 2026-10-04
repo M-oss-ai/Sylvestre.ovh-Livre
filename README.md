@@ -308,6 +308,29 @@ se partagent pas leurs filtres. Il peut être indisponible — navigation privé
 stockage bloqué — et la page s'affiche alors sans filtre, ce qui est
 le bon défaut.
 
+### Le total et le tri
+
+Sous les filtres, une ligne dit **« 42 séries · 318 tomes lus »** : le nombre de séries, et le total des
+tomes lus — la somme du « Vous avez lu le tome x » de chaque série. Elle se met à jour à chaque série qui
+bouge (→, ←, création, suppression), sans appel au serveur, et disparaît tant qu'il n'y a aucune série.
+
+À droite, un menu **« Trier par »** :
+
+| Tri | Ordre |
+|---|---|
+| Dernière modification | celui du serveur, le défaut |
+| Tomes restants (moins d'abord) | celles qui sont presque finies en premier ; « à jour » (0) tout en tête |
+| Tomes restants (plus d'abord) | celles qui ont le plus de tomes devant elles |
+| Tome lu (plus haut / plus bas d'abord) | d'après le dernier tome lu |
+
+Les **tomes restants** sont ceux que MangaDex connaît (le plus haut tome connu, ou le dernier volume déclaré
+pour une série finie) et que vous n'avez pas lus. Pour une série qui continue, c'est donc le dernier tome
+**paru** : la vraie fin, personne ne la connaît encore. Quand on ne sait pas — série pas liée à MangaDex, ou
+lue plus loin que MangaDex ne connaît — la série vient **en dernier**, quel que soit le sens. Sous ce tri, chaque
+carte dit « il en reste N » ou « à jour » sous « Vous avez lu le tome x » ; le reste du temps, elle ne prend pas
+la place. Le tri se combine avec les filtres et la recherche (la pertinence passe d'abord), se **mémorise avec
+les filtres** (ce n'est pas un filtre : « Toutes » ne le remet pas à zéro) et ramène en haut de la liste.
+
 ### Une série qu'on modifie ne disparaît pas sous vos yeux
 
 Retirer une série des favoris pendant que le filtre « Favoris » est

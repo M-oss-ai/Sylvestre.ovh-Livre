@@ -80,10 +80,10 @@ test('index.php : la taille d\'une page vient de la constante, le bouton est cac
 
 test('js/app.js : le découpage se fait APRÈS le filtre et la recherche, et repart de la page 1 quand la vue change', function () {
     $js = source_series_pages('js/app.js');
-    $vue = substr($js, (int) strpos($js, 'function appliquerVue()'), 4200);
+    $vue = substr($js, (int) strpos($js, 'function appliquerVue()'), 6500);
     contient('B.pagesSeries(visibles, SERIES_PAR_PAGE, pagesAffichees)', $vue, 'la taille vient de la fonction pure, testée');
-    contient('JSON.stringify([[...filtresStatut].sort(), [...filtresImage].sort(), favorisSeuls, prep.q])', $vue,
-        'la vue = filtres + recherche : une autre vue repart de la première page');
+    contient('JSON.stringify([[...filtresStatut].sort(), [...filtresImage].sort(), favorisSeuls, prep.q, tri])', $vue,
+        'la vue = filtres + recherche + tri : une autre vue repart de la première page');
     contient('pagesAffichees = 1;', $vue, 'remise à une page');
     vrai(strpos($vue, 'ordreBouscule = false;') < strpos($vue, 'B.pagesSeries('),
         'après le classement par pertinence : on garde les PREMIÈRES séries dans l\'ordre définitif');

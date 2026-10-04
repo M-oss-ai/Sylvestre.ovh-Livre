@@ -159,6 +159,69 @@ function serie_au_bout(array $s): bool
 }
 
 /**
+ * Combien de tomes reste-t-il à lire, d'après ce que MangaDex connaît de la série ?
+ * (demande de l'utilisateur : « trier les séries par tomes restants jusqu'à la fin »).
+ *
+ * C'est le plus haut tome connu — la dernière couverture (serie.dernier_tome) ou, pour une
+ * série finie, le dernier volume que MangaDex DÉCLARE (serie.tome_final), comme partout
+ * dans cette page — moins le tome lu. Pour une série qui continue, la « fin » est donc le
+ * dernier tome PARU connu, pas une fin que personne ne connaît encore.
+ *
+ * Retourne null quand on ne sait pas, et la carte ne dit alors rien : série pas liée à
+ * MangaDex (rien de lu), ou tome lu AU-DELÀ de ce que MangaDex connaît — MangaDex est en
+ * retard, la règle de fin_de_serie() (`inconnu`) ; « 0 reste » serait faux. 0 est une vraie
+ * réponse : tout ce qui est connu est lu.
+ */
+function serie_restants(array $s): ?int
+{
+    $tome  = max(0, (int) ($s['tome_actuel'] ?? 0));
+    $connu = max(max(0, (int) ($s['dernier_tome'] ?? 0)), max(0, (int) ($s['tome_final'] ?? 0)));
+    if ($connu <= 0 || $tome > $connu) {
+        return null;
+    }
+    return $connu - $tome;
+}
+
+/**
+ * Ce que dit la carte des tomes restants : « il en reste 3 », ou « à jour » quand il n'en
+ * reste aucun. '' si on ne sait pas. Elle n'est visible que sous le tri « tomes restants »
+ * (css/style.css, .tri-restants) : demande de l'utilisateur, une carte ne prend pas de place
+ * pour rien.
+ */
+function serie_restants_texte(?int $restants): string
+{
+    if ($restants === null) {
+        return '';
+    }
+    return $restants === 0 ? 'à jour' : 'il en reste ' . $restants;
+}
+
+/**
+ * Le nombre de séries et le nombre de tomes lus AU TOTAL (demande de l'utilisateur : « voir le
+ * nombre de mes séries, voir le nombre de livres que j'ai lu au total »). Un tome lu, c'est
+ * un de ceux que la progression d'une série compte : la somme de `tome_actuel` — « Vous avez
+ * lu le tome 5 » en compte 5, quelle que soit la série.
+ *
+ * Retourne ['series' => n, 'tomes' => n, 'texte' => « 42 séries · 318 tomes lus »]. Le MÊME
+ * texte est fabriqué par js/app.js (Bibliotheque.statistiques) quand une série bouge : les
+ * deux sont testés sur les mêmes cas.
+ */
+function statistiques_series(array $series): array
+{
+    $tomes = 0;
+    foreach ($series as $s) {
+        $tomes += max(0, (int) ($s['tome_actuel'] ?? 0));
+    }
+    $n = count($series);
+    return [
+        'series' => $n,
+        'tomes'  => $tomes,
+        // 0 et 1 sont au singulier, en français : « 0 série », « 1 tome lu ».
+        'texte'  => $n . ($n > 1 ? ' séries' : ' série') . ' · ' . $tomes . ($tomes > 1 ? ' tomes lus' : ' tome lu'),
+    ];
+}
+
+/**
  * `$lecture_seule` : le compte est bloqué (compte_bloque()). La carte garde
  * tout ce qui se lit — couverture, titre, progression — et perd ce qui
  * agit : la couverture n'ouvre plus la fiche, les quatre boutons s'en vont.
@@ -233,6 +296,15 @@ function carte_html(array $s, bool $lecture_seule = false): string
         $progression = 'Vous avez lu le tome <b>' . $tome . '</b>';
     }
 
+    /* Les tomes restants : un attribut pour le tri (js/app.js), et leur texte dans la progression,
+       caché sauf sous le tri « tomes restants », où il se lit sur sa propre ligne (css/style.css).
+       Rien du tout quand on ne sait pas (serie_restants()). */
+    $restants      = serie_restants($s);
+    $texte_restant = serie_restants_texte($restants);
+    if ($texte_restant !== '') {
+        $progression .= '<span class="card-restants">' . e($texte_restant) . '</span>';
+    }
+
     /* tabindex="-1" partout : au clavier, la grille ne compte qu'UN arrêt,
        la carte « active », que js/app.js remet à 0 (les flèches passent
        d'une carte à l'autre). Cinq arrêts par carte faisaient 780 appuis
@@ -270,6 +342,7 @@ function carte_html(array $s, bool $lecture_seule = false): string
                data-titre="' . e($titre) . '"
                data-auteur="' . e($auteur) . '"
                data-tome="' . $tome . '"
+               data-restants="' . ($restants === null ? '' : $restants) . '"
                data-couverture="' . e($couverture) . '"
                data-mangadex="' . e((string) ($s['mangadex_id'] ?? '')) . '"
                data-favori="' . ($favori ? '1' : '0') . '"
