@@ -164,7 +164,7 @@ stockées telles quelles et le gain de poids disparaît.
 
 ## Configuration
 
-Tout se règle dans `.env`, documenté dans `.env.example`. Trente et une de ces valeurs
+Tout se règle dans `.env`, documenté dans `.env.example`. Trente-deux de ces valeurs
 peuvent aussi se changer depuis l'administration (carte « Réglages ») : la valeur
 saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 
@@ -178,7 +178,7 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |
 | `ASSETS_VERSION` | Version des URL `css/` et `js/`. À incrémenter au déploiement |
-| `COUVERTURE_CANDIDATS` · `COUVERTURE_MAX_SERIES` | Séries examinées / proposées à la recherche de couverture |
+| `COUVERTURE_CANDIDATS` · `COUVERTURE_MAX_SERIES` · `COUVERTURE_PAGE_MAX` | Séries examinées / proposées à la recherche de couverture, et séries montrées par page de résultats (9, de 1 à 100) |
 | `COUVERTURE_QUOTA` · `COUVERTURE_FENETRE` | Recherches autorisées par compte et par tranche |
 | `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
@@ -407,7 +407,7 @@ forfait** : on peut être bloqué et administrateur.
   confirmée ; un envoi raté ne défait pas le changement, la page le dit.
 - **Nommer ou révoquer** un administrateur. Jamais soi-même : un autre doit le faire,
   il en reste donc toujours un.
-- **Réglages** : trente et une valeurs du `.env` — quotas, recherche de couverture, durées, freins
+- **Réglages** : trente-deux valeurs du `.env` — quotas, recherche de couverture, durées, freins
   anti-force-brute — se changent depuis la page, sans renvoyer de fichier. Une valeur
   enregistrée **remplace celle du `.env`** et s'applique dès la requête suivante, pour tout le
   monde ; « ↩ .env » l'efface. Chaque réglage a ses bornes (3 à 20 tentatives et 60 à 600 s de
@@ -517,6 +517,12 @@ vraie série n'était même pas candidate. Trois règles corrigent cela.
    chaque série — titre principal, traductions, titres alternatifs — et
    non au seul titre affiché. MangaDex affiche « Attack on Titan » là où
    l'on a tapé « Shingeki no Kyojin ».
+
+**Les résultats sont montrés par pages** : `COUVERTURE_PAGE_MAX` séries par page (9 par
+défaut, de 1 à 100, modifiable dans l'administration), avec « ← Page 2 / 3 → » sous la grille. Seules les
+séries de la page affichée coûtent un appel de couvertures, ce qui borne le coût d'un
+affichage. Une page suivante redemande le même titre et le même tome que la recherche qui l'a
+ouverte, et **compte pour une recherche** dans le quota du compte : elle coûte la même chose.
 
 L'écart de titre, terme dominant du classement :
 

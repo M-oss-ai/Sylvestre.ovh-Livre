@@ -1195,6 +1195,21 @@ html.verification-session body { visibility: hidden; }
   align-items: start;
 }
 
+/* Les pages des résultats : « ← Page 2 / 3 → », centrées sous la grille. */
+.cover-pages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.cover-page-info {
+  min-width: 90px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
 /* <button> et non <div> : un résultat de recherche est cliquable, il doit
    donc être atteignable au clavier et annoncé comme un bouton. D'où la
    remise à zéro de l'apparence native. */

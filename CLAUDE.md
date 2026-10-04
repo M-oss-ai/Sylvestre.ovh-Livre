@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1100 tests : 933 PHP en 55 fichiers, 167 JavaScript)
+php tests/lancer.php              # toute la suite (1115 tests : 945 PHP en 56 fichiers, 170 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -138,7 +138,7 @@ rien hors de la bibliothèque — c'est ce qui permet au banc de le charger.
 ## Règles tacites
 
 **Tout réglage passe par le `.env`, jamais en dur ailleurs** — sauf les
-trente et un de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
+trente-deux de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
 (voir plus bas). Et chaque constante de `config.php` est bornée par un plancher
 ou un plafond : un `.env` mal rempli ne doit jamais pouvoir *supprimer* une
 protection.
@@ -768,7 +768,7 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   valeur sort de PHP par `e()`. Un identifiant est du texte choisi par quelqu'un
   d'autre.
 
-**Trente et un réglages se changent depuis `admin.php`, et la base prime sur le
+**Trente-deux réglages se changent depuis `admin.php`, et la base prime sur le
 `.env`** (demande de l'utilisateur : « les limites et les durées, pas de mot de
 passe ni de connexion »). La table `reglage` ne porte que l'ÉCART : une ligne par
 réglage changé, et « ↩ .env » l'efface. `config.php` ouvre la base AVANT ses
@@ -1157,3 +1157,18 @@ règles, dans `chercher_couvertures()` :
   (`couverture_titres_connus()`), pas au seul titre affiché :
   l'utilisateur tape l'écriture qu'il connaît, et MangaDex affiche
   « Attack on Titan » là où il a tapé « Shingeki no Kyojin ».
+
+**Les résultats se montrent par PAGES** (demande de l'utilisateur ; `COUVERTURE_PAGE_MAX`, 1 à 100,
+défaut 9, `.env` ET `admin.php`). `chercher_couvertures($titre, $tome, $adulte, $page, &$pagination)`
+classe tout comme avant (CANDIDATS examinées, MAX_SERIES retenues), puis `couverture_page()` (pure)
+découpe : seules les séries de la page demandée paient un appel `/cover`, si bien qu'une page coûte
+`1 + COUVERTURE_PAGE_MAX` appels au plus. **Sans état entre deux pages** : le premier appel (`/manga`) est
+refait, même requête, même classement, mêmes pages — rien n'est gardé en session. Les clés du tableau
+gardent le rang d'origine (`array_slice(…, true)`) : le classement final en dépend. **Chaque page demandée
+est une recherche pour le quota** (`couverture_consommer()` AVANT, comme une recherche neuve) : elle coûte la
+même chose, et la rendre gratuite ouvrait le quota à qui feuillette. `api.php` borne `page` à 1–100 et
+rend `page: {page, pages, total}` ; `js/app.js` (`B.pagesCouvertures()`, pure, testée) montre « ← Page 2 / 3
+→ » sous la grille, caché tant qu'il n'y a qu'une page, et **redemande le MÊME titre et le MÊME tome** que la
+recherche d'origine (`rechercheCouv`) même si la fiche a changé entre-temps. Le bouton « Recherche auto »
+repart de la page 1 : `chercherCouverture(1)`, jamais l'évènement du clic passé en guise de page. Une page
+peut être vide si aucune de ses séries n'a de couverture : le message le dit, les flèches restent.

@@ -1006,7 +1006,13 @@ switch ($action) {
         $adulte = COUVERTURE_CONTENU_ADULTE
             && (int) ($moi['adulte_confirme'] ?? 0) === 1
             && (int) ($moi['filtre_sensible'] ?? 1) === 0;
-        $resultats = chercher_couvertures($titre, $tome, $adulte);
+        /* La page demandée (à partir de 1) : les séries sont montrées par tranches de
+           COUVERTURE_PAGE_MAX. Chaque page demandée est une recherche à part entière
+           — le quota ci-dessus l'a déjà comptée — car elle coûte la même chose :
+           un appel de liste et un appel par série montrée. */
+        $page      = max(1, min(100, (int) ($_POST['page'] ?? 1)));
+        $pagination = ['page' => 1, 'pages' => 1, 'total' => 0];
+        $resultats = chercher_couvertures($titre, $tome, $adulte, $page, $pagination);
 
         /* Une liste vide peut vouloir dire deux choses très différentes :
            la série n'existe pas, ou l'appel n'est jamais parti — file
@@ -1030,6 +1036,8 @@ switch ($action) {
             'ok'        => true,
             'tome'      => $tome,
             'resultats' => $resultats,
+            // Où l'on en est : la page montrée, combien il y en a, combien de séries en tout.
+            'page'      => $pagination,
             // Pas de solde à annoncer sans quota (forfait illimité).
             'recherches' => $quota > 0 ? [
                 'restantes' => couverture_restantes($mon_id, $quota),
@@ -1043,6 +1051,7 @@ switch ($action) {
             'filtre'    => COUVERTURE_CONTENU_ADULTE && !$adulte,
             'message'   => $resultats
                 ? count($resultats) . ' résultat(s) pour le tome ' . $tome
+                    . ($pagination['pages'] > 1 ? ' — page ' . $pagination['page'] . ' sur ' . $pagination['pages'] : '')
                 : 'Aucune série trouvée pour « ' . $titre . ' ».',
         ]);
     }
