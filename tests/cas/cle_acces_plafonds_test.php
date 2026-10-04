@@ -14,8 +14,22 @@ putenv('CLE_ACCES_DEFI_DUREE=999999'); // un défi oublié ne traîne pas des jo
 putenv('ADMIN_SUPPRESSION_DUREE=99999999'); // un lien oublié dans une boîte mail ne reste pas une arme
 putenv('CRON_HEURES=99999');           // un cron plus espacé qu'une semaine, .env compris
 putenv('RAPPORT_HEURES=99999');
+putenv('NOUVEAUTE_HEURES=99999');      // une série jamais revérifiée n'annoncerait plus jamais rien
+putenv('NOUVEAUTE_MAX_VISITE=99999');  // une arrivée sur la page ne lance pas des centaines d'appels
+putenv('NOUVEAUTE_MAX_CRON=99999');    // ni un passage du cron : il tient dans le temps que PHP lui laisse
 
 require __DIR__ . '/../lanceur.php';
+
+groupe('Nouveaux tomes — plafonds');
+
+test('NOUVEAUTE_HEURES est plafonné à une semaine', function () {
+    egale(168, NOUVEAUTE_HEURES, 'le .env demandait 99999 heures');
+});
+
+test('NOUVEAUTE_MAX_VISITE est plafonné à 20, NOUVEAUTE_MAX_CRON à 500', function () {
+    egale(20, NOUVEAUTE_MAX_VISITE, 'le .env demandait 99999');
+    egale(500, NOUVEAUTE_MAX_CRON, 'le .env demandait 99999');
+});
 
 groupe('Clés d\'accès — plafonds');
 

@@ -23,6 +23,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/mailer.php';
+require_once __DIR__ . '/includes/nouveautes.php';   // MangaDex : jamais fonctions.php, voir plus haut
 
 /* Hors requête web ? Voir cron_en_ligne_de_commande() dans
    includes/fonctions.php : la règle y vit pour être testable. */
@@ -210,6 +211,66 @@ $anomalies = [];
 if (!$etat_lisible) {
     $anomalies[] = 'table rapport_cron absente : rejouez livre.sql'
                  . ' (en attendant, le rapport part à chaque passage)';
+}
+
+/* ---------------------------------------------------------------------
+   Nouveaux tomes (includes/nouveautes.php)
+
+   Les séries « à jour » sont revérifiées chez MangaDex : NOUVEAUTE_MAX_CRON
+   au plus par passage, les plus anciennement vérifiées d'abord. Un tome de
+   plus, c'est la couverture prise, la série remontée en tête, l'annonce
+   posée pour la prochaine visite — et UN e-mail par compte, s'il a une
+   adresse confirmée et ne l'a pas refusé dans ses Paramètres.
+
+   Placé APRÈS le ménage et AVANT le rapport : un MangaDex muet ne doit pas
+   empêcher les tables d'être purgées, et le rapport doit pouvoir compter ce
+   passage. Une panne de MangaDex n'est PAS une anomalie : le service n'est
+   pas le nôtre, et le passage suivant réessaie. Ce qui en est une, c'est un
+   schéma pas migré (colonnes absentes) : le cron l'annonce bruyamment au lieu
+   de planter, comme pour la table du rapport.
+   --------------------------------------------------------------------- */
+try {
+    $bilan = nouveautes_verifier(
+        $pdo,
+        nouveautes_series_a_verifier($pdo, null, NOUVEAUTE_MAX_CRON),
+        nouveautes_budget()
+    );
+
+    $messages = 0;
+    $refuses  = 0;
+    $lecture  = $pdo->prepare(
+        'SELECT identifiant, email, email_verifie, notif_tomes, forfait FROM utilisateur WHERE id = ?'
+    );
+    foreach (nouveautes_par_compte($bilan['nouveaux']) as $utilisateur_id => $tomes) {
+        $lecture->execute([$utilisateur_id]);
+        $u = $lecture->fetch();
+        if (!$u || (int) $u['email_verifie'] !== 1 || (int) $u['notif_tomes'] !== 1 || $u['forfait'] === 'bloque') {
+            continue;   // la série est quand même à jour, et annoncée à la prochaine visite
+        }
+        if (avertir_nouveaux_tomes((string) $u['email'], (string) $u['identifiant'], $tomes)) {
+            $messages++;
+        } else {
+            $refuses++;
+            error_log('purger.php: avis de nouveaux tomes non envoye (compte ' . $utilisateur_id . ')');
+        }
+    }
+
+    /* Pas le mot « e-mail » dans cette ligne : le rapport écarte celles qui
+       le contiennent (les compteurs d'e-mails ont leur propre rubrique). */
+    $ligne = $bilan['verifiees'] . ' série(s) vérifiée(s) chez MangaDex, '
+           . count($bilan['nouveaux']) . ' nouveau(x) tome(s), ' . $messages . ' message(s) envoyé(s)';
+    if ($refuses > 0) {
+        $ligne .= ', ' . $refuses . ' échec(s) d\'envoi';
+    }
+    if ($bilan['interrompu'] !== '') {
+        $ligne .= ' (interrompu : ' . ['file' => 'file d\'attente pleine', 'echecs' => 'MangaDex ne répond pas',
+                                       'temps' => 'temps imparti'][$bilan['interrompu']] . ')';
+    }
+    $resume[] = $ligne;
+} catch (PDOException $e) {
+    error_log('purger.php: nouveaux tomes - ' . $e->getMessage());
+    $anomalies[] = 'nouveaux tomes ignorés : la base ne suit pas le code (colonnes absentes ?) — '
+                 . 'rejouez livre.sql (migration 13)';
 }
 
 /* ---------------------------------------------------------------------

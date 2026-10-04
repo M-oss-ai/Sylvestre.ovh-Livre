@@ -15,6 +15,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/carte.php';
 require_once __DIR__ . '/includes/couvertures.php';
+require_once __DIR__ . '/includes/nouveautes.php';   // fin de série, nouveaux tomes
 require_once __DIR__ . '/includes/google.php';   // les modifications en attente d'un compte Google
 require_once __DIR__ . '/includes/cle_acces.php';   // les clés d'accès (ajout, retrait)
 require_once __DIR__ . '/includes/admin.php';        // les actions `admin.*`
@@ -165,7 +166,8 @@ if ($action === 'donnees.exporter') {
 function ma_serie(PDO $pdo, int $mon_id, int $id): array
 {
     $req = $pdo->prepare(
-        'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori
+        'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori,
+                dernier_tome, nouveau_tome
            FROM serie WHERE id = ? AND utilisateur_id = ?'
     );
     $req->execute([$id, $mon_id]);
@@ -223,9 +225,12 @@ switch ($action) {
             reponse_json(['ok' => false, 'champ' => 'couverture_url', 'erreur' => MESSAGE_URL_IMAGE_REFUSEE], 422);
         }
 
-        $ancienne = '';
+        $ancienne     = '';
+        $ancien_lien  = '';
         if ($id > 0) {
-            $ancienne = (string) ma_serie($pdo, $mon_id, $id)['couverture'];
+            $existante   = ma_serie($pdo, $mon_id, $id);
+            $ancienne    = (string) $existante['couverture'];
+            $ancien_lien = (string) $existante['mangadex_id'];
         } elseif ($moi['forfait'] !== 'illimite') {
             /* Contrôle préalable, pour ne pas décompresser et ré-encoder une
                image que l'insertion va refuser de toute façon. Ce n'est
@@ -274,6 +279,18 @@ switch ($action) {
             );
             $req->execute([$titre, $auteur, $tome, $statut, $couverture, $lien, $id, $mon_id]);
             $message = 'Série mise à jour ✅';
+
+            /* Une autre série MangaDex (ou plus aucune) : ce qu'on savait de
+               l'ancienne — son dernier tome, la date de vérification, l'annonce
+               en attente — ne vaut plus rien pour celle-ci. Sans cette remise à
+               zéro, la nouvelle série serait jugée « à jour » sur le nombre de
+               tomes de l'autre. */
+            if ($lien !== $ancien_lien) {
+                $pdo->prepare(
+                    'UPDATE serie SET dernier_tome = 0, verifie_le = NULL, nouveau_tome = 0
+                      WHERE id = ? AND utilisateur_id = ?'
+                )->execute([$id, $mon_id]);
+            }
         } else {
             /* Le quota est appliqué PAR LA BASE, dans l'insertion elle-même.
                Un COUNT suivi d'un INSERT laissait passer deux requêtes
@@ -336,11 +353,14 @@ switch ($action) {
         $demarre = ($s['statut'] === 'envie');
         $statut  = $demarre ? 'cours' : $s['statut'];
 
-        $req = $pdo->prepare('UPDATE serie SET tome_actuel = ?, statut = ? WHERE id = ? AND utilisateur_id = ?');
+        /* « nouveau_tome = 0 » : en avançant, on a vu l'annonce d'un nouveau
+           tome — elle ne doit pas revenir au prochain chargement. */
+        $req = $pdo->prepare('UPDATE serie SET tome_actuel = ?, statut = ?, nouveau_tome = 0 WHERE id = ? AND utilisateur_id = ?');
         $req->execute([$tome, $statut, $id, $mon_id]);
 
-        $s['tome_actuel'] = $tome;
-        $s['statut']      = $statut;
+        $s['tome_actuel']  = $tome;
+        $s['statut']       = $statut;
+        $s['nouveau_tome'] = 0;
         reponse_json([
             'ok'      => true,
             'carte'   => carte_html($s),
@@ -1083,6 +1103,36 @@ switch ($action) {
         $tome = couverture_tome_vise($statut_vu, $tome_vu);
         $url  = couverture_liee($lien, $tome, $repli);
 
+        /* Le rafraîchissement automatique (celui qui suit un « → » ou un
+           « ← ») : il part de la base, n'envoie ni tome ni statut, et
+           écrit. Le bouton du formulaire, lui, propose sans rien écrire. */
+        $persister = ((string) ($_POST['enregistrer'] ?? '1')) === '1';
+        $auto      = $persister && !$repli && !isset($_POST['tome_actuel']) && !isset($_POST['statut']);
+
+        /* Pas de couverture pour le tome suivant d'une série « En cours » : est-ce
+           la fin de ce que MangaDex connaît ? (includes/nouveautes.php)
+             - série finie ou abandonnée : elle passe « Terminée », avec la
+               couverture du dernier tome ;
+             - série qui continue : elle reste « En cours », et sa carte dit
+               « Tome N à venir ».
+           Sinon (des tomes existent plus loin, MangaDex ne répond pas…) on
+           retombe sur la réponse habituelle : l'image en place reste. */
+        if ($url === '' && $auto && $statut_vu === 'cours' && mangadex_attente_suggeree() === 0) {
+            $fin = nouveautes_fin_de_serie($pdo, $mon_id, $s);
+            if ($fin['etat'] === 'termine' || $fin['etat'] === 'a_venir') {
+                $s = ma_serie($pdo, $mon_id, $id);
+                reponse_json([
+                    'ok'      => true,
+                    'url'     => url_image_sure((string) $s['couverture']),
+                    'carte'   => carte_html($s),
+                    'tome'    => $tome,
+                    // « Terminée » change de compteur de statut.
+                    'compte'  => compter_series($pdo, $mon_id),
+                    'message' => fin_de_serie_message((string) $s['titre'], $fin['etat'], $tome),
+                ]);
+            }
+        }
+
         if ($url === '') {
             $attente = mangadex_attente_suggeree();
             reponse_json([
@@ -1101,7 +1151,16 @@ switch ($action) {
            proposer l'URL, que l'utilisateur garde ou non en validant la
            modale. Écrire tout de suite ferait écraser ce choix par ce que
            le formulaire encore ouvert renverrait ensuite. */
-        $persister = ((string) ($_POST['enregistrer'] ?? '1')) === '1';
+        /* Une couverture EXACTE existe pour ce tome (le mode automatique n'accepte
+           pas de repli) : MangaDex connaît donc au moins jusque-là. Sans cela,
+           un « dernier tome » resté plus bas que ce qu'on lit — des tomes parus
+           depuis la dernière vérification — ferait dire « à venir » d'un tome
+           dont la couverture est affichée. */
+        if ($auto && (int) $s['dernier_tome'] < $tome) {
+            $pdo->prepare('UPDATE serie SET dernier_tome = ?, maj_le = maj_le WHERE id = ? AND utilisateur_id = ?')
+                ->execute([$tome, $id, $mon_id]);
+            $s['dernier_tome'] = $tome;
+        }
 
         if ($persister && $url !== url_image_sure((string) $s['couverture'])) {
             $pdo->prepare('UPDATE serie SET couverture = ? WHERE id = ? AND utilisateur_id = ?')
@@ -1154,6 +1213,62 @@ switch ($action) {
         }
 
         reponse_json(['ok' => true, 'url' => $locale]);
+    }
+
+    /* ---------------- Nouveaux tomes ----------------
+       Appelée par la bibliothèque, en arrière-plan, à son chargement — et
+       seulement quand index.php a vu des séries à vérifier (data-nouveautes).
+       Voir includes/nouveautes.php.
+
+       Elle n'entame pas le quota de recherche, comme couverture.rafraichir :
+       un appel par série, espacés par la file d'attente qui protège
+       l'adresse du serveur. NOUVEAUTE_MAX_VISITE borne leur nombre ; le
+       compte bloqué n'y a pas accès (ACTIONS_BLOQUEES). */
+    case 'serie.nouveautes': {
+        /* Ce qui suit attend MangaDex, parfois plusieurs secondes : la
+           session est libérée AVANT, sans quoi un « → » cliqué entre-temps
+           attendrait la fin du relevé (PHP verrouille la session par requête).
+           Rien ici n'y écrit plus. */
+        session_write_close();
+
+        $series = nouveautes_series_a_verifier($pdo, $mon_id, NOUVEAUTE_MAX_VISITE);
+        $bilan  = nouveautes_verifier($pdo, $series, min(15.0, nouveautes_budget()));
+
+        $nouveaux = [];
+        foreach ($bilan['nouveaux'] as $n) {
+            $s = ma_serie($pdo, $mon_id, $n['id']);
+            $nouveaux[] = [
+                'id'      => $n['id'],
+                'message' => nouveaute_message((string) $s['titre'], $n['tome']),
+                'carte'   => carte_html($s),
+            ];
+        }
+        reponse_json(['ok' => true, 'verifiees' => $bilan['verifiees'], 'nouveaux' => $nouveaux]);
+    }
+
+    /* Le bandeau des nouveaux tomes se vide : ce qui était à annoncer l'a été.
+       « maj_le = maj_le » : lire une annonce ne modifie pas la série, et la
+       bibliothèque est triée sur cette date. */
+    case 'serie.nouveautes_vues': {
+        $pdo->prepare('UPDATE serie SET nouveau_tome = 0, maj_le = maj_le WHERE utilisateur_id = ? AND nouveau_tome > 0')
+            ->execute([$mon_id]);
+        reponse_json(['ok' => true]);
+    }
+
+    /* Recevoir un e-mail à chaque nouveau tome, ou non. Une préférence du
+       compte : sans effet sur la bibliothèque, donc libre pour un compte
+       bloqué comme le filtre des images sensibles. */
+    case 'compte.notifications': {
+        $actives = ((string) ($_POST['actives'] ?? '1')) === '1';
+        $pdo->prepare('UPDATE utilisateur SET notif_tomes = ? WHERE id = ?')
+            ->execute([$actives ? 1 : 0, $mon_id]);
+        reponse_json([
+            'ok'      => true,
+            'actives' => $actives,
+            'message' => $actives
+                ? 'Vous recevrez un e-mail pour les nouveaux tomes.'
+                : 'Vous ne recevrez plus d\'e-mail pour les nouveaux tomes.',
+        ]);
     }
 
     /* ---------------- Filtre des images sensibles ----------------

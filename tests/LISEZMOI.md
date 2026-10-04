@@ -368,10 +368,31 @@ switch, les pages cessent de proposer ce qui est refusé, `livre.sql` porte la
 valeur et sa migration rejouable, le rapport du cron compte les comptes
 bloqués.
 
-**Non couvert, faute de réseau** — `mangadex_get`,
-`chercher_couvertures` et le téléchargement fait par
-`mangadex_image_locale`, qui interrogent tous MangaDex. Le classement des
-résultats, lui, repose sur `titre_normalise`, qui est testé : c'est la
+**Couvert, nouveaux tomes** — `nouveautes_test.php`, `carte_a_venir_test.php`,
+`mailer_nouveautes_test.php`, et les planchers/plafonds de `NOUVEAUTE_*`
+(`config_planchers_test.php`, `cle_acces_plafonds_test.php`). Les décisions
+PURES de `includes/nouveautes.php` : `fin_de_serie` (terminée, à venir, en
+route, inconnu — le dernier volume DÉCLARÉ compte autant que la dernière
+couverture), `nouveaute_evaluer` (annoncer, apprendre sans annoncer, ne jamais
+reculer), les messages, `nouveautes_par_compte`. La lecture des réponses de
+MangaDex, sur des réponses fabriquées : `mangadex_dernier_tome_depuis` (volumes
+décimaux, comparés comme des nombres, préférence de langue, plafond),
+`mangadex_statut_depuis`, `mangadex_id_valide`. `serie_a_venir` et l'étiquette
+« Tome N à venir » de `carte_html`, la carte INCHANGÉE dans tous les autres cas.
+L'e-mail `avis_nouveaux_tomes` (sujet sans titre, titres sur une ligne, rien de
+cliquable hors du site). Et, par lecture des sources, ce qu'un essai réel avait
+fait voir : chaque colonne que le relevé lit est dans sa requête, `maj_le =
+maj_le` pour tout ce qui n'est pas une modification, les écritures gardées
+contre un changement en cours d'appel, la session libérée avant d'attendre
+MangaDex, le cron sans `fonctions.php`, la migration 13 rejouable.
+
+**Non couvert, faute de réseau** — `mangadex_get`, `mangadex_dernier_tome`,
+`mangadex_statut_serie`, `chercher_couvertures` et le téléchargement fait par
+`mangadex_image_locale`, qui interrogent tous MangaDex. De même
+`nouveautes_fin_de_serie`, `nouveautes_verifier_serie` et `nouveautes_verifier` :
+elles lisent MangaDex ET écrivent en base (à vérifier avec une base jetable et
+le vrai service, comme décrit dans CLAUDE.md). Le classement des résultats de
+recherche, lui, repose sur `titre_normalise`, qui est testé : c'est la
 partie qui décide quelle série remonte en tête.
 
 **Non couvert, faute de base de données** — le limiteur anti force brute

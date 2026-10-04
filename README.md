@@ -69,6 +69,8 @@ curl -H "X-Cron-Token: VOTRE_CRON_TOKEN" https://votredomaine.fr/purger.php
 
 Elle supprime les jetons expirés, les compteurs de tentatives périmés,
 les images orphelines, et rejoue les e-mails qui n'étaient pas partis.
+Elle revérifie aussi chez MangaDex les séries « à jour » et prévient
+des nouveaux tomes (voir « Fin de série et nouveaux tomes »).
 
 Elle envoie un **rapport d'activité** à `ADMIN_EMAIL` : nombre de
 comptes et de séries, nouveautés de la période, tentatives de connexion
@@ -180,6 +182,7 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `COUVERTURE_QUOTA` · `COUVERTURE_FENETRE` | Recherches autorisées par compte et par tranche |
 | `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
+| `NOUVEAUTE_HEURES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : heures minimales entre deux vérifications d'une même série (1, de 1 à 168), séries vérifiées au plus par arrivée sur la page (6, de 1 à 20) et par passage du cron (40, de 1 à 500) |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
 | `CLE_ACCES_MAX` · `CLE_ACCES_DEFI_DUREE` | Clés d'accès : nombre par compte (10, plafond 50) et validité du défi envoyé au navigateur (300 s, entre 60 et 900) |
@@ -569,6 +572,55 @@ payer au tarif d'une recherche bloquerait la recherche manuelle de
 quelqu'un qui ne fait que rattraper sa série. La file d'attente, elle,
 s'applique : c'est elle qui protège l'adresse du serveur.
 
+### Fin de série et nouveaux tomes
+
+Une série liée à MangaDex sait aussi **où elle en est** (`includes/nouveautes.php`).
+
+**Au dernier tome.** En avançant d'un tome, si le tome suivant n'a pas de
+couverture, le serveur demande à MangaDex le plus haut tome illustré et l'état
+de publication de la série :
+
+| La série est… | Au dernier tome |
+|---|---|
+| `completed` ou `cancelled` | passe **« Terminée »** et prend la couverture du dernier tome |
+| `ongoing` ou `hiatus` | reste **« En cours »** ; la carte dit **« Tome N à venir »** au lieu de « à emprunter » |
+
+Le dernier tome est le plus haut de deux sources : la dernière couverture, et le
+« dernier volume » que MangaDex déclare pour une série finie. Si des tomes
+existent plus loin (il manque seulement la couverture du suivant, ce qui est
+courant), rien ne change. Ce que MangaDex ne dit pas clairement n'est jamais
+deviné.
+
+**Un tome de plus.** Une série « à jour » est revérifiée : à chaque **arrivée sur
+la bibliothèque** (en arrière-plan, après l'affichage de la page — MangaDex ne
+la retarde jamais) et à chaque **passage du cron**. Si MangaDex illustre un tome
+de plus que le tome lu :
+
+- la série prend la couverture du nouveau tome et **remonte en tête** (sa date de
+  modification passe à maintenant) ;
+- un **bandeau** l'annonce sur la bibliothèque : « Un nouveau tome est disponible
+  pour la série « X » (tome N). » ; « OK » le vide, et avancer d'un tome efface
+  l'annonce de cette série ;
+- le cron envoie **un seul e-mail par compte**, quel que soit le nombre de séries,
+  à son adresse **confirmée**, sauf si la personne l'a désactivé dans
+  Paramètres › Notifications. Un compte bloqué n'est jamais vérifié.
+
+La première vérification d'une série ne fait qu'apprendre le nombre de tomes :
+elle n'annonce rien, sinon toutes les séries d'avant la fonction annonceraient
+tout ce qui est paru depuis toujours.
+
+Chaque vérification est un appel à MangaDex, donc une part du débit partagé :
+`NOUVEAUTE_HEURES` espace deux vérifications d'une même série, et
+`NOUVEAUTE_MAX_VISITE` / `NOUVEAUTE_MAX_CRON` bornent leur nombre (les
+plus anciennement vérifiées passent d'abord). La file d'attente décrite
+plus haut s'applique, et le relevé s'arrête plutôt que d'insister quand elle
+refuse un appel, quand MangaDex ne répond plus trois fois de suite, ou quand son
+temps est épuisé.
+
+Les notifications du navigateur (« push ») ne sont pas faites : elles demandent
+un service worker et un chiffrement de charge utile propres, bien plus lourds que
+ce que le site embarque aujourd'hui.
+
 ### Contenu sensible
 
 `COUVERTURE_CONTENU_ADULTE` est à `0` par défaut : seules les séries
@@ -589,7 +641,7 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migration 9 : table `cle_acces`) |
+| `livre.sql` | Schéma complet, rejouable (migration 13 : nouveaux tomes) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
@@ -597,6 +649,7 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 | `includes/images.php` | Validation, redimension, ré-encodage |
 | `includes/mailer.php` | SMTP, jetons |
 | `includes/carte.php` | Gabarit d'une carte — **le seul endroit** où ce HTML est écrit |
+| `includes/couvertures.php` · `includes/nouveautes.php` | Client MangaDex ; fin de série et nouveaux tomes (chargé aussi par `purger.php`) |
 | `index.php` | La bibliothèque : grille, recherche, filtres, modales |
 | `api.php` | Actions AJAX + export JSON |
 | `inscription.php` · `connexion.php` · `deconnexion.php` | Comptes |

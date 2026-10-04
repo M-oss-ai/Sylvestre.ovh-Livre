@@ -680,6 +680,32 @@ $nb_series = (int) $req->fetchColumn();
     <?php endif; ?>
   </section>
 
+  <!-- ---------------- Notifications ----------------
+       Un e-mail quand un nouveau tome paraît (le cron le prépare, voir
+       includes/nouveautes.php). Sans objet pour un compte bloqué : la
+       consultation seule ne vérifie rien chez MangaDex, la carte n'a pas lieu
+       d'être. -->
+  <?php if (!$bloque): ?>
+  <section class="settings-card" id="notifications">
+    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔔</span> Notifications</h2>
+
+    <label class="bascule" for="notif-tomes">
+      <input type="checkbox" id="notif-tomes" class="bascule-case"
+             <?= (int) ($moi['notif_tomes'] ?? 1) === 1 ? 'checked' : '' ?>>
+      <span class="bascule-piste" aria-hidden="true"><span class="bascule-pastille"></span></span>
+      <span class="bascule-libelle">M'écrire quand un nouveau tome paraît</span>
+    </label>
+
+    <p class="hint">
+      Quand le tome que vous avez lu est le dernier connu d'une série encore en cours, le site
+      surveille la parution du suivant. Dès qu'il paraît, la série prend sa nouvelle couverture
+      et un bandeau l'annonce sur votre bibliothèque. Ce réglage ajoute un e-mail, un seul par
+      passage, à votre adresse
+      <?= (int) ($moi['email_verifie'] ?? 0) === 1 ? 'confirmée' : '(à confirmer d\'abord : aucun message ne part tant qu\'elle ne l\'est pas)' ?>.
+    </p>
+  </section>
+  <?php endif; ?>
+
   <!-- ---------------- Images sensibles ----------------
        Affichée seulement si l'administrateur a ouvert la possibilité dans
        le .env. Sinon la section n'existe pas : proposer un réglage sans

@@ -24,6 +24,24 @@ const ETOILE_SVG = '<svg class="etoile" viewBox="0 0 24 24" aria-hidden="true" f
     . 'l5.46 4.73L5.82 21z"/></svg>';
 
 /**
+ * La série est-elle « à jour » : suivie chez MangaDex, en cours, et son tome lu
+ * a atteint le dernier tome que MangaDex connaît ? Le tome suivant n'existe
+ * pas encore : la carte dit « à venir » au lieu de « à emprunter ».
+ *
+ * `dernier_tome` vaut 0 tant que MangaDex n'a pas été interrogé (série
+ * d'avant la fonction, ou panne au moment de l'avancer) : on ne prétend alors
+ * rien, la carte garde son libellé habituel. Voir includes/nouveautes.php.
+ */
+function serie_a_venir(array $s): bool
+{
+    $dernier = (int) ($s['dernier_tome'] ?? 0);
+    return ($s['statut'] ?? '') === 'cours'
+        && (string) ($s['mangadex_id'] ?? '') !== ''
+        && $dernier > 0
+        && (int) ($s['tome_actuel'] ?? 0) >= $dernier;
+}
+
+/**
  * `$lecture_seule` : le compte est bloqué (compte_bloque()). La carte garde
  * tout ce qui se lit — couverture, titre, progression — et perd ce qui
  * agit : la couverture n'ouvre plus la fiche, les quatre boutons s'en vont.
@@ -45,17 +63,25 @@ function carte_html(array $s, bool $lecture_seule = false): string
     $titre      = (string) $s['titre'];
     $auteur     = (string) ($s['auteur'] ?? '');
 
-    $alt = $en_cours
-        ? "Couverture du tome {$suivant} de {$titre}"
-        : "Couverture de {$titre} — dernier tome lu {$tome}";
+    /* À jour : le tome suivant n'est pas paru. La couverture montre alors le
+       dernier tome paru, et non « le tome à emprunter ». */
+    $a_venir = serie_a_venir($s);
+
+    $alt = $a_venir
+        ? "Couverture de {$titre} — dernier tome lu {$tome}, tome {$suivant} à venir"
+        : ($en_cours
+            ? "Couverture du tome {$suivant} de {$titre}"
+            : "Couverture de {$titre} — dernier tome lu {$tome}");
 
     $image = $couverture !== ''
         ? '<img class="card-cover-img" src="' . e($couverture) . '" alt="' . e($alt) . '" loading="lazy">'
         : '<span class="no-cover" aria-hidden="true">📕</span>';
 
-    $etiquette = $en_cours
-        ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>'
-        : '';
+    $etiquette = $a_venir
+        ? '<div class="next-tag next-tag-avenir">Tome ' . $suivant . ' à venir</div>'
+        : ($en_cours
+            ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>'
+            : '');
 
     /* Le même libellé quel que soit le statut : c'est le dernier tome
        TERMINÉ, ce que « Vous en êtes au tome » ne disait pas. À 0, aucun

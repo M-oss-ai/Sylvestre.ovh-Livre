@@ -64,6 +64,8 @@ const ACTIONS_LIBRES_DU_BLOQUE = [
     'compte.renvoyer_verification' => 'confirmer son adresse',
     'compte.supprimer'             => 'quitter le site : un droit, pas une faveur',
     'compte.filtre_sensible'       => 'une préférence de recherche, sans effet sur la bibliothèque',
+    'compte.notifications'         => 'une préférence d\'e-mail : sans effet sur la bibliothèque (et un compte bloqué n\'en reçoit pas)',
+    'serie.nouveautes_vues'        => 'vider un bandeau déjà lu : ni série modifiée, ni appel à MangaDex',
     /* Les actions d'administration portent sur d'AUTRES comptes : on peut être
        bloqué ET administrateur (colonne `admin`, distincte du forfait). Elles
        sont gardées par ACTIONS_ADMIN, pas par le forfait ; admin_test.php
@@ -109,6 +111,7 @@ test('ce qui touche à la même bibliothèque l\'est aussi', function () {
     vrai(action_bloquee($bloque, 'couverture.chercher'), 'chercher une couverture (appels MangaDex, quota)');
     vrai(action_bloquee($bloque, 'couverture.rafraichir'), 'réécrire l\'image d\'une série');
     vrai(action_bloquee($bloque, 'couverture.delier'), 'rapatrier une image sur le disque');
+    vrai(action_bloquee($bloque, 'serie.nouveautes'), 'le relevé des nouveaux tomes : appels MangaDex, et il réécrit l\'image');
 });
 
 test('les autres forfaits ne sont jamais gênés', function () {

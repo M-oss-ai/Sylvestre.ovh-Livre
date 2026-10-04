@@ -43,6 +43,9 @@ putenv('RAPPORT_HEURES=-3');
 putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait muette sans le dire
 putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
 putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait mort avant d'être lu
+putenv('NOUVEAUTE_HEURES=0');             // 0 h : MangaDex interrogé à chaque page, pour chaque série
+putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 série : la fonction deviendrait muette sans le dire
+putenv('NOUVEAUTE_MAX_CRON=-5');
 putenv('APP_URL=https://exemple.test/bibliotheque/');   // avec un / final
 
 require __DIR__ . '/../lanceur.php';
@@ -169,6 +172,19 @@ test('CLE_ACCES_MAX ne descend jamais sous 1', function () {
 
 test('CLE_ACCES_DEFI_DUREE ne descend jamais sous une minute', function () {
     egale(60, CLE_ACCES_DEFI_DUREE, 'le .env demandait 1 seconde');
+});
+
+groupe('Nouveaux tomes');
+
+test('NOUVEAUTE_HEURES ne descend jamais sous 1 heure', function () {
+    /* À 0, chaque arrivée sur la bibliothèque interrogerait MangaDex pour
+       chaque série à jour : le débit que tous les comptes se partagent. */
+    egale(1, NOUVEAUTE_HEURES, 'le .env demandait 0');
+});
+
+test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON ne descendent jamais sous 1', function () {
+    egale(1, NOUVEAUTE_MAX_VISITE, 'le .env demandait 0');
+    egale(1, NOUVEAUTE_MAX_CRON, 'le .env demandait -5');
 });
 
 groupe('Administration');

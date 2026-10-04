@@ -8,11 +8,13 @@
 declare(strict_types=1);
 require_once __DIR__ . '/includes/carte.php';
 require_once __DIR__ . '/includes/couvertures.php';   // le quota de recherche, annoncé dans la fiche
+require_once __DIR__ . '/includes/nouveautes.php';    // les nouveaux tomes : annonces, séries à vérifier
 
 $moi = exiger_connexion();
 
 $req = $pdo->prepare(
-    'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori
+    'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori,
+            dernier_tome, nouveau_tome
        FROM serie
       WHERE utilisateur_id = ?
       ORDER BY maj_le DESC, id DESC'
@@ -32,6 +34,15 @@ $quota_series    = ($bloque || $moi['forfait'] === 'illimite') ? 0 : MAX_SERIES_
 $quota_recherche = couverture_quota($moi);
 $tranche         = secondes_lisibles(COUVERTURE_FENETRE);
 
+/* Les nouveaux tomes. D'abord ce que le cron (ou une visite précédente) a
+   trouvé sans que la personne l'ait vu : le bandeau le dit tout de suite.
+   Ensuite, y a-t-il des séries à vérifier maintenant ? Le relevé se fait
+   après le chargement, depuis le navigateur (js/app.js) : MangaDex est trop
+   lent et trop incertain pour retarder l'affichage de la page. Un compte
+   bloqué ne sollicite pas MangaDex. */
+$nouveaux      = array_values(array_filter($series, static fn (array $s) => (int) $s['nouveau_tome'] > 0));
+$a_verifier    = !$bloque && nouveautes_series_a_verifier($pdo, (int) $moi['id'], 1) !== [];
+
 // Laissé par google.php (« Bienvenue ! », compte relié…) : dit en notification.
 $flash = flash_prendre();
 ?>
@@ -49,7 +60,8 @@ $flash = flash_prendre();
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
       data-quota-series="<?= (int) $quota_series ?>" data-bloque="<?= $bloque ? '1' : '0' ?>"
       data-quota-recherche="<?= (int) $quota_recherche ?>" data-tranche-recherche="<?= e($tranche) ?>"
-      data-compte="<?= (int) $moi['id'] ?>" data-flash="<?= e($flash) ?>" data-prive="1">
+      data-compte="<?= (int) $moi['id'] ?>" data-flash="<?= e($flash) ?>" data-prive="1"
+      data-nouveautes="<?= $a_verifier ? '1' : '0' ?>">
 
 <!-- Premier arrêt au clavier : sans lui, atteindre la première série
      demandait de traverser tout l'en-tête et les filtres. -->
@@ -147,6 +159,16 @@ $flash = flash_prendre();
     <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a>.
   </p>
   <?php endif; ?>
+
+  <!-- Les nouveaux tomes : une ligne par série, rendue ici pour ce qui était
+       déjà trouvé, complétée par js/app.js pour ce que le relevé du
+       chargement trouve. « OK » le vide (serie.nouveautes_vues). -->
+  <div id="nouveautes" class="alert alert-info alerte-nouveautes<?= $nouveaux ? '' : ' hidden' ?>" role="status">
+    <ul id="nouveautes-liste"><?php foreach ($nouveaux as $s): ?>
+      <li><?= e(nouveaute_message((string) $s['titre'], (int) $s['nouveau_tome'])) ?></li>
+    <?php endforeach; ?></ul>
+    <button type="button" id="nouveautes-ok" class="btn btn-ghost small">OK</button>
+  </div>
 
   <!-- Au clavier, la grille ne compte qu'UN arrêt : on y entre par Tab,
        les flèches passent d'une série à l'autre (voir js/app.js). Chaque

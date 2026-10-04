@@ -81,6 +81,10 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   -- que l'utilisateur reactive le filtre, ce qui n'aurait aucun sens.
   `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
   `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1,
+  -- Prévenir par e-mail quand un nouveau tome paraît (voir
+  -- includes/nouveautes.php) : 1 = oui, par défaut. Le message ne part qu'à
+  -- une adresse confirmée, et jamais à un compte bloqué.
+  `notif_tomes`  TINYINT(1)   NOT NULL DEFAULT 1,
   -- Identifiant du compte Google relié (revendication « sub » d'OpenID
   -- Connect), NULL sinon. C'est lui, et non l'adresse, qui reconnaît le
   -- compte Google : une adresse peut changer, le « sub » jamais.
@@ -162,6 +166,16 @@ CREATE TABLE IF NOT EXISTS `serie` (
   -- Serie mise en favori par son proprietaire. Un simple drapeau :
   -- l'ordre d'affichage n'en depend pas, seul le filtre s'en sert.
   `favori`         TINYINT(1)   NOT NULL DEFAULT 0,
+  -- Nouveaux tomes (voir includes/nouveautes.php et la migration 13) :
+  --   dernier_tome : le plus haut tome qui a une couverture chez MangaDex,
+  --                  tel qu'on l'a vu la dernière fois (0 = pas encore su) ;
+  --   verifie_le   : la dernière fois qu'on a interrogé MangaDex pour cette
+  --                  série (NULL = jamais) ;
+  --   nouveau_tome : le tome à emprunter dont l'arrivée n'a pas encore été
+  --                  annoncée à l'écran (0 = rien à annoncer).
+  `dernier_tome`   INT UNSIGNED NOT NULL DEFAULT 0,
+  `verifie_le`     DATETIME     NULL DEFAULT NULL,
+  `nouveau_tome`   INT UNSIGNED NOT NULL DEFAULT 0,
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -563,3 +577,53 @@ CREATE TABLE IF NOT EXISTS `reglage` (
     FOREIGN KEY (`modifie_par`) REFERENCES `utilisateur` (`id`)
     ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ---------------------------------------------------------------------
+--  13. Nouveaux tomes (voir includes/nouveautes.php).
+--
+--      `serie.dernier_tome` : le plus haut tome qui a une couverture chez
+--                       MangaDex, tel qu'on l'a vu la dernière fois. 0 tant
+--                       qu'on ne le sait pas : la première vérification le
+--                       range sans rien annoncer. Une série dont le tome lu
+--                       atteint ce nombre est « à jour » : sa carte dit
+--                       « Tome N à venir » au lieu de « à emprunter ».
+--      `serie.verifie_le` : la dernière interrogation de MangaDex pour cette
+--                       série, pour ne pas la refaire à chaque page (voir
+--                       NOUVEAUTE_HEURES). NULL = jamais.
+--      `serie.nouveau_tome` : le tome à emprunter dont l'arrivée n'a pas encore
+--                       été annoncée à l'écran. Le bandeau de la bibliothèque
+--                       le lit, et se vide d'un clic. 0 = rien à annoncer.
+--      `utilisateur.notif_tomes` : 1 = prévenir par e-mail (le cron, jamais à
+--                       une adresse non confirmée) ; se règle dans Paramètres.
+--
+--      Aucune donnée n'est touchée : chaque série garde son tome, son statut
+--      et son image. À exécuter AVANT d'envoyer le code (pages et cron lisent
+--      ces colonnes), comme les migrations 10 et 11.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'dernier_tome');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `dernier_tome` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `favori`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'verifie_le');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `verifie_le` DATETIME NULL DEFAULT NULL AFTER `dernier_tome`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'nouveau_tome');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `nouveau_tome` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `verifie_le`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'notif_tomes');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `notif_tomes` TINYINT(1) NOT NULL DEFAULT 1 AFTER `filtre_sensible`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

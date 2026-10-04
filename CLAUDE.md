@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (897 tests : 761 PHP en 52 fichiers, 136 JavaScript)
+php tests/lancer.php              # toute la suite (971 tests : 835 PHP en 55 fichiers, 136 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -94,6 +94,7 @@ l'amorce, tandis que `CHEMIN_PROJET` est la racine du dépôt.
 | `includes/reglages.php` | Les réglages modifiables depuis l'administration : la liste FERMÉE (`REGLAGES`, avec bornes, unités, défauts), la validation d'une saisie, le filtrage de ce que porte la table `reglage`. Chargé par `config.php` avant toute constante, donc **aucune dépendance** (ni constante, ni `env()`) |
 | `includes/admin.php` | La page d'administration : la liste des comptes (`admin_utilisateurs`), les décisions pures (ce qui est permis, la forme du motif d'un blocage, les dates, les chiffres), et les écritures (`admin_changer_forfait`, `admin_changer_droits`, `admin_supprimer_compte`). Inclus par `admin.php` et `api.php`, jamais par `fonctions.php` |
 | `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
+| `includes/nouveautes.php` | Fin de série et nouveaux tomes (voir « Règles tacites »). Les décisions sont pures (`fin_de_serie()`, `nouveaute_evaluer()`, les messages), le reste lit MangaDex et écrit en base. Inclus par `api.php`, `index.php` **et `purger.php`** : il ne charge donc que `couvertures.php`, jamais `fonctions.php` |
 
 ### Les points d'entrée
 
@@ -164,12 +165,15 @@ couvertures une seule fois, en PHP, et elle est testée.
 **Les libellés de `STATUTS` restent courts** (≤ 12 caractères, testé) :
 ils s'affichent dans la pastille posée sur la couverture.
 
-**`purger.php` ne charge que `config.php` et `mailer.php`.** Jamais
-`fonctions.php`, qui enverrait des en-têtes HTTP et démarrerait une
+**`purger.php` ne charge que `config.php`, `mailer.php` et `nouveautes.php`.**
+Jamais `fonctions.php`, qui enverrait des en-têtes HTTP et démarrerait une
 session — ce qu'une tâche planifiée n'a pas à faire. Toute fonction dont
 le cron a besoin va donc dans `config.php`. `mailer.php` compris : il
 compose le rapport que le cron envoie, et ne peut appeler ni `e()` ni
 rien d'autre de `fonctions.php` (d'où son propre `htmlspecialchars`).
+`nouveautes.php` (relevé des nouveaux tomes) et ce qu'il charge
+(`couvertures.php`, `images.php`) obéissent à la même règle ;
+`tests/cas/nouveautes_test.php` le vérifie.
 
 **Dans un e-mail, seules les adresses du site deviennent des liens.**
 `corps_html()` ne fait un lien que de ce qui commence par `APP_URL` ;
@@ -475,6 +479,75 @@ confirmation en place, sans identité.
   1Password, Proton Pass…) et iOS/Safari. Seuls un authentificateur simulé
   (tests PHP, HTTP complet, faux navigateur) l'ont été.
 
+**Fin de série et nouveaux tomes** (demande de l'utilisateur ; `includes/nouveautes.php`).
+Les mots « completed », « cancelled », « ongoing », « hiatus » sont ceux de
+MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
+- **Au dernier tome** — `couverture.rafraichir` en mode AUTOMATIQUE (celui qui suit
+  un « → », et qui part de la base : pas de `tome_actuel` ni de `statut` dans le POST),
+  quand le tome suivant d'une série « En cours » n'a pas de couverture :
+  `nouveautes_fin_de_serie()` demande à MangaDex le plus haut tome illustré et l'état
+  de publication, puis `fin_de_serie()` décide. `completed` / `cancelled` : statut
+  `termine` (jamais `abandon`, demande de l'utilisateur) et couverture du dernier
+  tome. `ongoing` / `hiatus` : la série reste « En cours », `dernier_tome` est
+  mémorisé, et `serie_a_venir()` (carte.php) fait dire « Tome N à venir ». Des tomes
+  plus loin (`en_route`) ou une réponse sans sens (`inconnu`) : rien ne change — la
+  couverture du tome suivant manque souvent AU MILIEU d'une série, ce n'est pas la fin.
+  **Le dernier tome est le plus haut entre la dernière couverture et `lastVolume`**
+  (que MangaDex ne renseigne que pour une série finie) : une série finie dont les
+  dernières couvertures manquent n'est pas « Terminée » avant son dernier volume.
+- **Un tome de plus** — `serie.nouveautes` (api.php), appelée par `js/app.js` APRÈS
+  l'affichage de la bibliothèque, et seulement si `index.php` a vu des séries à
+  vérifier (`data-nouveautes`) ; et `purger.php`, à chaque passage. Une série est
+  candidate quand elle est « En cours », liée, « à jour » (`tome_actuel >=
+  dernier_tome`) ou jamais vérifiée (`dernier_tome = 0`), pas vue depuis
+  `NOUVEAUTE_HEURES`, et que son compte n'est pas bloqué. **La première vérification
+  apprend sans annoncer** (`nouveaute_evaluer()` : `memoriser`) : sinon toute série
+  d'avant la fonction annoncerait tout ce qui est paru. Un tome nouveau : couverture
+  du tome à emprunter, `maj_le = NOW()` (la série remonte en tête), `nouveau_tome`
+  posé (le bandeau de `index.php` le lit, « OK » → `serie.nouveautes_vues`, « → » l'efface).
+- **Le relevé ne modifie pas la série.** `maj_le` se met à jour seule à tout `UPDATE`
+  et la bibliothèque est triée dessus : tout ce qui n'est pas une vraie modification
+  (`verifie_le`, `dernier_tome` appris, annonce lue) écrit `maj_le = maj_le`. Seul
+  un tome NOUVEAU écrit `maj_le = NOW()`.
+- **Le relevé de `serie.nouveautes` libère la session** (`session_write_close()`)
+  avant d'attendre MangaDex : PHP verrouille la session par requête, et un « → »
+  cliqué pendant le relevé attendrait sa fin. Rien ici n'y écrit plus.
+- **Les échecs ne font pas de pile.** Une série que MangaDex refuse est quand même notée
+  « vérifiée » (sinon, triée par ancienneté, elle resterait en tête et affamerait les
+  autres) ; mais si c'est NOTRE file d'attente (ou un 429) qui refuse, rien n'est noté
+  et le relevé s'arrête, comme après 3 échecs de suite ou son budget de temps.
+- **Les écritures sont gardées** (`tome_actuel = ?`, `dernier_tome = ?`, `statut =
+  'cours'`) : l'appel dure des secondes, et deux onglets — ou le cron et une visite —
+  ne doivent annoncer un tome qu'une fois.
+- **Une ligne ne porte pas ce qu'on n'y a pas mis.** `ma_serie()` (api.php) ne
+  sélectionne pas `utilisateur_id` : `nouveautes_fin_de_serie()` reçoit donc le compte
+  en paramètre. Le lire dans la ligne donnait 0, un `UPDATE` qui ne trouvait rien et
+  une série qui ne passait jamais « Terminée » — sans erreur, un simple avertissement.
+  Cela n'a été vu qu'EN ESSAI RÉEL (navigateur, vrai MangaDex, base jetable) : les
+  tests unitaires, qui n'écrivent pas en base, ne pouvaient pas le voir ; ils gardent
+  maintenant les colonnes lues par le relevé.
+- **Changer de série MangaDex remet à zéro** ce qu'on savait de l'ancienne
+  (`serie.enregistrer` : `dernier_tome`, `verifie_le`, `nouveau_tome`). Sinon la
+  nouvelle série serait jugée « à jour » sur le nombre de tomes de l'autre.
+- **Un compte bloqué ne sollicite pas MangaDex** : `serie.nouveautes` est dans
+  `ACTIONS_BLOQUEES`, le cron ignore ses séries, `index.php` ne demande pas le relevé.
+  `serie.nouveautes_vues` et `compte.notifications` sont libres (état d'affichage et
+  préférence).
+- **Un e-mail par compte et par passage** (`avis_nouveaux_tomes()`, mailer.php),
+  seulement à une adresse CONFIRMÉE et si `utilisateur.notif_tomes = 1` (Paramètres ›
+  Notifications, activé par défaut). Le sujet ne porte AUCUN titre (donnée du compte,
+  pas d'en-tête qui en dépende). Pas de « push » navigateur : il demande un service
+  worker et un chiffrement de charge utile propres — non fait.
+- **Réglages** : `NOUVEAUTE_HEURES` (1 à 168), `NOUVEAUTE_MAX_VISITE` (1 à 20),
+  `NOUVEAUTE_MAX_CRON` (1 à 500), dans le `.env`, planchers et plafonds testés. Ils ne sont
+  PAS dans `REGLAGES` (admin.php) : ils protègent le débit de MangaDex.
+- **Pour essayer** : une base jetable (voir « Commandes »), `livre.sql` rejoué, un compte
+  de test et des séries liées à de vraies séries MangaDex — Berserk
+  (`801513ba-a712-498c-8f57-cae55b38cc92`, en cours), Attack on Titan
+  (`304ceac3-8cdb-4fe7-acf7-2b6ff7a60613`, finie en 34 volumes). Pour provoquer un
+  « tome nouveau » : régler `dernier_tome` et `tome_actuel` UN TOME SOUS le dernier
+  réel, et `verifie_le = NULL`.
+
 **Le forfait « bloqué » est la consultation seule** (demande de l'utilisateur).
 `utilisateur.forfait` vaut `'bloque'` (à poser À LA MAIN en base, comme
 « illimite » : `UPDATE utilisateur SET forfait = 'bloque' WHERE identifiant =
@@ -659,7 +732,11 @@ publiques des clés d'accès — jamais une clé privée) : `utilisateur`, `seri
 `session_persistante`, `tentative_ip`, `cle_acces`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
 dernier rapport du cron), `reglage` (une ligne par réglage changé depuis `admin.php`,
-migration 12 : le `.env` reste la valeur de départ). `utilisateur.forfait` : `standard`, `illimite` ou
+migration 12 : le `.env` reste la valeur de départ). Migration 13 (nouveaux tomes) :
+`serie.dernier_tome`, `serie.verifie_le`, `serie.nouveau_tome`,
+`utilisateur.notif_tomes` — lues par les pages (`utilisateur_actuel()`, `index.php`) et par
+le cron : **rejouer `livre.sql` AVANT d'envoyer le code**. Le cron, lui, n'en plante pas
+si elles manquent : il le dit en anomalie. `utilisateur.forfait` : `standard`, `illimite` ou
 `bloque` (consultation seule, voir « Règles tacites »). `utilisateur.admin`
 (administrateur, indépendant du forfait), `raison_blocage` et `bloque_le` (le motif
 et la date d'un blocage) : migration 11. **`utilisateur_actuel()` les lit à chaque

@@ -602,6 +602,27 @@ function couverture_quota_illimite(int $quota_standard, int $demande): int
 define('COUVERTURE_QUOTA_ILLIMITE', couverture_quota_illimite(
     COUVERTURE_QUOTA, (int) env('COUVERTURE_QUOTA_ILLIMITE', '0')));
 
+/* --- Les nouveaux tomes (includes/nouveautes.php) --------------------
+   Une série « à jour » (le tome lu est le dernier que MangaDex illustre)
+   est revérifiée : à l'arrivée sur la bibliothèque, et à chaque passage du
+   cron. Chaque vérification est UN appel à MangaDex, donc une part du débit
+   que tous les comptes se partagent : ces trois bornes l'encadrent, et la
+   file d'attente (COUVERTURE_ESPACEMENT) espace de toute façon les appels.
+
+   Planchers et plafonds comme partout : un « 0 » ne doit pas faire interroger
+   MangaDex à chaque page, ni arrêter la fonction sans le dire. */
+
+/* Heures minimales entre deux vérifications de la MÊME série. */
+define('NOUVEAUTE_HEURES', min(168, max(1, (int) env('NOUVEAUTE_HEURES', '1'))));
+
+/* Séries vérifiées au plus par arrivée sur la bibliothèque : la vérification
+   part en arrière-plan, mais elle occupe un processus PHP le temps de ses
+   appels. Les plus anciennement vérifiées passent d'abord. */
+define('NOUVEAUTE_MAX_VISITE', min(20, max(1, (int) env('NOUVEAUTE_MAX_VISITE', '6'))));
+
+/* Séries vérifiées au plus par passage du cron, tous comptes confondus. */
+define('NOUVEAUTE_MAX_CRON', min(500, max(1, (int) env('NOUVEAUTE_MAX_CRON', '40'))));
+
 /* Borne haute du numéro de tome (colonne INT UNSIGNED). */
 define('TOME_MAX', max(1, (int) env('TOME_MAX', '9999')));
 

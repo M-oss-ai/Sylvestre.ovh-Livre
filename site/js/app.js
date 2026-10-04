@@ -677,7 +677,15 @@ window.Bibliotheque = (() => {
     if (!carte || !carte.dataset.mangadex) return;
 
     L.api("couverture.rafraichir", { id })
-      .then((r) => poserCarte(r.carte, id))
+      .then((r) => {
+        poserCarte(r.carte, id);
+        /* Arrivée au dernier tome connu (fin de série, ou « à venir ») : la
+           réponse porte les compteurs — « Terminée » change de statut — et
+           un message. Un simple changement d'image n'en porte pas, et reste
+           silencieux. */
+        if (r.compte) majCompteurs(r.compte);
+        if (r.message) L.toast(r.message);
+      })
       .catch(() => {});
   }
 
@@ -1606,6 +1614,60 @@ window.Bibliotheque = (() => {
     $coverStatus.textContent = "Couverture sélectionnée ✅";
   });
 
+  /* ---------------- Nouveaux tomes ----------------
+
+     Le bandeau (rendu par index.php pour ce qui était déjà trouvé) reçoit une
+     ligne par série que le relevé du chargement trouve ; « OK » le vide.
+
+     Le relevé part APRÈS l'affichage et en silence : MangaDex peut être lent
+     ou muet, et la bibliothèque n'a pas à attendre — ni à s'en plaindre :
+     personne n'a rien demandé, et il recommencera au prochain chargement.
+     index.php ne le demande (data-nouveautes) que s'il y a des séries à
+     vérifier, et jamais à un compte bloqué. Les messages viennent du serveur
+     et entrent par textContent : un titre est du texte, jamais du HTML. */
+
+  const $nouveautes = document.getElementById("nouveautes");
+  const $nouveautesListe = document.getElementById("nouveautes-liste");
+
+  function annoncerNouveautes(messages) {
+    messages.forEach((m) => {
+      const ligne = document.createElement("li");
+      ligne.textContent = m;
+      $nouveautesListe.appendChild(ligne);
+    });
+    if (messages.length) $nouveautes.classList.remove("hidden");
+  }
+
+  async function verifierNouveautes() {
+    try {
+      const r = await L.api("serie.nouveautes", {});
+      const trouvees = r.nouveaux || [];
+      trouvees.forEach((n) => {
+        poserCarte(n.carte, n.id);
+        /* En tête, comme au rechargement : le serveur vient de lui donner la
+           date de modification la plus récente. */
+        const carte = $grid.querySelector('.card[data-id="' + CSS.escape(String(n.id)) + '"]');
+        if (carte) {
+          carte._ordre = ordreNouveau--;
+          $grid.prepend(carte);
+        }
+      });
+      if (trouvees.length) appliquerVue();   // statut et favori n'ont pas bougé : les compteurs non plus
+      annoncerNouveautes(trouvees.map((n) => n.message));
+    } catch (e) {
+      /* Silence : voir plus haut. */
+    }
+  }
+
+  document.getElementById("nouveautes-ok").addEventListener("click", () => {
+    // Vidé tout de suite à l'écran ; le serveur suit, et s'il échoue le
+    // bandeau reviendra au prochain chargement — ce qui vaut mieux que de
+    // garder un bandeau qu'on vient de fermer.
+    $nouveautes.classList.add("hidden");
+    $nouveautesListe.textContent = "";
+    L.api("serie.nouveautes_vues", {}).catch(() => {});
+  });
+
   /* ---------------- Démarrage ---------------- */
 
   cartes().forEach(indexer);
@@ -1616,4 +1678,5 @@ window.Bibliotheque = (() => {
   appliquerVue();
   majQuota();
   suivreDefilement(); // page rechargée en cours de liste
+  if (document.body.dataset.nouveautes === "1" && !BLOQUE) verifierNouveautes();
 })();

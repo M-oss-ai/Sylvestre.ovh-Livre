@@ -53,6 +53,10 @@ const MANGADEX_FORMATS_EXCLUS = [
     '0234a31e-a729-4e28-9d6a-3f87c4966b9e',   // Oneshot
 ];
 
+/* Un tome a plusieurs couvertures, une par langue : on préfère le français,
+   puis l'anglais, puis le japonais (rang le plus bas d'abord). */
+const MANGADEX_LANGUES = ['fr' => 0, 'en' => 1, 'ja' => 2];
+
 /* --- La cadence des appels --------------------------------------------
 
    MangaDex tolère environ 5 requêtes par seconde et par adresse IP.
@@ -409,7 +413,6 @@ function mangadex_couvertures_serie(string $id, int $tome): array
 
     $choisie = null;
     $repli   = null;
-    $rangLangue = ['fr' => 0, 'en' => 1, 'ja' => 2];
 
     foreach ($couvertures['data'] ?? [] as $couverture) {
         $a = $couverture['attributes'] ?? [];
@@ -417,11 +420,11 @@ function mangadex_couvertures_serie(string $id, int $tome): array
         if ($fichier === '') {
             continue;
         }
-        $url = MANGADEX_IMAGES . rawurlencode($id) . '/' . rawurlencode($fichier) . '.512.jpg';
+        $url = mangadex_url_couverture($id, $fichier);
         $repli ??= $url;
 
         if (isset($a['volume']) && (int) $a['volume'] === $tome) {
-            $poids = $rangLangue[$a['locale'] ?? ''] ?? 9;
+            $poids = MANGADEX_LANGUES[$a['locale'] ?? ''] ?? 9;
             if ($choisie === null || $poids < $choisie['poids']) {
                 $choisie = ['url' => $url, 'poids' => $poids];
             }
@@ -429,6 +432,120 @@ function mangadex_couvertures_serie(string $id, int $tome): array
     }
 
     return ['exacte' => $choisie['url'] ?? null, 'repli' => $repli];
+}
+
+/** L'adresse d'une couverture (512 px de large) : l'identifiant de la série, puis le nom du fichier. */
+function mangadex_url_couverture(string $id, string $fichier): string
+{
+    return MANGADEX_IMAGES . rawurlencode($id) . '/' . rawurlencode($fichier) . '.512.jpg';
+}
+
+/**
+ * Un identifiant de série MangaDex a-t-il la forme d'un UUID ? Il vient de la
+ * base (mangadex_id_depuis_url() ne rend rien d'autre), mais il se retrouve
+ * dans un chemin d'appel (« /manga/{id} ») : on ne laisse passer que cela.
+ */
+function mangadex_id_valide(string $id): bool
+{
+    return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id) === 1;
+}
+
+/**
+ * Le plus haut tome illustré, lu dans la réponse de /cover triée par volume
+ * DÉCROISSANT, et la couverture qui le montre.
+ *
+ * Retourne ['tome' => N, 'url' => …]. 'tome' vaut 0 (et 'url' null) quand la
+ * série n'a aucune couverture numérotée.
+ *
+ * Le volume arrive en chaîne et peut être décimal (« 41.3 » : un hors-série) :
+ * on garde sa partie entière, comme mangadex_couvertures_serie(). Un volume
+ * vide, non numérique ou inférieur à 1 n'est pas un tome. Le maximum est
+ * recalculé ici plutôt que supposé en tête de liste : la réponse mêle
+ * plusieurs langues, et rien ne garantit que la première soit la meilleure.
+ * À tome égal, le français passe avant l'anglais, avant le japonais.
+ *
+ * Fonction pure : testée sans réseau.
+ */
+function mangadex_dernier_tome_depuis(array $reponse, string $id): array
+{
+    $meilleur = ['tome' => 0, 'url' => null];
+    $poids    = 99;
+
+    foreach ($reponse['data'] ?? [] as $couverture) {
+        $a       = is_array($couverture) ? ($couverture['attributes'] ?? []) : [];
+        $fichier = (string) ($a['fileName'] ?? '');
+        $volume  = $a['volume'] ?? null;
+        if ($fichier === '' || !is_numeric($volume)) {
+            continue;
+        }
+        $tome = min(TOME_MAX, (int) $volume);
+        if ($tome < 1) {
+            continue;
+        }
+
+        $p = MANGADEX_LANGUES[$a['locale'] ?? ''] ?? 9;
+        if ($tome > $meilleur['tome'] || ($tome === $meilleur['tome'] && $p < $poids)) {
+            $meilleur = ['tome' => $tome, 'url' => mangadex_url_couverture($id, $fichier)];
+            $poids    = $p;
+        }
+    }
+    return $meilleur;
+}
+
+/**
+ * Le plus haut tome illustré de cette série, et sa couverture : UN appel.
+ * null si MangaDex n'a pas répondu (panne, file saturée, série disparue) —
+ * l'appelant le distingue d'une série sans couverture, qui rend tome 0.
+ */
+function mangadex_dernier_tome(string $id): ?array
+{
+    if (!mangadex_id_valide($id)) {
+        return null;
+    }
+    /* 40 couvertures, les plus hautes d'abord : de quoi trouver le maximum
+       même si quelques couvertures sans numéro de volume s'intercalent, pour
+       une réponse qui reste légère. */
+    $reponse = mangadex_get('/cover', [
+        'manga'  => [$id],
+        'limit'  => 40,
+        'order'  => ['volume' => 'desc'],
+    ]);
+    return $reponse === null ? null : mangadex_dernier_tome_depuis($reponse, $id);
+}
+
+/**
+ * L'état de publication d'une série et son dernier volume DÉCLARÉ, lus dans la
+ * réponse de /manga/{id}.
+ *
+ *   'statut'         : ongoing, completed, hiatus ou cancelled (jamais autre
+ *                      chose : une valeur inconnue rend null, on ne devine pas) ;
+ *   'dernier_volume' : « lastVolume », que MangaDex ne renseigne que pour une
+ *                      série finie (0 sinon, ou si la valeur n'est pas un nombre).
+ *
+ * Fonction pure : testée sans réseau.
+ */
+function mangadex_statut_depuis(array $reponse): ?array
+{
+    $a      = $reponse['data']['attributes'] ?? null;
+    $statut = is_array($a) ? ($a['status'] ?? null) : null;
+    if (!is_string($statut) || !in_array($statut, ['ongoing', 'completed', 'hiatus', 'cancelled'], true)) {
+        return null;
+    }
+    $volume = $a['lastVolume'] ?? null;
+    return [
+        'statut'         => $statut,
+        'dernier_volume' => is_numeric($volume) ? max(0, min(TOME_MAX, (int) $volume)) : 0,
+    ];
+}
+
+/** L'état de publication de cette série chez MangaDex : UN appel. null si la réponse manque ou n'a pas de sens. */
+function mangadex_statut_serie(string $id): ?array
+{
+    if (!mangadex_id_valide($id)) {
+        return null;
+    }
+    $reponse = mangadex_get('/manga/' . $id, []);
+    return $reponse === null ? null : mangadex_statut_depuis($reponse);
 }
 
 /**

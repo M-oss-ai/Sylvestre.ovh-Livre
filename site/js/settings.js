@@ -325,6 +325,28 @@ window.Parametres = (() => {
     demanderConfirmation(libelle + " ?", "", libelle, "compte.motdepasse", finirMotDePasse, false);
   });
 
+  /* ---------------- E-mail des nouveaux tomes ----------------
+     Une préférence, enregistrée à chaque bascule. Le serveur dit la valeur
+     retenue : l'interrupteur la reprend, il ne la devine pas. Absente de la
+     page d'un compte bloqué. */
+
+  const $notif = document.getElementById("notif-tomes");
+  if ($notif) {
+    $notif.addEventListener("change", async () => {
+      $notif.disabled = true;
+      try {
+        const r = await L.api("compte.notifications", { actives: $notif.checked ? "1" : "0" });
+        $notif.checked = r.actives;
+        L.toast(r.message);
+      } catch (err) {
+        $notif.checked = !$notif.checked; // on rend à l'écran l'état réel
+        L.toast(err.message);
+      } finally {
+        $notif.disabled = false;
+      }
+    });
+  }
+
   /* ---------------- Filtre des images sensibles ----------------
      Présent seulement si l'administrateur a ouvert la possibilité dans le
      .env : sans cela, la carte n'existe pas dans la page.
