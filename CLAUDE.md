@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1153 tests : 965 PHP en 56 fichiers, 188 JavaScript)
+php tests/lancer.php              # toute la suite (1155 tests : 967 PHP en 56 fichiers, 188 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -663,9 +663,17 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   au moins y tiennent (le bas de la bulle sur le bas du « ⓘ » : elle monte, la mention à gauche reste lisible), sinon
   « dessus » (centrée sur lui, jamais sur la mention), sinon « dessous » ; toujours à 8 px des bords. (Une première
   version préférait la GAUCHE avec un minimum de 140 px : sur un téléphone, 138 px à droite la faisaient passer par-dessus
-  la mention elle-même.) **Quand elle se ferme** : un clic ailleurs (la bulle elle-même comprise), un second clic sur
-  son « ⓘ », Échap (qui rend le focus au « ⓘ », avant toute fenêtre), le défilement, le redimensionnement, le « ⓘ » qui
-  perd le focus. **Quand une carte est refaite ou filtrée** (`appliquerVue()` → `verifierBulle()`), elle ne se ferme que
+  la mention elle-même.) **Quand elle se ferme** : un clic ailleurs, un second clic sur son « ⓘ », Échap (qui rend le
+  focus au « ⓘ », avant toute fenêtre), le défilement, le redimensionnement, le « ⓘ » qui perd le focus. **Un clic SUR
+  la bulle ne la ferme PAS** (demande de l'utilisateur : « on peut le copier-coller ») ; trois pièges, tous traités et
+  commentés dans `js/app.js` : **(1)** le geste a pu COMMENCER dans la bulle et finir dehors (on glisse pour
+  sélectionner) — le « click » a alors un ancêtre commun pour cible (le `<body>`), d'où `gesteParti`, noté au
+  `pointerdown` en capture et remis à faux après chaque clic ; **(2)** enfoncer la souris sur une zone non focalisable
+  ôte le focus au « ⓘ », et le « focusout » fermait la bulle AVANT le clic : la bulle est donc `tabindex="-1"` (focalisable
+  au clic, pas à la tabulation) et le « focusout » ignore `relatedTarget === $bulle` ; **(3)** le focus pris dans la bulle
+  est rendu (`blur()`) à sa fermeture, pour ne pas rester sur une zone vidée. Côté CSS : `cursor: text`, `user-select: text`,
+  `outline: none` (plus de main : elle ne se ferme plus au clic). Vérifié en vrai (mode ordinateur) : clic sur la bulle,
+  glissement qui finit dehors, double-clic qui sélectionne un mot, Échap bulle focalisée. **Quand une carte est refaite ou filtrée** (`appliquerVue()` → `verifierBulle()`), elle ne se ferme que
   si SON « ⓘ » a disparu ou se cache, sinon elle se replace : le relevé des nouveaux tomes refait des cartes juste après le
   chargement, et les fermer toutes la faisait disparaître sous les yeux de qui venait de la lire (vu en essai). La bulle est
   un `role="status"` **toujours présent, vidé et replié (`.fermee`) quand elle est fermée** : une zone « status » retirée puis

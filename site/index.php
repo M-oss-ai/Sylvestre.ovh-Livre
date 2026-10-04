@@ -209,8 +209,9 @@ $flash = flash_prendre();
 
 <!-- La bulle des « ⓘ » des cartes (js/app.js) : une seule pour la page, hors de toute carte
      (une carte a « overflow: hidden » et la rognerait), vide et repliée tant qu'aucun « ⓘ »
-     n'est ouvert. « status » : le texte est lu quand il y est posé. -->
-<div id="bulle-info" class="bulle-info fermee" role="status"></div>
+     n'est ouvert. « status » : le texte est lu quand il y est posé. tabindex="-1" : un clic dedans
+     (pour copier son texte) la focalise sans fermer la bulle ; pas un arrêt de tabulation. -->
+<div id="bulle-info" class="bulle-info fermee" role="status" tabindex="-1"></div>
 
 <!-- Modale ajout / édition -->
 <div id="overlay" class="overlay hidden">

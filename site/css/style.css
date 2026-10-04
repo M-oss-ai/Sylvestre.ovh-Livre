@@ -725,7 +725,11 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   font-style: normal;
   font-weight: 400;
   line-height: 1.4;
-  cursor: pointer; /* un clic dessus la ferme */
+  /* Un clic dessus ne la ferme pas : on en copie le texte (demande de l'utilisateur). */
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  outline: none; /* focalisée au clic (tabindex -1), jamais par la tabulation */
 }
 
 /* Fermée : vide, hors de la vue, mais gardée dans la page — une zone « status » qu'on retire

@@ -719,13 +719,16 @@ window.Bibliotheque = (() => {
 
      UNE seule bulle pour toute la page (#bulle-info, posée par index.php hors de toute
      carte : la carte a « overflow: hidden » et la rognerait), en position fixe. Elle se
-     ferme au clic ailleurs — y compris sur elle —, à Échap, au défilement, au
-     redimensionnement, quand son « ⓘ » perd le focus, et quand la carte est refaite ou
-     filtrée. Elle est un « role=status » : le texte est lu quand il y est posé. */
+     ferme au clic ailleurs, à Échap, au défilement, au redimensionnement, quand son « ⓘ »
+     perd le focus, et quand sa carte disparaît. UN CLIC SUR LA BULLE NE LA FERME PAS
+     (demande de l'utilisateur : on peut copier-coller son texte) — voir plus bas. Elle est
+     un « role=status » : le texte est lu quand il y est posé. */
   function fermerBulle(rendreFocus = false) {
     if (!ancreBulle) return;
     const ancre = ancreBulle;
     ancreBulle = null;
+    // Le focus pris en cliquant dans la bulle (tabindex=-1) ne reste pas sur une zone vidée.
+    if ($bulle.contains(document.activeElement)) document.activeElement.blur();
     ancre.setAttribute("aria-expanded", "false");
     $bulle.textContent = "";
     $bulle.classList.add("fermee");
@@ -771,17 +774,31 @@ window.Bibliotheque = (() => {
     else poserBulle();
   }
 
+  /* Un clic sur la bulle ne la ferme pas — on veut pouvoir en sélectionner le texte pour le
+     copier. Trois pièges : (1) le geste a pu COMMENCER dans la bulle et finir dehors (on glisse
+     pour sélectionner) : le « click » a alors pour cible un ancêtre commun, d'où
+     `gesteParti` noté à l'enfoncement ; (2) l'enfoncement sur une zone non focalisable ôte le
+     focus au « ⓘ », ce que le « focusout » plus bas prendrait pour un départ — la bulle est donc
+     focalisable (tabindex=-1, dans index.php) et on regarde `relatedTarget` ; (3) `gesteParti`
+     est remis à faux après chaque clic, sinon un clic au clavier ailleurs, plus tard, serait ignoré. */
+  let gesteParti = false;
+  document.addEventListener("pointerdown", (e) => {
+    gesteParti = !!$bulle && $bulle.contains(e.target);
+  }, true);
+
   document.addEventListener("click", (e) => {
+    const dansLaBulle = !!$bulle && ($bulle.contains(e.target) || gesteParti);
+    gesteParti = false;
     const info = e.target.closest(".card-info");
     if (!info) {
-      fermerBulle(); // un clic ailleurs, la bulle elle-même comprise
+      if (!dansLaBulle) fermerBulle(); // un clic ailleurs ; sur la bulle elle-même : rien
       return;
     }
     if (info === ancreBulle) fermerBulle();
     else ouvrirBulle(info);
   });
   document.addEventListener("focusout", (e) => {
-    if (ancreBulle && e.target === ancreBulle) fermerBulle();
+    if (ancreBulle && e.target === ancreBulle && e.relatedTarget !== $bulle) fermerBulle();
   });
   window.addEventListener("scroll", () => fermerBulle(), { passive: true });
   window.addEventListener("resize", () => fermerBulle());

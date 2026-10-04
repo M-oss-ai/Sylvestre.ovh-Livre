@@ -454,7 +454,8 @@ test('tout est échappé : un titre ou une explication ne devient jamais du HTML
 
 test('index.php porte la bulle unique, hors de toute carte, vide et fermée', function () {
     $page = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/index.php'));
-    contient('<div id="bulle-info" class="bulle-info fermee" role="status"></div>', $page, 'la bulle, vide et fermée, annoncée comme « status »');
+    contient('<div id="bulle-info" class="bulle-info fermee" role="status" tabindex="-1"></div>', $page,
+        'la bulle, vide et fermée, annoncée comme « status », focalisable au clic (pour copier son texte) sans être un arrêt de tabulation');
     egale(1, substr_count($page, 'id="bulle-info"'), 'une seule pour toute la page');
     vrai(strpos($page, 'id="bulle-info"') > strpos($page, '</main>'), 'après la grille : une carte la rognerait (overflow: hidden)');
     $carte = (string) file_get_contents(CHEMIN_SITE . '/includes/carte.php');
@@ -481,11 +482,11 @@ test('js/app.js : le « ⓘ » ouvre la bulle, sans rien envoyer au serveur ni s
 
 test('js/app.js : la bulle se ferme au clic ailleurs, à Échap, au défilement, au redimensionnement, au changement de vue', function () {
     $js = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/js/app.js'));
-    contient('fermerBulle(); // un clic ailleurs, la bulle elle-même comprise', $js, 'un clic ailleurs');
+    contient('if (!dansLaBulle) fermerBulle();', $js, 'un clic ailleurs la ferme — mais pas un clic SUR elle (on en copie le texte)');
     contient('if (ancreBulle) { fermerBulle(true); return; }', $js, 'Échap, qui rend le focus au « ⓘ »');
     contient('window.addEventListener("scroll", () => fermerBulle(), { passive: true });', $js, 'le défilement');
     contient('window.addEventListener("resize", () => fermerBulle());', $js, 'le redimensionnement');
-    contient('if (ancreBulle && e.target === ancreBulle) fermerBulle();', $js, 'le « ⓘ » qui perd le focus');
+    contient('if (ancreBulle && e.target === ancreBulle && e.relatedTarget !== $bulle) fermerBulle();', $js, 'le « ⓘ » qui perd le focus, sauf au profit de la bulle');
     /* Le relevé des nouveaux tomes refait des cartes juste après le chargement : fermer la
        bulle à chacune la faisait disparaître sous les yeux de qui la lisait. */
     $debut = (int) strpos($js, 'function appliquerVue()');
@@ -495,6 +496,30 @@ test('js/app.js : la bulle se ferme au clic ailleurs, à Échap, au défilement,
     $bloc = substr($js, (int) strpos($js, 'function verifierBulle()'), 260);
     contient('if (!ancreBulle.isConnected || ancreBulle.closest(".card.hidden")) fermerBulle();', $bloc, 'fermée seulement si son « ⓘ » a disparu ou se cache');
     contient('else poserBulle();', $bloc, 'sinon replacée : une autre carte a pu changer de hauteur');
+});
+
+test('js/app.js : un clic SUR la bulle ne la ferme pas, qu\'il finisse dedans ou dehors (copier-coller, demande de l\'utilisateur)', function () {
+    $js = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/js/app.js'));
+    /* Le geste a pu COMMENCER dans la bulle et finir dehors (on glisse pour sélectionner) : le
+       « click » a alors un ancêtre commun pour cible. D'où la note faite à l'enfoncement. */
+    contient('document.addEventListener("pointerdown", (e) => {', $js, 'l\'enfoncement est noté');
+    contient('gesteParti = !!$bulle && $bulle.contains(e.target);', $js, 'avec son origine : dans la bulle ou non');
+    contient('const dansLaBulle = !!$bulle && ($bulle.contains(e.target) || gesteParti);', $js, 'un clic dont la cible OU l\'origine est la bulle');
+    contient('gesteParti = false;', $js, 'remis à faux après chaque clic : un clic au clavier plus tard n\'est pas ignoré');
+    /* Enfoncer la souris sur une zone non focalisable ôte le focus au « ⓘ » : sans cette garde, le
+       « focusout » fermait la bulle avant même le clic. */
+    contient('e.relatedTarget !== $bulle', $js, 'le focus qui passe du « ⓘ » à la bulle n\'est pas un départ');
+    /* Le focus pris dans la bulle ne reste pas sur une zone vidée à la fermeture. */
+    contient('if ($bulle.contains(document.activeElement)) document.activeElement.blur();', $js, 'la fermeture rend le focus');
+});
+
+test('style.css : le texte de la bulle se sélectionne et son curseur le dit', function () {
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    $debut = (int) strpos($css, '.bulle-info {');
+    $bulle = substr($css, $debut, (int) strpos($css, '.bulle-info.fermee {') - $debut);
+    contient('cursor: text;', $bulle, 'un curseur de texte, pas une main : un clic ne la ferme pas');
+    contient('user-select: text;', $bulle, 'sélectionnable');
+    sans('cursor: pointer', $bulle, 'plus de main : elle ne se ferme plus au clic');
 });
 
 test('style.css : le « ⓘ » et sa bulle ont leur style, la bulle est hors des cartes', function () {

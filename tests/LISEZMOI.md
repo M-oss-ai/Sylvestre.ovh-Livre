@@ -397,7 +397,8 @@ la mention dans `carte_html`, son « ⓘ » (`serie_fin_info` : seules les quatr
 ont une explication, courte (≤ 100 caractères), qui dit qui parle, les autres n'en ont pas ni de « ⓘ » ; le texte
 de la bulle dans `data-aide`, aucune explication dans la carte, la bulle unique de `index.php` ; `Bibliotheque.placerBulle` :
 à droite, au-dessus, au-dessous, jamais hors de la fenêtre, jamais NaN ; ses fermetures et son maintien quand le relevé
-refait une autre carte, lus dans les sources de `js/app.js` ; le balisage accessible ; le
+refait une autre carte, lus dans les sources de `js/app.js` ; un clic sur la bulle qui ne la ferme pas, qu'il finisse
+dedans ou dehors (copier-coller : `gesteParti`, `relatedTarget`, `cursor: text`) ; le balisage accessible ; le
 câblage dans `js/app.js`), le compteur du filtre, la couleur, les
 migrations 15 et 16, la
 carte INCHANGÉE dans tous les autres cas.
