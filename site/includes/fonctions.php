@@ -235,13 +235,15 @@ function valider_mot_de_passe(string $mdp, string $identifiant = ''): array
     if ($mdp !== '' && preg_match('/^[\p{Z}\s]|[\p{Z}\s]$/u', $mdp)) {
         $erreurs[] = 'Le mot de passe ne doit pas commencer ni se terminer par un espace.';
     }
-    if (!preg_match('/\p{Lu}/u', $mdp)) {
+    /* Chaque classe n'est exigée que si le réglage le dit (MDP_MAJ, MDP_MINUSCULE,
+       MDP_CHIFFRE, MDP_SPE : config.php, modifiables depuis admin.php). */
+    if (MDP_MAJ && !preg_match('/\p{Lu}/u', $mdp)) {
         $erreurs[] = 'Le mot de passe doit contenir au moins une majuscule.';
     }
-    if (!preg_match('/\p{Ll}/u', $mdp)) {
+    if (MDP_MINUSCULE && !preg_match('/\p{Ll}/u', $mdp)) {
         $erreurs[] = 'Le mot de passe doit contenir au moins une minuscule.';
     }
-    if (!preg_match('/\p{Nd}/u', $mdp)) {
+    if (MDP_CHIFFRE && !preg_match('/\p{Nd}/u', $mdp)) {
         $erreurs[] = 'Le mot de passe doit contenir au moins un chiffre.';
     }
     /* « Caractère spécial » = ni lettre (\p{L}), ni chiffre (\p{N}), ni
@@ -251,7 +253,7 @@ function valider_mot_de_passe(string $mdp, string $identifiant = ''): array
        invisibles à l'écran et se glissent facilement dans un copier-coller.
        Sans \p{Z}, coller un espace insécable suffirait à satisfaire la
        règle sans qu'aucun caractère spécial ne soit réellement saisi. */
-    if (!preg_match('/[^\p{L}\p{N}\p{Z}\s]/u', $mdp)) {
+    if (MDP_SPE && !preg_match('/[^\p{L}\p{N}\p{Z}\s]/u', $mdp)) {
         $erreurs[] = 'Le mot de passe doit contenir au moins un caractère spécial '
                    . "(par exemple ! ? * - _ #) — l'espace ne compte pas.";
     }
@@ -266,6 +268,23 @@ function valider_mot_de_passe(string $mdp, string $identifiant = ''): array
     }
 
     return $erreurs;
+}
+
+/**
+ * Les attributs que js/mdp.js lit sur un champ de mot de passe : de quoi dire, pendant la
+ * saisie, les MÊMES règles que valider_mot_de_passe() (la longueur, le maximum, et les
+ * quatre classes exigées ou non). À poser tels quels sur chaque champ « nouveau mot de
+ * passe » : une seule source, donc aucune page ne peut oublier une règle ni en dire une
+ * que le serveur ne vérifie plus. Chaque valeur est un entier ou « 0 » / « 1 » : rien
+ * à échapper.
+ */
+function attributs_regles_mdp(): string
+{
+    return 'data-regles-mdp data-mdp-min="' . MDP_MIN . '" data-mdp-max="' . MDP_MAX . '"'
+        . ' data-mdp-maj="' . (MDP_MAJ ? '1' : '0') . '"'
+        . ' data-mdp-minuscule="' . (MDP_MINUSCULE ? '1' : '0') . '"'
+        . ' data-mdp-chiffre="' . (MDP_CHIFFRE ? '1' : '0') . '"'
+        . ' data-mdp-spe="' . (MDP_SPE ? '1' : '0') . '"';
 }
 
 /* ---------------------------------------------------------------------

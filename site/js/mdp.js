@@ -7,8 +7,12 @@
    fonctions.php) — mêmes règles, mêmes messages. Le serveur reste seul
    juge : ceci ne fait que prévenir plus tôt.
 
-   Branché sur tout champ portant data-regles-mdp :
+   Branché sur tout champ portant data-regles-mdp (posé par
+   attributs_regles_mdp(), en PHP : une seule source pour toutes les pages) :
      data-mdp-min / data-mdp-max   les bornes du .env
+     data-mdp-maj, -minuscule,
+     -chiffre, -spe                « 1 » : la classe est exigée, « 0 » : non
+                                   (réglages MDP_MAJ… de l'administration)
      data-identifiant              l'id du champ identifiant, ou
      data-identifiant-valeur       l'identifiant lui-même (compte connu)
    ========================================================= */
@@ -19,7 +23,7 @@ window.ReglesMdp = (() => {
   const OBLIGATOIRE = "Ce champ est obligatoire.";
 
   /** Les règles que `mdp` ne respecte pas, dans l'ordre du serveur. */
-  function manques(mdp, { min = 8, max = 200, identifiant = "" } = {}) {
+  function manques(mdp, { min = 8, max = 200, identifiant = "", maj = true, minuscule = true, chiffre = true, spe = true } = {}) {
     if (mdp === "") return [OBLIGATOIRE];
     const m = [];
     // Les espaces (y compris insécables, \p{Z}) ne comptent pas dans la longueur.
@@ -27,10 +31,10 @@ window.ReglesMdp = (() => {
     if (utiles < min) m.push("Le mot de passe doit faire au moins " + min + " caractères, espaces non comptés.");
     if ([...mdp].length > max) m.push("Le mot de passe est trop long (" + max + " caractères maximum).");
     if (/^[\p{Z}\s]|[\p{Z}\s]$/u.test(mdp)) m.push("Le mot de passe ne doit pas commencer ni se terminer par un espace.");
-    if (!/\p{Lu}/u.test(mdp)) m.push("Le mot de passe doit contenir au moins une majuscule.");
-    if (!/\p{Ll}/u.test(mdp)) m.push("Le mot de passe doit contenir au moins une minuscule.");
-    if (!/\p{Nd}/u.test(mdp)) m.push("Le mot de passe doit contenir au moins un chiffre.");
-    if (!/[^\p{L}\p{N}\p{Z}\s]/u.test(mdp)) {
+    if (maj && !/\p{Lu}/u.test(mdp)) m.push("Le mot de passe doit contenir au moins une majuscule.");
+    if (minuscule && !/\p{Ll}/u.test(mdp)) m.push("Le mot de passe doit contenir au moins une minuscule.");
+    if (chiffre && !/\p{Nd}/u.test(mdp)) m.push("Le mot de passe doit contenir au moins un chiffre.");
+    if (spe && !/[^\p{L}\p{N}\p{Z}\s]/u.test(mdp)) {
       m.push("Le mot de passe doit contenir au moins un caractère spécial (par exemple ! ? * - _ #) — l'espace ne compte pas.");
     }
     const id = String(identifiant || "").trim();
@@ -68,12 +72,20 @@ window.ReglesMdp = (() => {
     if (!decrit.includes(id)) champ.setAttribute("aria-describedby", [id, ...decrit].join(" "));
   }
 
+  /* Une classe est exigée sauf si l'attribut dit « 0 » — comme côté PHP, où seule la valeur « 0 »
+     la désactive : un attribut absent ou illisible laisse la règle en place. */
+  const exigee = (valeur) => String(valeur == null ? "1" : valeur).trim() !== "0";
+
   function options(champ) {
     const d = champ.dataset;
     const source = d.identifiant ? document.getElementById(d.identifiant) : null;
     return {
       min: parseInt(d.mdpMin, 10) || 8,
       max: parseInt(d.mdpMax, 10) || 200,
+      maj: exigee(d.mdpMaj),
+      minuscule: exigee(d.mdpMinuscule),
+      chiffre: exigee(d.mdpChiffre),
+      spe: exigee(d.mdpSpe),
       identifiant: source ? source.value : d.identifiantValeur || "",
     };
   }
@@ -105,5 +117,5 @@ window.ReglesMdp = (() => {
 
   document.querySelectorAll("input[data-regles-mdp]").forEach(brancher);
 
-  return { manques, brancher, OBLIGATOIRE };
+  return { manques, brancher, options, exigee, OBLIGATOIRE };
 })();

@@ -16,8 +16,11 @@
    chacune a ses bornes — celles que l'utilisateur a validées. Rien de ce
    qui touche aux secrets (SMTP, base, jetons, Google), à l'adresse du site
    ou à l'identité de l'administrateur (ADMIN_EMAIL, seconde clé de la
-   suppression d'un compte), aux mots de passe, ni aux images n'y figure : ce
-   sont des réglages de déploiement, qui restent dans le .env.
+   suppression d'un compte), ni aux images n'y figure : ce sont des réglages
+   de déploiement, qui restent dans le .env. Exception demandée par
+   l'utilisateur : la POLITIQUE de mot de passe (groupe « Mots de passe » :
+   longueur minimale et classes de caractères exigées). MDP_MAX, borne
+   technique, n'y est pas.
 
    Deux jeux de bornes, à ne pas confondre :
      - celles d'ici (min/max) valent pour ce qu'on saisit dans la page, et
@@ -35,6 +38,7 @@ const REGLAGES_GROUPES = [
     'quotas'     => 'Quotas',
     'couverture' => 'Recherche de couverture',
     'durees'     => 'Durées',
+    'mdp'        => 'Mots de passe',
     'freins'     => 'Freins anti-force-brute',
 ];
 
@@ -148,6 +152,37 @@ const REGLAGES = [
         'groupe' => 'durees', 'libelle' => "Clés d'accès par compte",
         'aide' => "Un téléphone, un ordinateur, un gestionnaire de mots de passe…",
         'min' => 1, 'max' => 50, 'defaut' => 10, 'unite' => 'clés',
+    ],
+
+    // ---- Mots de passe ----
+    'MDP_MIN' => [
+        'groupe' => 'mdp', 'libelle' => 'Longueur minimale',
+        'aide' => "Espaces non comptés. Un mot de passe court se devine vite : en dessous de 8, la protection s'affaiblit nettement.",
+        'min' => 1, 'max' => 200, 'defaut' => 8, 'unite' => 'caractères',
+    ],
+    'MDP_MAJ' => [
+        'groupe' => 'mdp', 'libelle' => 'Majuscule',
+        'aide' => "Au moins une lettre majuscule (« É » compte).",
+        'min' => 0, 'max' => 1, 'defaut' => 1,
+        'choix' => ['0' => 'Non exigée', '1' => 'Exigée'],
+    ],
+    'MDP_MINUSCULE' => [
+        'groupe' => 'mdp', 'libelle' => 'Minuscule',
+        'aide' => "Au moins une lettre minuscule (« é » compte).",
+        'min' => 0, 'max' => 1, 'defaut' => 1,
+        'choix' => ['0' => 'Non exigée', '1' => 'Exigée'],
+    ],
+    'MDP_CHIFFRE' => [
+        'groupe' => 'mdp', 'libelle' => 'Chiffre',
+        'aide' => "Au moins un chiffre.",
+        'min' => 0, 'max' => 1, 'defaut' => 1,
+        'choix' => ['0' => 'Non exigé', '1' => 'Exigé'],
+    ],
+    'MDP_SPE' => [
+        'groupe' => 'mdp', 'libelle' => 'Caractère spécial',
+        'aide' => "Ni lettre, ni chiffre, ni espace (par exemple ! ? * - _ #). Valable pour les nouveaux mots de passe : ceux qui existent déjà ne sont pas revérifiés.",
+        'min' => 0, 'max' => 1, 'defaut' => 1,
+        'choix' => ['0' => 'Non exigé', '1' => 'Exigé'],
     ],
 
     // ---- Freins anti-force-brute ----

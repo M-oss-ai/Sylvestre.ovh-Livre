@@ -79,8 +79,8 @@ scénarios vérifiables du tout.
 
 - Les réglages du `.env` deviennent des **constantes** (`MDP_MIN`,
   `IP_ENTETE`, `ASSETS_VERSION`…). Une constante ne se redéfinit pas :
-  vérifier qu'un `MDP_MIN` réglé à 3 est bien relevé à 8 exige un
-  processus dont l'environnement porte `MDP_MIN=3` dès le départ.
+  vérifier qu'une `LIMITEUR_FENETRE` de 10 est bien relevée à 60 exige un
+  processus dont l'environnement porte `LIMITEUR_FENETRE=10` dès le départ.
 - `ip_client()` garde son résultat dans un `static` : le premier appel le
   fige pour toute la durée du processus. D'où un fichier par scénario
   d'adresse.
@@ -355,6 +355,20 @@ sans filet, et le branchement du repli (`localStorage` toujours dans un `try`) ;
 `Admin.groupesReplies` et `Admin.basculerGroupe`. Ce qui change réellement à la
 requête suivante (quota de séries, durée du cookie de session, inscriptions fermées,
 freins) se vérifie en HTTP sur un site de test (CLAUDE.md, « Déploiement »).
+
+**Couvert, politique de mot de passe réglable** — `mdp_regles_test.php` (en sous-processus, via
+`tests/outils/valider-mdp.php`), `config_planchers_test.php`, `reglages_test.php`, `tests/js/cas/mdp_test.js`.
+`MDP_MIN` de 1 à 200 (le plancher de 8 est levé : 0 et les négatifs donnent 1, 5000 donne 200, `MDP_MAX` reste
+au-dessus) ; chaque classe (`MDP_MAJ`, `MDP_MINUSCULE`, `MDP_CHIFFRE`, `MDP_SPE`) se désactive SEULE et les trois
+autres restent exigées ; tout désactivé, seule la longueur compte, et les espaces de bord, l'identifiant, le maximum
+restent refusés ; **seul « 0 » desserre** (vide, « non », « false », « 2 » : exigée) ; le message cite le vrai minimum ;
+`attributs_regles_mdp()` dit ce que le serveur applique, et les quatre pages l'appellent. Côté JavaScript :
+`ReglesMdp.manques` avec chaque classe désactivée, `exigee` et `options` (un attribut absent laisse la règle). Dans
+la liste : le groupe « Mots de passe », ses menus 0 / 1, `MDP_MAX` toujours absent.
+
+**Couvert, la fiche d'une série** — `fiche_fond_test.php`, par lecture de `js/app.js` : un clic sur le fond sombre ne
+la ferme pas (aucun écouteur), « ✕ », « Annuler » et Échap la ferment toujours, la question « Abandonner ? » est
+inchangée. Non couvert (le branchement n'est pas joignable) : essayé à la main dans le navigateur.
 
 **Couvert, structure du dépôt** — `structure_test.php`, par lecture des
 sources : `site/` ne contient que ce qui doit monter (ni `tests/`, ni `.md`,

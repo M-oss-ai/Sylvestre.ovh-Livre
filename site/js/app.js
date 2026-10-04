@@ -1328,9 +1328,16 @@ window.Bibliotheque = (() => {
   /* ---------------- Modifications non enregistrées ----------------
      Échap ou un clic à côté de la fiche la fermaient en jetant la saisie,
      y compris une couverture qu'une recherche de plusieurs secondes venait
-     de trouver. Ces deux gestes-là sont des réflexes : ils demandent donc
-     confirmation dès que la fiche a changé. « Annuler » et « ✕ », eux,
-     disent clairement ce qu'ils font et ferment sans question. */
+     de trouver. Échap est un réflexe : il demande donc confirmation dès que
+     la fiche a changé. « Annuler » et « ✕ », eux, disent clairement ce qu'ils
+     font et ferment sans question.
+
+     UN CLIC À CÔTÉ DE LA FICHE (sur le fond sombre) NE FAIT PLUS RIEN, ni
+     fermeture ni question (demande de l'utilisateur : « quand on modifie une
+     série et qu'on clique ailleurs, ça ne fait rien — on ne la ferme pas »).
+     Un doigt ou un curseur qui dérape hors de la fiche ne doit pas la fermer,
+     même sans modification. On ne la quitte que par « ✕ », « Annuler » ou
+     Échap. */
 
   let ficheAOuverture = null;
   const $abandonOverlay = document.getElementById("abandon-overlay");
@@ -1388,7 +1395,7 @@ window.Bibliotheque = (() => {
   document.getElementById("btn-add-first").addEventListener("click", demanderAjout);
   document.getElementById("btn-close").addEventListener("click", fermerModale);
   document.getElementById("btn-cancel").addEventListener("click", fermerModale);
-  $overlay.addEventListener("click", (e) => { if (e.target === $overlay) fermerSiRienNeChange(); });
+  // Aucun écouteur sur le fond ($overlay) : un clic à côté de la fiche ne la ferme pas (voir plus haut).
 
   /* ---------------- Enregistrement ---------------- */
 

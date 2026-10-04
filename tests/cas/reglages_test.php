@@ -47,6 +47,7 @@ test('ce que l\'utilisateur a demandé y est : quotas, couverture, durées, frei
         'COUVERTURE_QUOTA', 'COUVERTURE_QUOTA_ILLIMITE', 'COUVERTURE_FENETRE', 'COUVERTURE_MAX_SERIES',
         'COUVERTURE_CANDIDATS', 'COUVERTURE_CONTENU_ADULTE',
         'ADMIN_SUPPRESSION_DUREE', 'RAPPORT_HEURES', 'CRON_HEURES', 'NOUVEAUTE_MINUTES', 'SESSION_DUREE', 'REMEMBER_DUREE_VIP', 'CLE_ACCES_MAX',
+        'MDP_MIN', 'MDP_MAJ', 'MDP_MINUSCULE', 'MDP_CHIFFRE', 'MDP_SPE',
     ] as $cle) {
         vrai(isset(REGLAGES[$cle]), "$cle est modifiable");
     }
@@ -87,12 +88,49 @@ test('rien de ce qui est secret, d\'identité ou de déploiement n\'est modifiab
         'CRON_TOKEN', 'UPLOAD_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', // les secrets
         'APP_URL', 'ADMIN_EMAIL',                                            // l'adresse du site, et la seconde clé des suppressions
         'IP_ENTETE', 'IP_PROXY_SAUTS', 'ASSETS_VERSION',                     // le déploiement
-        'MDP_MIN', 'MDP_MAX', 'CONFIRMATION_DUREE', 'CLE_ACCES_DEFI_DUREE',   // mots de passe et confirmations
+        'MDP_MAX', 'CONFIRMATION_DUREE', 'CLE_ACCES_DEFI_DUREE',              // MDP_MAX (borne technique) et les confirmations
         'COUVERTURE_ESPACEMENT', 'COUVERTURE_FILE_MAX', 'COUVERTURE_TIMEOUT', // ce qui protège l'IP du serveur
         'LEGAL_EDITEUR', 'LEGAL_CONTACT', 'QUOTA_BASE_MO',
     ] as $cle) {
         faux(isset(REGLAGES[$cle]), "$cle reste dans le .env");
     }
+});
+
+groupe('REGLAGES — la politique de mot de passe (demande de l\'utilisateur)');
+
+test('MDP_MIN de 1 à 200 caractères, défaut 8', function () {
+    egale([1, 200, 8, 'caractères'], [REGLAGES['MDP_MIN']['min'], REGLAGES['MDP_MIN']['max'], REGLAGES['MDP_MIN']['defaut'], REGLAGES['MDP_MIN']['unite']], 'MDP_MIN');
+    egale(1, reglage_facteur('MDP_MIN'), 'saisi en caractères, tel quel');
+    estNul(reglage_valider('MDP_MIN', '0')[0], '0 : pas de minimum');
+    estNul(reglage_valider('MDP_MIN', '201')[0], '201 : au-delà');
+    egale(['1', ''], reglage_valider('MDP_MIN', '1'), '1 passe');
+    egale(['200', ''], reglage_valider('MDP_MIN', '200'), '200 passe');
+});
+
+test('les quatre classes sont des menus 0 / 1, exigées par défaut', function () {
+    foreach (['MDP_MAJ', 'MDP_MINUSCULE', 'MDP_CHIFFRE', 'MDP_SPE'] as $cle) {
+        egale(['0', '1'], array_map('strval', array_keys(REGLAGES[$cle]['choix'])), "$cle : un menu 0 / 1");
+        egale([0, 1, 1], [REGLAGES[$cle]['min'], REGLAGES[$cle]['max'], REGLAGES[$cle]['defaut']], "$cle : de 0 à 1, exigée par défaut");
+        egale(['0', ''], reglage_valider($cle, '0'), "$cle : « 0 » accepté");
+        egale(['1', ''], reglage_valider($cle, '1'), "$cle : « 1 » accepté");
+        estNul(reglage_valider($cle, '2')[0], "$cle : 2 refusé");
+        estNul(reglage_valider($cle, 'oui')[0], "$cle : un mot refusé");
+        vrai(max(array_map('mb_strlen', REGLAGES[$cle]['choix'])) <= 14, "$cle : les libellés tiennent dans la case (14 caractères)");
+    }
+});
+
+test('ces réglages forment leur propre groupe « Mots de passe », où il n\'y a que la politique', function () {
+    egale('Mots de passe', REGLAGES_GROUPES['mdp'], 'le groupe existe');
+    $cles = array_keys(array_filter(REGLAGES, static fn (array $r): bool => $r['groupe'] === 'mdp'));
+    egale(['MDP_MIN', 'MDP_MAJ', 'MDP_MINUSCULE', 'MDP_CHIFFRE', 'MDP_SPE'], $cles, 'dans cet ordre : la longueur, puis les quatre classes');
+});
+
+test('la base remplace le .env : « 0 » lu de la base est gardé, un choix inconnu ignoré', function () {
+    $r = reglages_filtrer(['MDP_SPE' => '0', 'MDP_MAJ' => '1', 'MDP_MIN' => '5000', 'MDP_CHIFFRE' => '7']);
+    egale('0', $r['MDP_SPE'], '« 0 » est gardé');
+    egale('1', $r['MDP_MAJ'], '« 1 » aussi');
+    egale('200', $r['MDP_MIN'], 'une longueur démesurée est ramenée à 200');
+    faux(isset($r['MDP_CHIFFRE']), 'un choix inconnu est ignoré : le .env reprend la main');
 });
 
 groupe('REGLAGES — les bornes validées');

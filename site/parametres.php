@@ -547,7 +547,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
         <div class="password-wrap">
           <input id="a-new" name="mot_de_passe_nouveau" type="password" autocomplete="new-password" required
                  maxlength="<?= MDP_MAX ?>"
-                 data-regles-mdp data-mdp-min="<?= MDP_MIN ?>" data-mdp-max="<?= MDP_MAX ?>"
+                 <?= attributs_regles_mdp() ?>
                  data-identifiant-valeur="<?= e($moi['identifiant']) ?>"<?= champ_aria($erreurs_mdp, 'nouveau', 'a-new') ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-new" aria-label="Afficher le mot de passe">👁️</button>
         </div>

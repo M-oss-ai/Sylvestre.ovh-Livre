@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1167 tests : 973 PHP en 56 fichiers, 194 JavaScript)
+php tests/lancer.php              # toute la suite (1200 tests : 997 PHP en 58 fichiers, 203 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -138,7 +138,7 @@ rien hors de la bibliothèque — c'est ce qui permet au banc de le charger.
 ## Règles tacites
 
 **Tout réglage passe par le `.env`, jamais en dur ailleurs** — sauf les
-trente-deux de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
+trente-sept de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
 (voir plus bas). Et chaque constante de `config.php` est bornée par un plancher
 ou un plafond : un `.env` mal rempli ne doit jamais pouvoir *supprimer* une
 protection.
@@ -229,6 +229,35 @@ pendant la frappe — tout champ `data-regles-mdp`. Une règle ajoutée d'un
 côté s'ajoute de l'autre, tests compris. Ce qui concerne le lien de
 confirmation se dit à l'étape suivante, quand il est parti.
 
+**La politique de mot de passe se règle : `.env` ET `admin.php`** (demande de l'utilisateur ; groupe
+« Mots de passe » de `REGLAGES`). Cinq valeurs : **`MDP_MIN`**, la longueur minimale, **de 1 à 200**
+(défaut 8) ; et quatre interrupteurs, **`MDP_MAJ`**, **`MDP_MINUSCULE`**, **`MDP_CHIFFRE`**,
+**`MDP_SPE`** : `1` = la classe est exigée (défaut), `0` = non. Ce sont des constantes de `config.php`
+(les trois dernières des booléens), lues par `valider_mot_de_passe()` et par `js/mdp.js`.
+- **Le plancher de 8 sur `MDP_MIN` est LEVÉ** à la demande de l'utilisateur (« de 1 à 200 ») : il
+  protégeait de 3 caractères tapés par erreur dans le `.env`, il ne protège plus de rien en dessous de 8 — à 1,
+  un mot de passe d'un caractère est accepté. C'est un choix assumé, dit dans l'aide de la page. `0` et les
+  négatifs valent 1, 5000 vaut 200 ; `MDP_MAX` reste au-dessus de `MDP_MIN` (donc 201 si `MDP_MIN` vaut 200).
+- **Seul « 0 » desserre une classe** (`trim(env(…, '1')) !== '0'`) : une ligne vide, « non », « false », une faute
+  de frappe la laissent exigée. Un `.env` mal rempli ne desserre donc pas la politique par accident (la règle
+  des planchers du projet, appliquée à un interrupteur). Testé : `tests/cas/config_planchers_test.php`.
+- **« MDP_MIN » nommait déjà la longueur** : la règle des minuscules s'appelle `MDP_MINUSCULE` (la demande
+  listait deux fois « MDP_MIN »).
+- **Une seule source pour les pages : `attributs_regles_mdp()`** (`includes/fonctions.php`) rend les attributs
+  `data-regles-mdp data-mdp-min data-mdp-max data-mdp-maj data-mdp-minuscule data-mdp-chiffre data-mdp-spe` que
+  `js/mdp.js` lit ; les quatre pages qui créent un mot de passe (`inscription.php`, `google-inscription.php`,
+  `parametres.php`, `reinitialiser-mot-de-passe.php`) l'appellent, plus aucune n'écrit les attributs à la main (un
+  test le garde). Sans ces attributs (une vieille page en cache), `js/mdp.js` garde les quatre règles : `exigee()`
+  ne desserre que sur « 0 ».
+- **Ce qui n'est PAS une classe ne bouge pas** : les espaces en début ou en fin sont toujours refusés, l'identifiant
+  dans le mot de passe aussi, le maximum et l'UTF-8 invalide aussi. La longueur se compte toujours sans les espaces.
+- **Ne touche que les NOUVEAUX mots de passe** : les mots de passe déjà enregistrés ne sont jamais revérifiés ; les
+  resserrer n'oblige personne à en changer (la page le dit sous « Caractère spécial »).
+- **Se juge en sous-processus** (les constantes sont figées) : `tests/outils/valider-mdp.php` et
+  `tests/cas/mdp_regles_test.php` (chaque classe désactivée SEULE, les trois autres restent exigées ; tout désactivé ;
+  `MDP_MIN` de 1 à 200 ; les attributs). Les menus de la page disent « Exigée / Non exigée » (« Exigé / Non exigé »
+  au masculin).
+
 **Le site ne connaît ni prénom ni nom** (retirés, migration 8) : un
 compte, c'est un identifiant et une adresse. L'avatar par défaut prend
 les deux premières lettres de l'identifiant (`initiales()`).
@@ -258,6 +287,18 @@ l'utilisateur), hors d'un champ où la touche efface du texte
 `<h2>` (`tabindex="-1"`, sans cadre), plus dans le Titre : le curseur
 dans le champ rendait Suppr inopérant à l'ouverture. Une nouvelle série
 garde le Titre.
+
+**Un clic à côté de la fiche d'une série ne fait RIEN** (demande de l'utilisateur : « quand on modifie une
+série et qu'on clique ailleurs, ça ne fait rien — on ne la ferme pas »). Le fond sombre autour de la fiche
+(`#overlay`) n'a plus d'écouteur : ni fermeture, ni la question « Abandonner les modifications ? », fiche modifiée
+ou non, série nouvelle ou existante. Elle ne se quitte que par « ✕ », « Annuler » ou Échap (qui, lui, demande
+confirmation quand la fiche a changé : `fermerSiRienNeChange()`). **Ne pas remettre l'écouteur en croyant réparer un
+oubli** : sa disparition est signalée à l'endroit où il était (`js/app.js`), et `tests/cas/fiche_fond_test.php` le
+cherche. Les autres fenêtres gardent leur comportement : un clic à côté de « Abandonner ? » reste « non » (on
+reste dans la fiche) ; la confirmation de suppression et l'annonce du quota se ferment toujours à un clic à côté
+(rien n'y est à perdre). Vérifié dans le
+navigateur (ordinateur, vrais clics) : fond sans modification, fond après modification du titre (la saisie reste,
+aucune question), Échap (la question), « Continuer », « Annuler ».
 
 **Les quatre filtres d'image portent leur nombre, comme les statuts.**
 `compter_series()` lit `statut`, `favori` et `couverture` en UNE requête
@@ -861,9 +902,10 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   valeur sort de PHP par `e()`. Un identifiant est du texte choisi par quelqu'un
   d'autre.
 
-**Trente-deux réglages se changent depuis `admin.php`, et la base prime sur le
+**Trente-sept réglages se changent depuis `admin.php`, et la base prime sur le
 `.env`** (demande de l'utilisateur : « les limites et les durées, pas de mot de
-passe ni de connexion »). La table `reglage` ne porte que l'ÉCART : une ligne par
+passe ni de connexion » — puis, plus tard, la POLITIQUE de mot de passe : voir
+« La politique de mot de passe » plus bas). La table `reglage` ne porte que l'ÉCART : une ligne par
 réglage changé, et « ↩ .env » l'efface. `config.php` ouvre la base AVANT ses
 constantes (la connexion PDO est montée juste après `ADMIN_EMAIL`, qu'`erreur_fatale()`
 affiche), lit la table, et `env()` rend la valeur de la base s'il y en a une,
@@ -880,7 +922,8 @@ valeur de la base passe par le MÊME `max(…, min(…))` que si elle venait du 
 - **Ne sont PAS dans la liste, exprès** : les secrets et l'accès à la base (`DB_*`,
   `SMTP_*`, `CRON_TOKEN`, `UPLOAD_SECRET`, `GOOGLE_*`), `APP_URL`, **`ADMIN_EMAIL`**
   (la seconde clé de la suppression d'un compte : modifiable depuis la page, un intrus
-  ne serait plus arrêté), les mots de passe (`MDP_MIN`, `MDP_MAX`), `CONFIRMATION_DUREE`
+  ne serait plus arrêté), `MDP_MAX` (borne technique : le coût du hachage ; la longueur minimale
+  et les classes exigées, elles, SONT réglables), `CONFIRMATION_DUREE`
   et `CLE_ACCES_DEFI_DUREE`, ce qui protège l'IP du serveur face à MangaDex
   (`COUVERTURE_ESPACEMENT`, `_FILE_MAX`, `_TIMEOUT`), `IP_*`, `ASSETS_VERSION`, les
   images et l'import (retirés à la demande de l'utilisateur), les `LEGAL_*`. Un test

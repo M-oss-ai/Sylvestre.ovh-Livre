@@ -196,7 +196,7 @@ $csrf = jeton_csrf();
         <label for="mot_de_passe">Mot de passe</label>
         <div class="password-wrap">
           <input id="mot_de_passe" name="mot_de_passe" type="password" autocomplete="new-password" maxlength="<?= MDP_MAX ?>"
-                 data-regles-mdp data-mdp-min="<?= MDP_MIN ?>" data-mdp-max="<?= MDP_MAX ?>" data-identifiant="identifiant"
+                 <?= attributs_regles_mdp() ?> data-identifiant="identifiant"
                  <?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe', 'mdp-facultatif') ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="mot_de_passe"
                   aria-label="Afficher le mot de passe">👁️</button>

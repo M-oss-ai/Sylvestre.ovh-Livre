@@ -13,8 +13,12 @@
 
 declare(strict_types=1);
 
-putenv('MDP_MIN=3');                   // en dessous, la politique ne protège plus rien
-putenv('MDP_MAX=2');                   // un maximum sous le minimum : incohérent
+putenv('MDP_MIN=0');                   // le plancher est 1 (l'ancien 8 est levé à la demande de l'utilisateur)
+putenv('MDP_MAX=0');                   // un maximum sous le minimum : incohérent
+putenv('MDP_MAJ=');                    // vide : la classe reste exigée (seul « 0 » la désactive)
+putenv('MDP_MINUSCULE=non');           // un mot, une faute de frappe : exigée
+putenv('MDP_CHIFFRE=false');           // idem
+putenv('MDP_SPE=0');                   // le seul cas qui desserre : un « 0 »
 putenv('LIMITEUR_FENETRE=10');
 putenv('LIMITEUR_BLOCAGE_MAX=1');
 putenv('LIMITEUR_OUBLI=5');
@@ -56,23 +60,31 @@ require __DIR__ . '/../lanceur.php';
 
 groupe('Politique de mot de passe');
 
-test('MDP_MIN ne descend jamais sous 8', function () {
-    /* Quoi qu'on mette dans le .env : en dessous de 8 caractères, la
-       politique ne protège plus de rien. */
-    egale(8, MDP_MIN, 'le .env demandait 3');
+test('MDP_MIN ne descend jamais sous 1', function () {
+    /* Le plancher est 1 depuis que l'utilisateur a demandé « de 1 à 200 »
+       (il était de 8). 0 ou un nombre négatif ne désarme rien de plus : 1. */
+    egale(1, MDP_MIN, 'le .env demandait 0');
 });
 
 test('MDP_MAX reste au-dessus de MDP_MIN', function () {
     // Un maximum inférieur au minimum rendrait TOUT mot de passe invalide :
     // plus personne ne pourrait s'inscrire ni changer de mot de passe.
     vrai(MDP_MAX > MDP_MIN, 'le maximum dépasse le minimum');
-    egale(9, MDP_MAX, 'le .env demandait 2, on obtient MDP_MIN + 1');
+    egale(2, MDP_MAX, 'le .env demandait 0, on obtient MDP_MIN + 1');
 });
 
 test('le texte d aide ne peut pas mentir sur la règle appliquée', function () {
     /* Le message de longueur est construit à partir de MDP_MIN, jamais
-       écrit en dur : il suit donc toujours la règle réellement appliquée. */
-    contient((string) MDP_MIN, implode(' ', valider_mot_de_passe('Aa1!')), 'le message cite le vrai minimum');
+       écrit en dur : il suit donc toujours la règle réellement appliquée.
+       (Un seul espace : zéro caractère utile, sous le minimum de 1.) */
+    contient('au moins ' . MDP_MIN . ' caractères', implode(' ', valider_mot_de_passe(' ')), 'le message cite le vrai minimum');
+});
+
+test('seul « 0 » desserre une classe : vide, un mot ou une faute de frappe la laissent exigée', function () {
+    vrai(MDP_MAJ, 'MDP_MAJ vide : exigée');
+    vrai(MDP_MINUSCULE, 'MDP_MINUSCULE=non : exigée');
+    vrai(MDP_CHIFFRE, 'MDP_CHIFFRE=false : exigé');
+    faux(MDP_SPE, 'MDP_SPE=0 : seul cas qui desserre');
 });
 
 groupe('Limiteur anti force brute');

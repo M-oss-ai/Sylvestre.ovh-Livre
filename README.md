@@ -164,7 +164,7 @@ stockées telles quelles et le gain de poids disparaît.
 
 ## Configuration
 
-Tout se règle dans `.env`, documenté dans `.env.example`. Trente-deux de ces valeurs
+Tout se règle dans `.env`, documenté dans `.env.example`. Trente-sept de ces valeurs
 peuvent aussi se changer depuis l'administration (carte « Réglages ») : la valeur
 saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 
@@ -177,6 +177,7 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `UPLOAD_SECRET` | Sel des noms de fichiers envoyés |
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |
+| `MDP_MIN` · `MDP_MAJ` · `MDP_MINUSCULE` · `MDP_CHIFFRE` · `MDP_SPE` | Politique de mot de passe : longueur minimale (8, **de 1 à 200**), puis une majuscule, une minuscule, un chiffre, un caractère spécial (**1 = exigé, 0 = non** ; seul « 0 » desserre une règle). Modifiables depuis l'administration. Ne touchent que les nouveaux mots de passe |
 | `SERIES_PAGES_MAX` | Séries affichées par page dans la bibliothèque (30, de 1 à 100), puis un bouton « Afficher plus ». **0 : pas de pages**, toutes les séries sur une seule page. Modifiable depuis l'administration |
 | `ASSETS_VERSION` | Version des URL `css/` et `js/`. À incrémenter au déploiement |
 | `COUVERTURE_CANDIDATS` · `COUVERTURE_MAX_SERIES` | Séries examinées / proposées à la recherche de couverture |
@@ -360,6 +361,10 @@ touche efface du texte. Sur ordinateur, cette fiche s'ouvre donc sur son
 titre, et non plus dans le champ Titre : Tab y mène. Une nouvelle série
 garde le curseur dans le Titre.
 
+Un clic **à côté de la fiche** (sur le fond sombre) ne fait rien : ni fermeture, ni question, même si la fiche a
+été modifiée — un clic qui dérape ne fait pas perdre la saisie. On quitte la fiche par « ✕ », « Annuler » ou Échap
+(qui demande confirmation quand la fiche a changé).
+
 `carte.php` pose `tabindex="-1"` partout, `js/app.js` rend le sien à la
 carte active — et le garde à la carte qui la remplace après une action.
 
@@ -416,8 +421,8 @@ forfait** : on peut être bloqué et administrateur.
   confirmée ; un envoi raté ne défait pas le changement, la page le dit.
 - **Nommer ou révoquer** un administrateur. Jamais soi-même : un autre doit le faire,
   il en reste donc toujours un.
-- **Réglages** : trente-deux valeurs du `.env` — quotas, recherche de couverture, durées, freins
-  anti-force-brute — se changent depuis la page, sans renvoyer de fichier. Une valeur
+- **Réglages** : trente-sept valeurs du `.env` — quotas, recherche de couverture, durées, politique de mot
+  de passe, freins anti-force-brute — se changent depuis la page, sans renvoyer de fichier. Une valeur
   enregistrée **remplace celle du `.env`** et s'applique dès la requête suivante, pour tout le
   monde ; « ↩ .env » l'efface. Chaque réglage a ses bornes (3 à 20 tentatives et 60 à 600 s de
   blocage pour les freins, 0 à 365 jours pour les sessions, 1 à 168 h pour `CRON_HEURES`…).

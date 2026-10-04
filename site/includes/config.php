@@ -413,17 +413,32 @@ define('MDP_CONFIRM_BLOCAGE', max(1, (int) env('MDP_CONFIRM_BLOCAGE', '60')));
 /* ---------------------------------------------------------------------
    Politique de mot de passe
 
-   Seule la LONGUEUR est réglable. Les classes de caractères exigées
-   (majuscule, minuscule, chiffre, caractère spécial) restent codées dans
-   valider_mot_de_passe() : les rendre optionnelles demanderait de
-   reconstruire le texte d'aide au cas par cas, pour un réglage que
-   personne ne desserre dans le bon sens.
+   Réglable depuis admin.php (groupe « Mots de passe », demande de
+   l'utilisateur) :
+     MDP_MIN       la longueur minimale, de 1 à 200 caractères (défaut 8).
+                   L'ancien plancher de 8 est LEVÉ à sa demande : à 1, plus
+                   rien n'empêche un mot de passe d'un seul caractère.
+     MDP_MAJ       une majuscule est-elle exigée ?    1 = oui (défaut), 0 = non
+     MDP_MINUSCULE une minuscule ?                    idem
+     MDP_CHIFFRE   un chiffre ?                       idem
+     MDP_SPE       un caractère spécial ?             idem
+   (« MDP_MIN » désignait déjà la longueur : la règle des minuscules a donc
+   pour nom MDP_MINUSCULE.)
 
-   MDP_MIN ne peut pas descendre en dessous de 8, quoi qu'on mette dans
-   le .env : au-dessous, la politique ne protège plus de rien.
+   Une classe n'est désactivée QUE par un « 0 » : une ligne vide, « non »,
+   une faute de frappe la laissent exigée. Un .env mal rempli ne desserre
+   donc pas la politique par accident. Ces booléens sont rendus tels quels à
+   valider_mot_de_passe() et à js/mdp.js (attributs_regles_mdp()).
+
+   MDP_MAX n'est PAS réglable depuis la page : borne technique (coût du
+   hachage), toujours au-dessus de MDP_MIN.
    --------------------------------------------------------------------- */
-define('MDP_MIN', max(8, (int) env('MDP_MIN', '8')));
+define('MDP_MIN', min(200, max(1, (int) env('MDP_MIN', '8'))));
 define('MDP_MAX', min(4096, max(MDP_MIN + 1, (int) env('MDP_MAX', '200'))));
+define('MDP_MAJ', trim(env('MDP_MAJ', '1')) !== '0');
+define('MDP_MINUSCULE', trim(env('MDP_MINUSCULE', '1')) !== '0');
+define('MDP_CHIFFRE', trim(env('MDP_CHIFFRE', '1')) !== '0');
+define('MDP_SPE', trim(env('MDP_SPE', '1')) !== '0');
 
 /* ---------------------------------------------------------------------
    Images envoyées
