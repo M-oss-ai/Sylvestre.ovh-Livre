@@ -174,6 +174,10 @@ function admin_ligne(array $r, ?int $maintenant = null): array
         'email'          => (string) ($r['email'] ?? ''),
         'confirme'       => (int) ($r['email_verifie'] ?? 0) === 1,
         'photo'          => (int) ($r['a_photo'] ?? 0) === 1,
+        // L'adresse À AFFICHER : celle de la colonne si le site l'accepte, sinon '' (url_image_sure).
+        // `photo` dit seulement que la colonne n'est pas vide ; une valeur refusée (http://,
+        // javascript:, ../) donne photo = true et photo_url = '', et la page n'affiche rien.
+        'photo_url'      => url_image_sure((string) ($r['photo'] ?? '')),
         'forfait'        => $forfait,
         'admin'          => (int) ($r['admin'] ?? 0) === 1,
         'google'         => (int) ($r['google'] ?? 0) === 1,
@@ -229,7 +233,7 @@ function admin_totaux(array $lignes): array
 function admin_utilisateurs(PDO $pdo): array
 {
     $lignes = $pdo->query(
-        "SELECT u.id, u.identifiant, u.email, u.email_verifie, (u.photo <> '') AS a_photo,
+        "SELECT u.id, u.identifiant, u.email, u.email_verifie, u.photo, (u.photo <> '') AS a_photo,
                 u.forfait, u.admin, u.raison_blocage, u.bloque_le, u.cree_le,
                 (u.google_sub IS NOT NULL AND u.google_sub <> '') AS google,
                 (SELECT COUNT(*) FROM serie s WHERE s.utilisateur_id = u.id) AS nb_series
@@ -244,7 +248,7 @@ function admin_utilisateurs(PDO $pdo): array
 function admin_utilisateur(PDO $pdo, int $id): ?array
 {
     $req = $pdo->prepare(
-        "SELECT u.id, u.identifiant, u.email, u.email_verifie, (u.photo <> '') AS a_photo,
+        "SELECT u.id, u.identifiant, u.email, u.email_verifie, u.photo, (u.photo <> '') AS a_photo,
                 u.forfait, u.admin, u.raison_blocage, u.bloque_le, u.cree_le,
                 (u.google_sub IS NOT NULL AND u.google_sub <> '') AS google,
                 (SELECT COUNT(*) FROM serie s WHERE s.utilisateur_id = u.id) AS nb_series

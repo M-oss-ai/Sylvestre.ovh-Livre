@@ -234,7 +234,25 @@ function admin_oui_non(bool $oui, string $quoi): string
             </td>
             <td class="c-email"><?= e($c['email']) ?></td>
             <td class="c-confirme"><?= admin_oui_non($c['confirme'], 'Adresse confirmée') ?></td>
-            <td class="c-photo"><?= admin_oui_non($c['photo'], 'Photo de profil') ?></td>
+            <td class="c-photo">
+              <?php if ($c['photo_url'] !== ''): ?>
+                <!-- La photo du compte. referrerpolicy : l'adresse de CETTE page ne part pas chez
+                     l'hébergeur d'une image externe. L'adresse a passé url_image_sure() : https
+                     ou un fichier de uploads/, rien d'autre. -->
+                <button type="button" class="admin-photo-btn" data-photo="<?= e($c['photo_url']) ?>"
+                        aria-label="Agrandir la photo de <?= e($c['identifiant']) ?>">
+                  <img class="admin-photo" src="<?= e($c['photo_url']) ?>" alt="" width="40" height="40"
+                       loading="lazy" decoding="async" referrerpolicy="no-referrer">
+                </button>
+              <?php elseif ($c['photo']): ?>
+                <!-- La colonne n'est pas vide, mais le site refuse l'adresse (http://, chemin
+                     étranger…) : un ✓ ferait croire qu'on peut la voir. -->
+                <span class="admin-non" role="img" aria-label="Photo de profil : adresse refusée par le site"
+                      title="Une photo est enregistrée, mais son adresse est refusée par le site : elle n'est pas affichée.">⚠</span>
+              <?php else: ?>
+                <?= admin_oui_non(false, 'Photo de profil') ?>
+              <?php endif; ?>
+            </td>
             <td class="c-forfait">
               <select class="admin-forfait" aria-label="Forfait de <?= e($c['identifiant']) ?>">
                 <?php foreach (ADMIN_FORFAITS as $valeur => $libelle): ?>
@@ -340,6 +358,18 @@ function admin_oui_non(bool $oui, string $quoi): string
       <div class="grow"></div>
       <button type="button" id="admin-annuler" class="btn btn-ghost">Annuler</button>
       <button type="button" id="admin-valider" class="btn btn-primary">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- La photo d'un compte, en grand. -->
+<div id="admin-photo-overlay" class="overlay hidden">
+  <div class="modal small" role="dialog" aria-modal="true" aria-labelledby="admin-photo-legende">
+    <img id="admin-photo-grande" class="admin-photo-grande" src="" alt="" referrerpolicy="no-referrer">
+    <p id="admin-photo-legende" class="hint admin-photo-legende"></p>
+    <div class="modal-actions">
+      <div class="grow"></div>
+      <button type="button" id="admin-photo-fermer" class="btn btn-ghost">Fermer</button>
     </div>
   </div>
 </div>

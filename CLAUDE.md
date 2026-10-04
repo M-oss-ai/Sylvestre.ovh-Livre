@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (892 tests : 756 PHP en 52 fichiers, 136 JavaScript)
+php tests/lancer.php              # toute la suite (896 tests : 760 PHP en 52 fichiers, 136 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -544,6 +544,15 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   cible est relue avant d'être effacée (elle a pu devenir administrateur entre-temps).
   Pas son propre compte (par ses Paramètres), pas un administrateur (d'abord lui
   retirer ses droits). Le titulaire est prévenu APRÈS, s'il a une adresse confirmée.
+- **La photo du compte s'affiche dans la colonne « Photo »** (demande de l'utilisateur), en
+  vignette ronde que le clic agrandit. L'adresse affichée est `photo_url`, passée par
+  `url_image_sure()` (https, ou un fichier de `uploads/` — rien d'autre) ; `photo` dit seulement
+  que la colonne n'est pas vide, si bien qu'une valeur refusée (`http://`, `../`) donne un ⚠
+  qui l'explique plutôt qu'un ✓ trompeur. `referrerpolicy="no-referrer"` : l'adresse de la page
+  d'administration ne part pas chez l'hébergeur d'une image externe — une photo en lien est
+  chargée par le navigateur de l'administrateur, qui y montre donc son adresse IP, comme pour
+  les couvertures de la bibliothèque. Une image qui ne se charge pas (fichier disparu, adresse
+  morte) devient un ⚠ (`js/admin.js`, pas d'`onerror=` : la CSP l'interdit).
 - **La page ne fabrique aucun HTML à partir de données** : `js/admin.js` met à jour
   les lignes déjà rendues par PHP (`textContent`, attributs `data-`), et chaque
   valeur sort de PHP par `e()`. Un identifiant est du texte choisi par quelqu'un

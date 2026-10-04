@@ -214,6 +214,30 @@ test('une adresse non confirmée, pas de photo, pas administrateur', function ()
     vrai($l['google'] === false, 'compte e-mail');
 });
 
+test('la photo : l\'adresse à afficher est celle que le site accepte, jamais une autre', function () {
+    $l = admin_ligne(ligne_brute(['photo' => 'uploads/a1B2-c_3.webp', 'a_photo' => '1']));
+    egale('uploads/a1B2-c_3.webp', $l['photo_url'], 'un fichier du dossier uploads/');
+    $l = admin_ligne(ligne_brute(['photo' => 'https://exemple.test/moi.png', 'a_photo' => '1']));
+    egale('https://exemple.test/moi.png', $l['photo_url'], 'une adresse https');
+    vrai($l['photo'] === true, 'et le compte « a une photo »');
+});
+
+test('une photo refusée par le site n\'est jamais affichée, mais le compte reste « avec photo »', function () {
+    foreach (['http://exemple.test/moi.png', 'javascript:alert(1)', 'data:image/png;base64,AAAA', '../includes/config.php',
+              'uploads/../includes/config.php', 'uploads/a.php', '//exemple.test/moi.png', 'ftp://exemple.test/moi.png'] as $refusee) {
+        $l = admin_ligne(ligne_brute(['photo' => $refusee, 'a_photo' => '1']));
+        egale('', $l['photo_url'], var_export($refusee, true) . ' : rien à afficher');
+        vrai($l['photo'] === true, var_export($refusee, true) . ' : la colonne n\'est pourtant pas vide');
+    }
+});
+
+test('sans photo : ni adresse ni photo', function () {
+    $l = admin_ligne(ligne_brute(['photo' => '', 'a_photo' => '0']));
+    egale('', $l['photo_url'], 'pas d\'adresse');
+    vrai($l['photo'] === false, 'pas de photo');
+    egale('', admin_ligne([])['photo_url'], 'une ligne presque vide non plus');
+});
+
 test('un forfait inconnu ou vide est lu « standard » (la migration 10 pas rejouée)', function () {
     egale('standard', admin_ligne(ligne_brute(['forfait' => '']))['forfait'], 'vide');
     egale('standard', admin_ligne(ligne_brute(['forfait' => 'gratuit']))['forfait'], 'inconnu');
@@ -422,6 +446,25 @@ test('chaque ligne passe par e() : identifiant, adresse, raison', function () {
     }
     sans("<?= \$c['identifiant']", $page, 'jamais brut');
     sans("<?= \$c['email']", $page, 'jamais brut');
+});
+
+test('la photo du compte s\'affiche : lue en base, échappée, sans fuite de la page appelante', function () {
+    $page = lire('admin.php');
+    $admin = lire('includes/admin.php');
+    contient('u.photo, (u.photo <> \'\') AS a_photo', $admin, 'la liste lit la colonne photo');
+    egale(2, substr_count($admin, 'u.photo, (u.photo <> \'\') AS a_photo'), 'la liste ET la lecture d\'un compte (réponses d\'api.php)');
+    contient("e(\$c['photo_url'])", $page, 'l\'adresse sort échappée');
+    sans("<?= \$c['photo_url']", $page, 'jamais brute');
+    contient('referrerpolicy="no-referrer"', $page, 'l\'adresse de la page d\'administration ne part pas chez l\'hébergeur d\'une image externe');
+    contient('loading="lazy"', $page, 'les vignettes se chargent à la demande');
+    sans('onerror=', $page, 'la CSP interdit le JavaScript en ligne : le repli passe par js/admin.js');
+    contient('class="admin-photo-btn"', $page, 'la vignette est un bouton : on peut l\'agrandir au clavier');
+    contient('adresse refusée par le site', $page, 'une photo dont le site refuse l\'adresse le dit, au lieu d\'un ✓ trompeur');
+    contient('aria-label="Agrandir la photo de', $page, 'et il le dit');
+    contient('id="admin-photo-overlay"', $page, 'la fenêtre qui l\'agrandit existe');
+    $js = lire('js/admin.js');
+    contient('"admin-photo"', $js, 'js/admin.js attrape l\'échec d\'une photo (un fichier disparu)');
+    contient('removeAttribute("src")', $js, 'et ne garde pas l\'image chargée une fois la fenêtre fermée');
 });
 
 test('la page charge son script, et rien d\'en ligne', function () {

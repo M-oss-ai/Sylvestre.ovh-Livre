@@ -2057,3 +2057,30 @@ th[aria-sort="none"] .admin-tri { color: var(--text-dim); }
   .admin-enregistrer { grid-column: 1; }
   .admin-revenir { grid-column: 2; justify-self: end; }
 }
+
+/* La photo d'un compte : une vignette ronde dans la colonne « Photo », agrandie au clic. */
+.admin-photo-btn {
+  display: block;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  cursor: zoom-in;
+  line-height: 0;
+}
+.admin-photo-btn:hover,
+.admin-photo-btn:focus-visible { border-color: var(--gold); outline: none; }
+.admin-photo { display: block; width: 100%; height: 100%; object-fit: cover; }
+.admin-table .c-photo { vertical-align: middle; }
+.admin-photo-grande {
+  display: block;
+  max-width: 100%;
+  max-height: 65vh;
+  margin: 0 auto;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.25);
+}
+.admin-photo-legende { text-align: center; margin-top: 10px; overflow-wrap: anywhere; }

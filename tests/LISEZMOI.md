@@ -307,7 +307,9 @@ ET administrateur, `admin_forfait_valide` (liste fermée, suit l'`ENUM`),
 `admin_raison_erreur` (500 caractères, comptés en caractères), qui peut faire quoi à
 qui (pas ses propres droits, pas sa propre suppression d'ici, pas un
 administrateur), les dates « en jour », `admin_ligne`, `admin_pour_acteur`,
-`admin_totaux`, les phrases de la page. Les messages (`avis_compte_bloque`,
+`admin_totaux`, les phrases de la page, la photo du compte (l'adresse affichée est celle que
+`url_image_sure()` accepte, une adresse refusée — `http://`, `../`, `javascript:` — n'est
+jamais affichée mais le compte reste « avec photo »). Les messages (`avis_compte_bloque`,
 `avis_forfait_illimite`, `avis_forfait_standard`, `avis_suppression_a_confirmer`,
 `avis_compte_supprime_par_admin`) : ce qu'ils disent, et que le motif d'un blocage
 ou un identifiant ne devient jamais un lien ni une balise. Par lecture des sources :

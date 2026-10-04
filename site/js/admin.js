@@ -399,6 +399,62 @@ window.Admin = (() => {
       }
     });
 
+    /* ---- la photo d'un compte : une vignette, et sa version agrandie ---- */
+    const photoOverlay = document.getElementById("admin-photo-overlay");
+    const photoGrande = document.getElementById("admin-photo-grande");
+    const photoLegende = document.getElementById("admin-photo-legende");
+    const photoFermer = document.getElementById("admin-photo-fermer");
+    let photoRetour = null;
+
+    function photoOuvrir(bouton) {
+      const l = lireLigne(bouton.closest("tr"));
+      photoGrande.src = bouton.dataset.photo;
+      photoGrande.alt = "Photo de " + l.identifiant;
+      photoLegende.textContent = l.identifiant + " — " + l.email;
+      photoRetour = bouton;
+      photoOverlay.classList.remove("hidden");
+      photoFermer.focus();
+    }
+
+    function photoFermee() {
+      photoOverlay.classList.add("hidden");
+      photoGrande.removeAttribute("src");   // l'image cesse d'être chargée, elle n'est plus regardée
+      if (photoRetour && photoRetour.isConnected) photoRetour.focus();
+      photoRetour = null;
+    }
+
+    corps.addEventListener("click", (e) => {
+      const bouton = e.target.closest(".admin-photo-btn");
+      if (bouton) photoOuvrir(bouton);
+    });
+    photoFermer.addEventListener("click", photoFermee);
+    photoOverlay.addEventListener("click", (e) => {
+      if (e.target === photoOverlay) photoFermee();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (photoOverlay.classList.contains("hidden")) return;
+      if (e.key === "Escape") photoFermee();
+      else if (e.key === "Tab") L.piegerFocus(photoOverlay, e);
+    });
+
+    /* Une photo qui ne se charge pas : le fichier a disparu, ou l'adresse ne répond plus.
+       La vignette cède la place à un signe, et le dit — sans quoi on croirait la colonne vide. */
+    document.addEventListener(
+      "error",
+      (e) => {
+        const img = e.target;
+        if (!(img instanceof HTMLImageElement) || !img.classList.contains("admin-photo")) return;
+        const bouton = img.closest(".admin-photo-btn");
+        if (!bouton) return;
+        const signe = document.createElement("span");
+        signe.className = "admin-non";
+        signe.textContent = "⚠";
+        signe.title = "Image introuvable : le fichier a disparu, ou l'adresse ne répond plus.";
+        bouton.replaceWith(signe);
+      },
+      true // capture : l'évènement « error » d'une image ne remonte pas
+    );
+
     lignes().forEach(majBoutons);
     filtrer();
   }
