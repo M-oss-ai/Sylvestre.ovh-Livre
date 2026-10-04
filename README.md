@@ -314,18 +314,17 @@ Sous les filtres, une ligne dit **« 42 séries · 318 tomes lus »** : le nombr
 tomes lus — la somme du « Vous avez lu le tome x » de chaque série. Elle se met à jour à chaque série qui
 bouge (→, ←, création, suppression), sans appel au serveur, et disparaît tant qu'il n'y a aucune série.
 
-À droite, **« Trier par »** : trois boutons, du même style que les filtres — **Récentes**, **Tomes restants**,
-**Tome lu**. Une **phrase toujours visible** dit en clair l'ordre obtenu (« Les séries où il reste le moins de
-tomes à lire sont en premier »), avec en dessous ce que veut dire « tomes restants », et un bouton **⇅ Inverser**
-met le critère choisi dans l'autre sens (il n'apparaît pas pour « Récentes », qui n'en a pas) :
+**« Trier par »** est une rangée de boutons **dans la barre des filtres** : comme eux, elle tient sur une ligne qui
+coulisse sur le côté, et se cache quand on descend pour revenir quand on remonte. Trois boutons — **Plus récent**,
+**Tome**, **Tomes restants**. Le bouton choisi est allumé et porte une **flèche** : **↑ du plus petit au plus grand**,
+**↓ du plus grand au plus petit**. **Recliquer le bouton allumé inverse le sens.** Aucun texte d'explication : l'ordre se
+lit dans l'infobulle du bouton (survol, ou lecteur d'écran).
 
-| Bouton | Au premier clic | Après « Inverser » |
+| Bouton | Au premier clic | En recliquant |
 |---|---|---|
-| Récentes | les dernières séries modifiées en premier (l'ordre du serveur, le défaut) | — |
-| Tomes restants | le moins de tomes à lire en premier : les séries presque finies, « à jour » (0) tout en tête | le plus de tomes à lire en premier |
-| Tome lu | le tome lu le plus haut en premier | le tome lu le plus bas en premier |
-
-Cliquer le bouton déjà allumé ne retourne pas la liste : l'autre sens, c'est « Inverser ».
+| Plus récent ↓ | les dernières séries modifiées en premier (l'ordre du serveur, le défaut) | **Plus ancien ↑** : les plus anciennes en premier |
+| Tome ↓ | le tome lu le plus haut en premier | Tome ↑ : le plus bas en premier |
+| Tomes restants ↑ | le moins de tomes à lire en premier : les séries presque finies, « à jour » (0) tout en tête | Tomes restants ↓ : le plus de tomes à lire en premier |
 
 Les **tomes restants** sont ceux que MangaDex connaît (le plus haut tome connu, ou le dernier volume déclaré
 pour une série finie) et que vous n'avez pas lus. Pour une série qui continue, c'est donc le dernier tome
@@ -334,7 +333,6 @@ lue plus loin que MangaDex ne connaît — la série vient **en dernier**, quel 
 carte dit « il en reste N » ou « à jour » sous « Vous avez lu le tome x » ; le reste du temps, elle ne prend pas
 la place. Le tri se combine avec les filtres et la recherche (la pertinence passe d'abord), se **mémorise avec
 les filtres** (ce n'est pas un filtre : « Toutes » ne le remet pas à zéro) et ramène en haut de la liste.
-
 ### Une série qu'on modifie ne disparaît pas sous vos yeux
 
 Retirer une série des favoris pendant que le filtre « Favoris » est

@@ -319,18 +319,9 @@ main.bibliotheque { padding-top: 0; }
 /* Cachés derrière la barre du haut, filet compris. */
 .barre-filtres.escamotee { transform: translateY(calc(-100% - 2px)); }
 
-/* Le total de la bibliothèque (« 42 séries · 318 tomes lus ») à gauche, le tri à droite, et sous eux
-   la phrase qui dit l'ordre obtenu. Ce n'est pas un filtre : la ligne ne se colle pas, elle défile
-   avec la page. Le tri est fait de trois boutons du même style que les filtres (.filter-btn),
-   un peu plus petits ; sur téléphone ils passent sous le total. */
-.ligne-outils {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-  margin: 0 0 14px;
-}
+/* Le total de la bibliothèque (« 42 séries · 318 tomes lus »), sous les filtres. Ce n'est pas un
+   filtre : la ligne ne se colle pas, elle défile avec la page. */
+.ligne-outils { margin: 0 0 14px; }
 
 .stats-bibliotheque {
   margin: 0;
@@ -339,16 +330,18 @@ main.bibliotheque { padding-top: 0; }
   color: var(--text-dim);
 }
 
-.tri {
-  display: flex;
-  flex-wrap: wrap;
+/* Le tri : « Trier par », puis un bouton par critère (Plus récent, Tome, Tomes restants), dans la
+   barre collée. Une rangée comme celles des filtres (.filters) : UNE ligne qui coulisse sur le côté,
+   avec le même fondu sur le bord qui a de la suite. Les boutons réutilisent .filter-btn, en un peu
+   plus petit ; le bouton allumé porte une flèche (↑ du plus petit au plus grand, ↓ du plus grand au
+   plus petit), un clic sur lui l'inverse. */
+.filters-tri {
+  margin-top: 8px;
   align-items: center;
-  gap: 6px 8px;
-  min-width: 0;
-  margin-left: auto;
 }
 
 .tri-titre {
+  flex: none;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -361,44 +354,9 @@ main.bibliotheque { padding-top: 0; }
   font-size: 13px;
 }
 
-/* La phrase qui dit, en clair, l'ordre obtenu (js/app.js, Bibliotheque.aideTri), et « Inverser ».
-   Sur toute la largeur, sous le total et les boutons. */
-.tri-explication {
-  flex: 1 1 100%;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 4px 10px;
-}
-
-/* La phrase principale, en clair, avec « Inverser » à sa droite ; l'explication, plus petite,
-   dessous sur toute la largeur. */
-.tri-aide {
-  flex: 1 1 0;
-  min-width: 0;
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--text);
-}
-
-.tri-aide-detail {
-  flex: 1 1 100%;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-dim);
-}
-
-.tri-inverser { flex: none; white-space: nowrap; }
-
-/* Sur téléphone, les trois boutons tiennent sur UNE ligne, sous le total (pas un seul tout seul
-   sur la suivante). */
-@media (max-width: 480px) {
-  .tri { width: 100%; }
-  .tri-btn { padding: 6px 10px; }
-}
+/* La flèche : à la suite du nom, seulement sur le bouton allumé (vide ailleurs, sans place). */
+.tri-fleche { font-weight: 700; }
+.tri-fleche:empty { display: none; }
 /* « il en reste 3 » : le nombre de tomes restants, sur sa propre ligne sous « Vous avez lu le tome x »,
    pour qui trie par tomes restants. Sur sa ligne et non à la suite : dans une carte étroite il se
    coupait en deux (« il en reste / 3 »). Caché le reste du temps : la carte ne prend pas de place

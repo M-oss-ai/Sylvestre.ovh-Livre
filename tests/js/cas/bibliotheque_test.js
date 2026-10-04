@@ -6,7 +6,7 @@
    filtres déplié, le moment où « Toutes » s allume, les bords qui ont de
    la suite quand une rangée coulisse, les textes des
    quotas, la touche qui supprime et les champs où elle efface du texte,
-   le tri (tomes restants, tome lu) et le total « N séries · N tomes lus ».
+   le tri (plus récent, tome, tomes restants, et la flèche de chaque bouton) et le total « N séries · N tomes lus ».
    Le reste d'app.js branche ces décisions sur la page ; il se
    vérifie dans un navigateur, sur une vraie bibliothèque.
    ===================================================================== */
@@ -494,9 +494,9 @@ test("des valeurs absurdes ne donnent jamais NaN", () => {
 
 groupe("Bibliotheque.triValide() — un tri connu, ou le défaut");
 
-test("les cinq tris, et les trois critères des boutons de index.php", () => {
-  egale(["recentes", "restants-asc", "restants-desc", "tome-desc", "tome-asc"], B.TRIS, "les tris mémorisés");
-  egale(["recentes", "restants", "tome"], B.CRITERES, "les critères (un test PHP les compare aux boutons de index.php)");
+test("les six tris, et les trois critères des boutons de index.php (dans l ordre : Plus récent, Tome, Tomes restants)", () => {
+  egale(["recentes", "recentes-asc", "tome-desc", "tome-asc", "restants-asc", "restants-desc"], B.TRIS, "les tris mémorisés");
+  egale(["recentes", "tome", "restants"], B.CRITERES, "les critères (un test PHP les compare aux boutons de index.php)");
   for (const t of B.TRIS) egale(t, B.triValide(t), t + " reste tel quel");
 });
 
@@ -506,31 +506,57 @@ test("une mémoire illisible ou étrangère vaut « recentes », l ordre du serv
   }
 });
 
-groupe("Bibliotheque.critereTri(), triApres(), triInverse() — les boutons du tri");
+groupe("Bibliotheque.critereTri(), sensTri(), triInverse(), triApres() — les boutons et leur flèche");
 
 test("le critère d un tri, et « recentes » pour tout ce qui est inconnu", () => {
   egale("recentes", B.critereTri("recentes"), "recentes");
-  egale("restants", B.critereTri("restants-asc"), "restants-asc");
-  egale("restants", B.critereTri("restants-desc"), "restants-desc");
+  egale("recentes", B.critereTri("recentes-asc"), "recentes-asc : le même bouton « Plus récent »");
   egale("tome", B.critereTri("tome-desc"), "tome-desc");
   egale("tome", B.critereTri("tome-asc"), "tome-asc");
+  egale("restants", B.critereTri("restants-asc"), "restants-asc");
+  egale("restants", B.critereTri("restants-desc"), "restants-desc");
   egale("recentes", B.critereTri("n importe quoi"), "un tri inconnu");
   egale("recentes", B.critereTri(undefined), "rien");
   for (const t of B.TRIS) vrai(B.CRITERES.includes(B.critereTri(t)), t + " a un bouton");
 });
 
-test("choisir un autre critère démarre dans le sens le plus parlant", () => {
-  egale("restants-asc", B.triApres("recentes", "restants"), "tomes restants : le moins d abord (les séries presque finies)");
-  egale("tome-desc", B.triApres("recentes", "tome"), "tome lu : le plus haut d abord");
+test("le sens : ↑ « asc » du plus petit au plus grand, ↓ « desc » du plus grand au plus petit", () => {
+  egale("desc", B.sensTri("recentes"), "les plus récentes d abord : ↓");
+  egale("asc", B.sensTri("recentes-asc"), "les plus anciennes d abord : ↑");
+  egale("desc", B.sensTri("tome-desc"), "tome le plus haut d abord : ↓");
+  egale("asc", B.sensTri("tome-asc"), "tome le plus bas d abord : ↑");
+  egale("asc", B.sensTri("restants-asc"), "le moins de tomes restants d abord : ↑");
+  egale("desc", B.sensTri("restants-desc"), "le plus de tomes restants d abord : ↓");
+  egale("desc", B.sensTri("inconnu"), "un tri inconnu vaut le défaut, donc ↓");
+});
+
+test("Inverser : le même critère dans l autre sens, deux fois = le tri d origine", () => {
+  egale("recentes-asc", B.triInverse("recentes"), "recentes → recentes-asc");
+  egale("recentes", B.triInverse("recentes-asc"), "et retour");
+  egale("restants-desc", B.triInverse("restants-asc"), "restants asc → desc");
+  egale("restants-asc", B.triInverse("restants-desc"), "restants desc → asc");
+  egale("tome-asc", B.triInverse("tome-desc"), "tome desc → asc");
+  egale("tome-desc", B.triInverse("tome-asc"), "tome asc → desc");
+  for (const t of B.TRIS) egale(t, B.triInverse(B.triInverse(t)), t + " : aller-retour");
+  for (const t of B.TRIS) egale(B.critereTri(t), B.critereTri(B.triInverse(t)), t + " : le critère ne change pas");
+  for (const t of B.TRIS) differe(B.sensTri(t), B.sensTri(B.triInverse(t)), t + " : le sens change");
+  egale("recentes-asc", B.triInverse("n importe quoi"), "un tri inconnu vaut le défaut : on l inverse");
+});
+
+test("choisir un autre bouton démarre dans le sens le plus parlant", () => {
+  egale("tome-desc", B.triApres("recentes", "tome"), "Tome : le plus haut d abord");
+  egale("restants-asc", B.triApres("recentes", "restants"), "Tomes restants : le moins d abord (les séries presque finies)");
   egale("restants-asc", B.triApres("tome-asc", "restants"), "depuis un autre critère, quel que soit son sens");
   egale("tome-desc", B.triApres("restants-desc", "tome"), "idem");
-  egale("recentes", B.triApres("restants-desc", "recentes"), "Récentes revient à l ordre du serveur");
+  egale("recentes", B.triApres("restants-desc", "recentes"), "Plus récent revient à l ordre du serveur, ↓");
   egale("recentes", B.triApres("tome-asc", "recentes"), "idem");
 });
 
-test("cliquer le critère déjà choisi ne retourne PAS la liste : l autre sens est le bouton Inverser", () => {
-  for (const t of B.TRIS) egale(t, B.triApres(t, B.critereTri(t)), t + " : rien ne change");
-  egale("restants-desc", B.triApres("restants-desc", "restants"), "le sens choisi est conservé");
+test("recliquer le bouton DÉJÀ allumé inverse le sens (plus de bouton Inverser : la flèche suffit)", () => {
+  for (const t of B.TRIS) egale(B.triInverse(t), B.triApres(t, B.critereTri(t)), t + " : le sens s inverse");
+  egale("restants-desc", B.triApres("restants-asc", "restants"), "Tomes restants ↑ → ↓");
+  egale("recentes-asc", B.triApres("recentes", "recentes"), "Plus récent ↓ → ↑ (« Plus ancien »)");
+  egale("recentes", B.triApres(B.triApres("recentes", "recentes"), "recentes"), "et un clic de plus revient");
 });
 
 test("un critère inconnu ne change rien", () => {
@@ -539,60 +565,79 @@ test("un critère inconnu ne change rien", () => {
   egale("recentes", B.triApres("mémoire illisible", "titre"), "et une mémoire illisible retombe sur le défaut");
 });
 
-test("Inverser : le même critère dans l autre sens, deux fois = le tri d origine", () => {
-  egale("restants-desc", B.triInverse("restants-asc"), "restants asc → desc");
-  egale("restants-asc", B.triInverse("restants-desc"), "restants desc → asc");
-  egale("tome-asc", B.triInverse("tome-desc"), "tome desc → asc");
-  egale("tome-desc", B.triInverse("tome-asc"), "tome asc → desc");
-  for (const t of B.TRIS) egale(t, B.triInverse(B.triInverse(t)), t + " : aller-retour");
-  for (const t of B.TRIS) egale(B.critereTri(t), B.critereTri(B.triInverse(t)), t + " : le critère ne change pas");
-});
+groupe("Bibliotheque.etatBoutonTri() — le nom, la flèche et l infobulle de chaque bouton");
 
-test("« recentes » n a pas d autre sens : Inverser le laisse tel quel", () => {
-  egale("recentes", B.triInverse("recentes"), "recentes");
-  egale("recentes", B.triInverse("inconnu"), "un tri inconnu");
-});
-
-groupe("Bibliotheque.aideTri() — la phrase qui dit l ordre obtenu");
-
-test("une phrase claire pour chacun des cinq tris, toutes différentes", () => {
-  const phrases = B.TRIS.map((t) => B.aideTri(t).sens);
-  for (let i = 0; i < phrases.length; i++) {
-    vrai(typeof phrases[i] === "string" && phrases[i].length > 20, B.TRIS[i] + " a une vraie phrase");
-    vrai(phrases[i].endsWith("."), B.TRIS[i] + " : une phrase qui finit");
+test("au départ : « Plus récent ↓ » allumé, les deux autres sans flèche", () => {
+  const r = B.etatBoutonTri("recentes", "recentes");
+  vrai(r.actif, "allumé");
+  egale("Plus récent", r.libelle, "son nom");
+  egale("↓", r.fleche, "les plus récentes d abord : ↓");
+  for (const c of ["tome", "restants"]) {
+    const e = B.etatBoutonTri(c, "recentes");
+    faux(e.actif, c + " éteint");
+    egale("", e.fleche, c + " : aucune flèche sur un bouton éteint");
   }
-  egale(B.TRIS.length, new Set(phrases).size, "deux tris ne se décrivent jamais pareil : le sens se lit");
+  egale("Tome", B.etatBoutonTri("tome", "recentes").libelle, "Tome");
+  egale("Tomes restants", B.etatBoutonTri("restants", "recentes").libelle, "Tomes restants");
 });
 
-test("elle dit le sens : le moins / le plus de tomes à lire, le tome le plus haut / le plus bas", () => {
-  contient("le moins de tomes à lire", B.aideTri("restants-asc").sens, "restants-asc");
-  contient("le plus de tomes à lire", B.aideTri("restants-desc").sens, "restants-desc");
-  contient("le tome le plus haut", B.aideTri("tome-desc").sens, "tome-desc");
-  contient("le tome le plus bas", B.aideTri("tome-asc").sens, "tome-asc");
-  contient("modifiées en dernier", B.aideTri("recentes").sens, "recentes");
-  for (const t of B.TRIS) contient("sont en premier", B.aideTri(t).sens, t + " : dit qui passe en premier");
+test("la flèche suit le sens du bouton allumé, et seulement le sien", () => {
+  egale("↑", B.etatBoutonTri("restants", "restants-asc").fleche, "Tomes restants, le moins d abord : ↑");
+  egale("↓", B.etatBoutonTri("restants", "restants-desc").fleche, "le plus d abord : ↓");
+  egale("↓", B.etatBoutonTri("tome", "tome-desc").fleche, "Tome, le plus haut d abord : ↓");
+  egale("↑", B.etatBoutonTri("tome", "tome-asc").fleche, "le plus bas d abord : ↑");
+  egale("", B.etatBoutonTri("recentes", "restants-asc").fleche, "les autres boutons n en ont pas");
+  egale("", B.etatBoutonTri("tome", "restants-asc").fleche, "idem");
 });
 
-test("pour les tomes restants le détail dit ce que c est, et où vont les séries sans information", () => {
-  for (const t of ["restants-asc", "restants-desc"]) {
-    const d = B.aideTri(t).detail;
-    contient("déjà parus", d, t + " : ce que c est");
-    contient("MangaDex", d, t + " : d où ça vient");
-    contient("à la fin", d, t + " : les séries dont on ne le sait pas");
+test("« Plus récent » devient « Plus ancien » quand on l inverse, et seulement lui", () => {
+  const r = B.etatBoutonTri("recentes", "recentes-asc");
+  vrai(r.actif, "toujours allumé");
+  egale("Plus ancien", r.libelle, "le nom suit le sens");
+  egale("↑", r.fleche, "les plus anciennes d abord : ↑");
+  egale("Plus récent", B.etatBoutonTri("recentes", "tome-desc").libelle, "éteint : son nom habituel");
+  egale("Plus récent", B.etatBoutonTri("recentes", "recentes").libelle, "allumé dans le sens habituel");
+  egale("Tome", B.etatBoutonTri("tome", "tome-asc").libelle, "Tome garde son nom, seule la flèche change");
+  egale("Tomes restants", B.etatBoutonTri("restants", "restants-desc").libelle, "idem");
+});
+
+test("l infobulle dit l ordre en clair : un bouton allumé dit son ordre et qu un clic l inverse", () => {
+  const a = B.etatBoutonTri("restants", "restants-asc").aide;
+  contient("le moins de tomes restants d'abord", a, "son ordre");
+  contient("Cliquer pour inverser", a, "et ce que fait un clic");
+  contient("le plus de tomes restants d'abord", B.etatBoutonTri("restants", "restants-desc").aide, "l autre sens");
+  contient("le tome lu le plus haut d'abord", B.etatBoutonTri("tome", "tome-desc").aide, "tome ↓");
+  contient("le tome lu le plus bas d'abord", B.etatBoutonTri("tome", "tome-asc").aide, "tome ↑");
+  contient("les plus anciennes d'abord", B.etatBoutonTri("recentes", "recentes-asc").aide, "plus ancien");
+});
+
+test("un bouton éteint dit l ordre qu un clic donnerait, sans parler d inverser", () => {
+  const e = B.etatBoutonTri("restants", "recentes").aide;
+  contient("le moins de tomes restants d'abord", e, "il démarre par le moins de tomes");
+  faux(e.includes("inverser"), "rien à inverser : il n est pas allumé");
+  contient("le tome lu le plus haut d'abord", B.etatBoutonTri("tome", "recentes").aide, "Tome démarre par le plus haut");
+  contient("les plus récentes d'abord", B.etatBoutonTri("recentes", "tome-asc").aide, "Plus récent");
+});
+
+test("chaque bouton nomme la chose dans son infobulle (lue aussi par les lecteurs d écran)", () => {
+  for (const c of B.CRITERES) {
+    for (const t of B.TRIS) {
+      const e = B.etatBoutonTri(c, t);
+      vrai(e.aide.startsWith(e.libelle + " : "), c + " / " + t + " : l aide commence par le nom du bouton");
+      vrai(e.aide.endsWith("."), c + " / " + t + " : une phrase qui finit");
+    }
   }
-  for (const t of ["recentes", "tome-desc", "tome-asc"]) egale("", B.aideTri(t).detail, t + " : rien à expliquer de plus");
 });
 
-test("le détail du sens « moins d abord » et du sens « plus d abord » est le même : inverser ne change que la première phrase", () => {
-  egale(B.aideTri("restants-asc").detail, B.aideTri("restants-desc").detail, "même explication");
-  differe(B.aideTri("restants-asc").sens, B.aideTri("restants-desc").sens, "mais le sens, lui, change");
+test("un critère inconnu n a rien à montrer", () => {
+  egale({ actif: false, libelle: "", fleche: "", aide: "" }, B.etatBoutonTri("titre", "tome-asc"), "inconnu");
+  egale({ actif: false, libelle: "", fleche: "", aide: "" }, B.etatBoutonTri(undefined, "tome-asc"), "rien");
 });
 
-test("un tri inconnu se décrit comme le défaut", () => {
-  egale(B.aideTri("recentes"), B.aideTri("n importe quoi"), "inconnu");
-  egale(B.aideTri("recentes"), B.aideTri(undefined), "rien");
+test("un tri inconnu se montre comme le défaut", () => {
+  egale(B.etatBoutonTri("recentes", "recentes"), B.etatBoutonTri("recentes", "n importe quoi"), "inconnu");
+  egale(B.etatBoutonTri("tome", "recentes"), B.etatBoutonTri("tome", undefined), "rien");
 });
-
 groupe("Bibliotheque.comparerTri() — trier par tomes restants ou par tome lu");
 
 const serie = (tome, restants) => ({ tome, restants });
@@ -604,18 +649,26 @@ const trier = (tri, series) => series
   .map(([s]) => s.nom);
 
 const SERIES = [
-  { nom: "A", tome: 10, restants: 5 },
-  { nom: "B", tome: 3, restants: 0 },
-  { nom: "C", tome: 25, restants: null },
-  { nom: "D", tome: 7, restants: 12 },
-  { nom: "E", tome: 3, restants: 5 },
-  { nom: "F", tome: 40, restants: null },
+  { nom: "A", tome: 10, restants: 5, ordre: 0 },
+  { nom: "B", tome: 3, restants: 0, ordre: 1 },
+  { nom: "C", tome: 25, restants: null, ordre: 2 },
+  { nom: "D", tome: 7, restants: 12, ordre: 3 },
+  { nom: "E", tome: 3, restants: 5, ordre: 4 },
+  { nom: "F", tome: 40, restants: null, ordre: 5 },
 ];
 
 test("par défaut : aucune préférence, l ordre du serveur décide", () => {
   egale(0, B.comparerTri("recentes", serie(1, 9), serie(50, 0)), "recentes");
   egale(0, B.comparerTri("inconnu", serie(1, 9), serie(50, 0)), "un tri inconnu vaut le défaut");
   egale(["A", "B", "C", "D", "E", "F"], trier("recentes", SERIES), "la liste ne bouge pas");
+});
+
+test("les plus anciennes d abord : l ordre du serveur à l envers, y compris pour des rangs négatifs (séries créées depuis le chargement)", () => {
+  egale(["F", "E", "D", "C", "B", "A"], trier("recentes-asc", SERIES), "du dernier rang au premier");
+  vrai(B.comparerTri("recentes-asc", { ordre: 0 }, { ordre: 3 }) > 0, "la plus récente (rang 0) passe après");
+  vrai(B.comparerTri("recentes-asc", { ordre: -2 }, { ordre: 0 }) > 0, "une série créée à l instant (rang négatif) est la plus récente : en dernier");
+  egale(0, B.comparerTri("recentes-asc", { ordre: 4 }, { ordre: 4 }), "même rang : égalité");
+  egale(0, B.comparerTri("recentes-asc", {}, {}), "des rangs absents ne donnent jamais NaN");
 });
 
 test("tomes restants, le moins d abord : à jour (0) en tête, puis 5, 5, 12 ; l inconnu à la fin", () => {

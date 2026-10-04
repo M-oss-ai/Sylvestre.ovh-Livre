@@ -432,18 +432,19 @@ MangaDex, le cron sans `fonctions.php`, la migration 13 rejouable.
 nombres absurdes). Le branchement sur la page (recherche, filtres, « Afficher plus » à l'écran) se vérifie
 à la main : le banc ne charge pas la grille.
 
-**Couvert, le total et le tri** — `carte_tri_test.php` et `Bibliotheque.triValide()`, `critereTri()`, `triApres()`,
-`triInverse()`, `aideTri()`, `comparerTri()`, `statistiques()` dans
-`tests/js/cas/bibliotheque_test.js`. `serie_restants()` (le plus haut tome connu moins le tome lu ; `null` quand on ne
-sait pas — pas liée, ou lue au-delà de MangaDex —, jamais 0 ni négatif), `serie_restants_texte()`, `statistiques_series()` et
-son miroir JavaScript sur les mêmes cas (0 et 1 au singulier), `data-restants` et « il en reste N » dans `carte_html()`,
-les boutons de tri de `index.php` (`data-critere`) comparés à `Bibliotheque.CRITERES`, un seul bouton allumé au départ, la phrase
-visible et « Inverser » caché sous « Récentes ». Côté navigateur : les cinq tris sur des séries à jour, inconnues, ex aequo ;
-**l'inconnu passe toujours après, dans les deux sens** ; l'antisymétrie ; **le clic sur le critère déjà choisi ne retourne pas
-la liste**, « Inverser » deux fois revient au tri d'origine ; une phrase par tri, toutes différentes, qui dit le sens. Le
-branchement (boutons, « Inverser », mémoire, recherche combinée, total qui bouge au « → ») s'est vérifié à la main dans le
-navigateur.
-
+**Couvert, le total et le tri** — `carte_tri_test.php` et `Bibliotheque.triValide()`, `critereTri()`, `sensTri()`,
+`triInverse()`, `triApres()`, `etatBoutonTri()`, `comparerTri()`, `statistiques()` dans `tests/js/cas/bibliotheque_test.js`.
+`serie_restants()` (le plus haut tome connu moins le tome lu ; `null` quand on ne sait pas — pas liée, ou lue au-delà de
+MangaDex —, jamais 0 ni négatif), `serie_restants_texte()`, `statistiques_series()` et son miroir JavaScript sur les mêmes
+cas (0 et 1 au singulier), `data-restants` et « il en reste N » dans `carte_html()`. Côté page : les boutons de tri
+(`data-critere`) comparés à `Bibliotheque.CRITERES`, dans l'ordre « Plus récent », « Tome », « Tomes restants » ; un seul
+allumé au départ, avec sa flèche ↓ ; la rangée DANS `#barre-filtres` (avant le total, qui ne se colle pas) ; **aucune phrase,
+aucun « Inverser », aucun menu** (`sans`). Côté navigateur : les six tris sur des séries à jour, inconnues, ex aequo ;
+**l'inconnu passe toujours après, dans les deux sens** ; l'antisymétrie ; « Plus ancien » = l'ordre du serveur à l'envers,
+rangs négatifs compris ; **recliquer le bouton allumé inverse le sens**, deux fois = le tri d'origine ; la flèche sur le seul
+bouton allumé ; « Plus récent » ↔ « Plus ancien » ; l'infobulle de chaque bouton. Le branchement (clics, flèche, mémoire,
+recherche combinée, barre qui se cache, rangée qui coulisse) s'est vérifié à la main dans le navigateur — le défilement avec
+la vraie molette seulement : voir CLAUDE.md.
 **Couvert, notifications push** — `push_test.php`, `tests/js/cas/push_test.js`,
 `tests/js/cas/sw_test.js`. Le chiffrement contre l'exemple de la RFC 8291
 (octet pour octet), un aller-retour avec un déchiffrement écrit à part, un message

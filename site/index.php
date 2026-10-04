@@ -147,34 +147,31 @@ $flash = flash_prendre();
       <button class="filter-btn" data-image="<?= e($cle) ?>" type="button" aria-pressed="false"><?= e($libelle) ?><span class="count" id="count-image-<?= e($cle) ?>"><?= (int) $compte['image-' . $cle] ?></span></button>
     <?php endforeach; ?>
   </div>
+
+  <!-- Le tri : « Trier par », puis un bouton par critère, dans la barre collée comme les filtres et,
+       comme eux, sur UNE ligne qui coulisse sur le côté. Pas de phrase d'explication (demande de
+       l'utilisateur : trop d'infos) : le bouton allumé porte une flèche qui dit le sens — ↑ du plus petit
+       au plus grand, ↓ du plus grand au plus petit —, un clic sur lui l'inverse, et « Plus récent » devient
+       « Plus ancien ». js/app.js (Bibliotheque.etatBoutonTri) remplit les noms, les flèches et les
+       infobulles ; ce qui est écrit ici est l'état du tri par défaut. Les critères (data-critere) sont
+       ceux de Bibliotheque.CRITERES : un test les compare. Caché tant qu'il n'y a aucune série. -->
+  <nav class="filters filters-tri<?= $series ? '' : ' hidden' ?>" id="tri-rangee" aria-label="Trier">
+    <span class="tri-titre">Trier par</span>
+    <button type="button" class="filter-btn tri-btn active" data-critere="recentes" aria-pressed="true"
+            title="Les plus récentes d'abord"><span class="tri-libelle">Plus récent</span><span class="tri-fleche" aria-hidden="true">↓</span></button>
+    <button type="button" class="filter-btn tri-btn" data-critere="tome" aria-pressed="false"
+            title="Le tome lu le plus haut d'abord"><span class="tri-libelle">Tome</span><span class="tri-fleche" aria-hidden="true"></span></button>
+    <button type="button" class="filter-btn tri-btn" data-critere="restants" aria-pressed="false"
+            title="Le moins de tomes restants d'abord"><span class="tri-libelle">Tomes restants</span><span class="tri-fleche" aria-hidden="true"></span></button>
+  </nav>
   </div>
 
   <!-- Le total de la bibliothèque (séries, tomes lus : js/app.js le tient à jour à chaque
-       série qui bouge) et le tri. Hors de la barre collée : ce n'est pas un filtre, on ne le
-       cherche pas en descendant. Caché tant qu'il n'y a aucune série.
-       Le tri : trois boutons (le critère) du même style que les filtres, une phrase TOUJOURS
-       visible qui dit en clair l'ordre obtenu, et « Inverser » pour l'autre sens. Les
-       critères (data-critere) sont ceux de Bibliotheque.CRITERES (js/app.js) : un test les
-       compare. La phrase de départ est celle du tri par défaut ; js/app.js la remplace par
-       celle du tri mémorisé. -->
+       série qui bouge). Hors de la barre collée : ce n'est pas un filtre, on ne le cherche pas
+       en descendant. Caché tant qu'il n'y a aucune série. -->
   <div id="ligne-outils" class="ligne-outils<?= $series ? '' : ' hidden' ?>">
     <p id="stats-bibliotheque" class="stats-bibliotheque"
        title="Les tomes lus : la somme du dernier tome lu de chaque série"><?= e($stats['texte']) ?></p>
-    <div class="tri" role="group" aria-labelledby="tri-titre">
-      <span id="tri-titre" class="tri-titre">Trier par</span>
-      <button type="button" class="filter-btn tri-btn active" data-critere="recentes" aria-pressed="true"
-              title="Les séries modifiées en dernier d'abord">Récentes</button>
-      <button type="button" class="filter-btn tri-btn" data-critere="restants" aria-pressed="false"
-              title="Combien de tomes il vous reste à lire (d'après MangaDex)">Tomes restants</button>
-      <button type="button" class="filter-btn tri-btn" data-critere="tome" aria-pressed="false"
-              title="Le dernier tome que vous avez lu">Tome lu</button>
-    </div>
-    <div class="tri-explication">
-      <p id="tri-aide-sens" class="tri-aide" aria-live="polite">Les séries modifiées en dernier sont en premier.</p>
-      <button type="button" id="tri-inverser" class="btn btn-ghost small tri-inverser hidden"
-              title="Mettre l'ordre dans l'autre sens">⇅ Inverser</button>
-      <p id="tri-aide-detail" class="tri-aide-detail hidden"></p>
-    </div>
   </div>
 
   <!-- La place restante, annoncée à l'approche de la limite (voir

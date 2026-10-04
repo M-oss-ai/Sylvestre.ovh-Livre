@@ -151,20 +151,37 @@ test('les boutons de tri (data-critere) sont exactement les critères de Bibliot
     egale($criteres, $valeurs[1], 'les critères sont ceux qu on déduit des tris : aucun bouton sans tri, aucun tri sans bouton');
 });
 
-test('un seul bouton de tri est allumé au départ, et le groupe est nommé (aria-pressed, role=group)', function () use ($index) {
-    vrai(substr_count($index, 'class="filter-btn tri-btn active"') === 1, 'un seul actif : « Récentes »');
+test('trois boutons dans l ordre « Plus récent », « Tome », « Tomes restants », dont un seul allumé au départ', function () use ($index) {
+    vrai(substr_count($index, 'class="filter-btn tri-btn active"') === 1, 'un seul actif : « Plus récent »');
     vrai(substr_count($index, 'class="filter-btn tri-btn') === 3, 'trois boutons');
     contient('data-critere="recentes" aria-pressed="true"', $index, 'dit aux lecteurs d écran lequel est choisi');
-    contient('role="group" aria-labelledby="tri-titre"', $index, 'le groupe est nommé « Trier par »');
+    motif('~data-critere="recentes".*?Plus récent.*?data-critere="tome".*?>Tome<.*?data-critere="restants".*?Tomes restants~s', $index, 'dans l ordre de la demande');
+    contient('<span class="tri-libelle">Plus récent</span><span class="tri-fleche" aria-hidden="true">↓</span>', $index, 'le tri par défaut porte déjà sa flèche : les plus récentes d abord, ↓');
+    vrai(substr_count($index, '<span class="tri-fleche" aria-hidden="true"></span>') === 2, 'les deux autres boutons n en ont pas (vide, sans place)');
 });
 
-test('la phrase qui dit l ordre est toujours là, et « Inverser » est caché tant que le tri est « Récentes »', function () use ($index) {
-    contient('id="tri-aide-sens" class="tri-aide" aria-live="polite"', $index, 'visible (pas visually-hidden), annoncée quand elle change');
-    sans('visually-hidden', substr($index, (int) strpos($index, 'id="tri-aide-sens"'), 400), 'pas réservée aux lecteurs d écran : tout le monde la lit');
-    contient('id="tri-aide-detail" class="tri-aide-detail hidden"', $index, 'l explication, cachée tant qu il n y en a pas');
-    contient('id="tri-inverser" class="btn btn-ghost small tri-inverser hidden"', $index, 'caché au départ : le tri par défaut n a pas d autre sens');
+test('les boutons sont DANS la barre collée, sur une rangée qui coulisse comme les filtres', function () use ($index) {
+    $barre = strpos($index, 'id="barre-filtres"');
+    $tri   = strpos($index, 'id="tri-rangee"');
+    $total = strpos($index, 'id="ligne-outils"');
+    vrai($barre !== false && $tri !== false && $total !== false, 'les trois sont dans la page');
+    vrai($barre < $tri && $tri < $total, 'après les filtres, avant le total : donc DANS la barre, qui se ferme avant le total');
+    motif('~<nav class="filters filters-tri<\?= \$series \? \'\' : \' hidden\' \?>" id="tri-rangee" aria-label="Trier">~', $index,
+        'une rangée « .filters » (une ligne, défilement sur le côté, fondu), cachée tant qu il n y a aucune série');
+    motif('~<span class="tri-titre">Trier par</span>~', $index, 'le titre de la rangée, qui coulisse avec elle');
+    // La barre se ferme APRÈS la rangée du tri et AVANT le total : le total ne se colle pas.
+    $apres = substr($index, $tri, $total - $tri);
+    vrai(substr_count($apres, '</nav>') === 1 && substr_count($apres, '</div>') >= 1, 'la rangée se ferme, puis la barre');
 });
 
+test('aucune phrase d explication, aucun bouton « Inverser » : trop d infos (demande de l utilisateur)', function () use ($index) {
+    sans('tri-aide', $index, 'plus de phrase sous les boutons');
+    sans('tri-explication', $index, 'ni de bloc qui la portait');
+    sans('id="tri-inverser"', $index, 'plus de bouton Inverser : recliquer le bouton allumé suffit');
+    sans('Les séries où il reste', $index, 'ni la phrase des tomes restants');
+    sans('d\'après MangaDex) que vous n\'avez pas lus', $index, 'ni son explication');
+    sans('<select', substr($index, (int) strpos($index, 'id="tri-rangee"'), 1500), 'et plus de menu déroulant');
+});
 test('le total a son emplacement', function () use ($index) {
     contient('id="stats-bibliotheque"', $index, 'le total, que js/app.js tient à jour');
     contient('statistiques_series($series)', $index, 'rendu par la même fonction que celle testée plus haut');
