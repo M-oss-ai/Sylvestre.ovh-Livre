@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1117 tests : 945 PHP en 56 fichiers, 172 JavaScript)
+php tests/lancer.php              # toute la suite (1128 tests : 956 PHP en 56 fichiers, 172 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -615,7 +615,18 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   faux d'une série dont on n'avait pas lu les couvertures. Le message est un `p.card-fin` du CORPS de la carte,
   entre `.card-progress` et `.card-actions` ; la couverture ne garde que « Tome N à emprunter » quand
   `serie_au_bout()` est faux. **Pour TOUTE série liée, quel que soit son statut** (« Terminée »,
-  « Abandonnée », « Envie » aussi). **Les données** : `publication` (migration 16, `VARCHAR(12)`, pas un
+  « Abandonnée », « Envie » aussi). **Le « ⓘ »** (demande de l'utilisateur : « un petit message clair ») :
+  `serie_fin_info()` (pure) rend `['texte', 'aide']` ; `serie_fin_etiquette()` n'en est que le texte. Chaque
+  mention a une explication d'au moins une phrase qui dit QUI parle (« MangaDex indique que… » : des données de
+  bénévoles, pas des certitudes du site), avec les mêmes chiffres que la mention ; « Série terminée » dit en plus
+  qu'il ne faut pas la confondre avec le statut « Terminée » de la pastille (le vôtre). Pas de mention, pas de
+  « ⓘ » vide. Dans la carte : un `<button class="card-info" aria-expanded aria-controls="aide-fin-<id>">` après le
+  texte, et le `<p class="card-fin-aide hidden" role="note">` juste dessous ; `js/app.js` plie/déplie
+  (`hidden` + `aria-expanded`), sans appel serveur et sans garde `BLOQUE` (un compte bloqué s'en sert : il
+  explique, il ne change rien). **Ni `data-action` ni sélection de la carte** (le clic est exclu du clic de sélection)
+  ; **`tabindex="-1"` comme tout ce qui se focalise dans une carte, rendu à la carte active** par `FOCUSABLES_CARTE`
+  (qui compte donc `.card-info`). Replié au départ ; une carte refaite (relevé, avancer…) le replie. Pas de bulle
+  flottante : l'explication s'insère dans la carte, ce qui marche au toucher comme à la souris. **Les données** : `publication` (migration 16, `VARCHAR(12)`, pas un
   `ENUM` : valeur contrôlée par `publication_connue()`), `tome_final` et `publication_le` (migration 17). Le
   relevé les lit — un appel `/manga`, la première fois puis toutes les `NOUVEAUTE_PUBLICATION_JOURS` jours
   (`nouveautes_publication_ecrire()`, `publication_perimee` dans la requête) — sans modifier la série

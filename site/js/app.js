@@ -451,7 +451,7 @@ window.Bibliotheque = (() => {
      l'autre, Début et Fin vont aux extrémités ; Tab mène aux boutons de
      la carte active, puis sort de la grille. */
 
-  const FOCUSABLES_CARTE = ".card-cover, .card-actions button";
+  const FOCUSABLES_CARTE = ".card-cover, .card-actions button, .card-info";
   let carteActive = null;
 
   function rendreActive(carte) {
@@ -657,6 +657,19 @@ window.Bibliotheque = (() => {
 
   /* ---------------- Actions sur une carte ---------------- */
 
+  /* Le « ⓘ » de la mention (« Tome 44 en attente »…) : déplie ou replie son
+     explication, juste dessous. Ce n'est pas une commande — rien ne part au serveur,
+     un compte bloqué s'en sert aussi — d'où ni data-action ni garde BLOQUE. */
+  $grid.addEventListener("click", (e) => {
+    const info = e.target.closest(".card-info");
+    if (!info) return;
+    const aide = document.getElementById(info.getAttribute("aria-controls"));
+    if (!aide) return;
+    const ouvre = aide.classList.contains("hidden");
+    aide.classList.toggle("hidden", !ouvre);
+    info.setAttribute("aria-expanded", ouvre ? "true" : "false");
+  });
+
   $grid.addEventListener("click", (e) => {
     const cible = e.target.closest("[data-action]");
     if (!cible) return;
@@ -706,7 +719,7 @@ window.Bibliotheque = (() => {
   });
 
   $grid.addEventListener("click", (e) => {
-    if (e.target.closest("[data-action]")) return; // couverture et boutons : leur action
+    if (e.target.closest("[data-action], .card-info")) return; // couverture et boutons : leur action
     const carte = e.target.closest(".card");
     if (!carte || !window.matchMedia("(pointer: fine)").matches) return;
     // Un texte qu'on vient de sélectionner (le titre, pour le copier).

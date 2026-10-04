@@ -662,7 +662,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   margin-top: 4px;
 }
 
-.card-progress b { color: var(--gold); font-weight: 700; }
+.card-progress b {
+  color: var(--gold);
+  font-weight: 700;
+}
 
 /* La mention de la série (serie_fin_etiquette()) : « Tome 44 en attente »,
    « En pause au tome 43 », « Se termine au tome 50 », « Arrêtée au tome 43 »…
@@ -674,6 +677,44 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   font-weight: 600;
   color: var(--text-dim);
   margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.card-fin-texte { min-width: 0; }
+
+/* Le « ⓘ » : déplie l'explication de la mention, juste dessous. Un <button> (clavier,
+   lecteur d'écran), remis à zéro pour qu'il ne ressemble pas à une commande. */
+.card-info {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-style: normal;
+  font-size: 15px;
+  line-height: 1;
+  padding: 3px 5px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.card-info:hover,
+.card-info:focus-visible { color: var(--gold-light); }
+.card-info[aria-expanded="true"] { color: var(--gold); }
+
+/* L'explication : en clair, pas en retrait comme la mention — c'est elle qu'on est
+   venu lire. */
+.card-fin-aide {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.25);
+  border-left: 2px solid var(--gold);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-top: 4px;
 }
 
 .card-actions {
@@ -1781,6 +1822,8 @@ html.verification-session body { visibility: hidden; }
   .card-progress { font-size: 11.5px; }
 
   .card-fin { font-size: 11.5px; }
+
+  .card-fin-aide { font-size: 11.5px; }
 
   .card-actions { margin-top: 8px; gap: 6px; }
 

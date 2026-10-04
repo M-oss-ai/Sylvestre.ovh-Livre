@@ -384,7 +384,9 @@ décimaux, comparés comme des nombres, préférence de langue, plafond),
 « Arrêtée au tome N », même au tome 2 et pour tout statut ; « MangaDex s'arrête au tome X » quand MangaDex est en
 retard sur le lecteur ; l'état sans numéro quand aucun tome n'est connu ; rien quand on ne sait pas), `serie_au_bout`, `statut_apres_avance` (« → » au-delà de MangaDex), `statut_apres_recul` (« ← » depuis « En attente » ou
 « Terminée » : « En cours » seulement en quittant le dernier tome connu), `publication_connue`,
-la mention dans `carte_html`, le compteur du filtre, la couleur, les migrations 15 et 16, la
+la mention dans `carte_html`, son « ⓘ » (`serie_fin_info` : chaque mention a son explication, qui dit
+qui parle ; le balisage accessible ; le câblage dans `js/app.js`), le compteur du filtre, la couleur, les
+migrations 15 et 16, la
 carte INCHANGÉE dans tous les autres cas.
 Celui qui n'est pas au bout des tomes n'est jamais prévenu. Et, par lecture des sources, ce qu'un essai réel avait
 fait voir : chaque colonne que le relevé lit est dans sa requête, `maj_le =

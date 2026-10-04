@@ -71,6 +71,21 @@ function serie_a_venir(array $s): bool
  */
 function serie_fin_etiquette(array $s): string
 {
+    return serie_fin_info($s)['texte'];
+}
+
+/**
+ * La mention (voir serie_fin_etiquette()) ET son explication, pour le « ⓘ » de la
+ * carte (demande de l'utilisateur : « un petit message clair »).
+ *
+ * Retourne ['texte' => la mention, 'aide' => une ou deux phrases qui disent ce
+ * qu'elle veut dire et d'où elle vient]. Les deux sont '' quand on ne sait rien.
+ * L'aide dit toujours QUI parle — « MangaDex indique que… » — parce que ce sont des
+ * informations de MangaDex, saisies par des bénévoles, pas des certitudes du site.
+ * Fonction pure, testée : une mention sans explication ferait un « ⓘ » vide.
+ */
+function serie_fin_info(array $s): array
+{
     $statut      = (string) ($s['statut'] ?? '');
     $tome        = max(0, (int) ($s['tome_actuel'] ?? 0));
     $dernier     = max(0, (int) ($s['dernier_tome'] ?? 0));
@@ -79,33 +94,69 @@ function serie_fin_etiquette(array $s): string
     $lu          = in_array($publication, ['ongoing', 'hiatus', 'completed', 'cancelled'], true);
 
     if ($lu && $connu > 0 && $tome <= $connu) {
-        $mention = match ($publication) {
-            'ongoing'   => $dernier > 0 ? 'Tome ' . ($dernier + 1) . ' en attente' : '',
-            'hiatus'    => 'En pause au tome ' . $connu,
-            'completed' => 'Se termine au tome ' . $connu,
-            default     => 'Arrêtée au tome ' . $connu,
-        };
-        if ($mention !== '') {
-            return $mention;
+        switch ($publication) {
+            case 'ongoing':
+                if ($dernier > 0) {
+                    return [
+                        'texte' => 'Tome ' . ($dernier + 1) . ' en attente',
+                        'aide'  => 'La série paraît toujours. MangaDex connaît les tomes jusqu\'au ' . $dernier
+                            . ' : le ' . ($dernier + 1) . ' n\'y est pas encore. Il a pu sortir en librairie avant d\'apparaître chez MangaDex.',
+                    ];
+                }
+                break;
+            case 'hiatus':
+                return [
+                    'texte' => 'En pause au tome ' . $connu,
+                    'aide'  => 'MangaDex indique que la série est en pause : l\'auteur a interrompu la publication. Le dernier tome qu\'il connaît est le ' . $connu . '.',
+                ];
+            case 'completed':
+                return [
+                    'texte' => 'Se termine au tome ' . $connu,
+                    'aide'  => 'MangaDex indique que la publication est terminée : la série compte ' . $connu . ' tome' . ($connu > 1 ? 's' : '') . '.',
+                ];
+            default:
+                return [
+                    'texte' => 'Arrêtée au tome ' . $connu,
+                    'aide'  => 'MangaDex indique que la série a été arrêtée avant sa fin. Le dernier tome qu\'il connaît est le ' . $connu . '.',
+                ];
         }
     }
     if ($statut === 'attente') {
-        return 'Tome ' . ($tome + 1) . ' en attente';
+        return [
+            'texte' => 'Tome ' . ($tome + 1) . ' en attente',
+            'aide'  => 'Vous avez mis cette série « En attente » : vous attendez la sortie du tome ' . ($tome + 1) . '.',
+        ];
     }
     if ($connu > 0 && $tome > $connu) {
-        return "MangaDex s'arrête au tome " . $connu;
+        return [
+            'texte' => "MangaDex s'arrête au tome " . $connu,
+            'aide'  => 'Vous avez lu plus de tomes que MangaDex n\'en connaît (' . $connu . ') : ses informations ont du retard. '
+                . 'Le site ne peut pas dire où en est la série.',
+        ];
     }
     if ($lu && $connu === 0) {
         return match ($publication) {
-            'ongoing'   => 'En cours de publication',
-            'hiatus'    => 'En pause',
-            'completed' => 'Série terminée',
-            default     => 'Série arrêtée',
+            'ongoing'   => [
+                'texte' => 'En cours de publication',
+                'aide'  => 'MangaDex indique que la série paraît toujours, mais il ne connaît aucun tome numéroté : le site ne peut pas dire où elle en est.',
+            ],
+            'hiatus'    => [
+                'texte' => 'En pause',
+                'aide'  => 'MangaDex indique que la série est en pause, mais il ne connaît aucun tome numéroté : le site ne peut pas dire à quel tome.',
+            ],
+            'completed' => [
+                'texte' => 'Série terminée',
+                'aide'  => 'MangaDex indique que la publication de la série est terminée, mais ne donne pas son nombre de tomes. '
+                    . 'À ne pas confondre avec le statut « Terminée » de la pastille : celui-là est le vôtre, il dit que vous avez fini de la lire.',
+            ],
+            default     => [
+                'texte' => 'Série arrêtée',
+                'aide'  => 'MangaDex indique que la série a été arrêtée avant sa fin, mais il ne connaît aucun tome numéroté.',
+            ],
         };
     }
-    return '';
+    return ['texte' => '', 'aide' => ''];
 }
-
 /**
  * La personne a-t-elle lu exactement tout ce que MangaDex connaît de la série ?
  * Alors le tome suivant n'a pas de couverture chez lui : la carte ne propose plus
@@ -150,7 +201,8 @@ function carte_html(array $s, bool $lecture_seule = false): string
        termine au tome X », « Arrêtée au tome X »…) est dans le corps de la carte,
        sous « Vous avez lu le tome x » (serie_fin_etiquette()), pour TOUTE série liée
        à MangaDex et même au tome 2. */
-    $mention   = serie_fin_etiquette($s);
+    $info      = serie_fin_info($s);
+    $mention   = $info['texte'];
     $emprunter = $en_cours && !serie_au_bout($s);
 
     $alt = $emprunter ? "Couverture du tome {$suivant} de {$titre}" : "Couverture de {$titre} — dernier tome lu {$tome}";
@@ -160,7 +212,19 @@ function carte_html(array $s, bool $lecture_seule = false): string
         : '<span class="no-cover" aria-hidden="true">📕</span>';
 
     $etiquette = $emprunter ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>' : '';
-    $fin_html  = $mention !== '' ? '<p class="card-fin">' . e($mention) . '</p>' : '';
+    /* La mention, et son « ⓘ » : un bouton qui déplie l'explication juste dessous
+       (js/app.js, « card-info »). Pas de data-action : ce n'est pas une commande, et un
+       compte bloqué le garde (« aucune action pour le script »). tabindex="-1" comme
+       tout ce qui se focalise dans une carte ; la carte active le rend (app.js,
+       FOCUSABLES_CARTE). aria-expanded dit s'il est déplié. */
+    $fin_html = '';
+    if ($mention !== '') {
+        $aide_id  = 'aide-fin-' . (int) $s['id'];
+        $fin_html = '<p class="card-fin"><span class="card-fin-texte">' . e($mention) . '</span>'
+            . '<button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="' . $aide_id . '"'
+            . ' aria-label="Que veut dire « ' . e($mention) . ' » ?" title="Que veut dire ce message ?">ⓘ</button></p>'
+            . '<p class="card-fin-aide hidden" id="' . $aide_id . '" role="note">' . e($info['aide']) . '</p>';
+    }
 
     /* Le même libellé quel que soit le statut : c'est le dernier tome
        TERMINÉ, ce que « Vous en êtes au tome » ne disait pas. À 0, aucun
