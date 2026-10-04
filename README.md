@@ -378,11 +378,11 @@ page.
 ## Administration
 
 Une page réservée aux comptes **administrateurs** : `admin.php`. Elle liste tous
-les comptes (identifiant, adresse et si elle est confirmée, photo, forfait, date
+les comptes (image, identifiant, adresse et si elle est confirmée, forfait, date
 d'inscription, nombre de séries), avec une recherche et des colonnes triables.
-Les mots « admin », « Google », « non confirmé », « bloqué », « sans photo » et
-« sans série » tiennent lieu de filtres : taper « non confirmé » suffit. La photo de
-chaque compte s'affiche en vignette dans la colonne « Photo » ; un clic l'agrandit.
+Les mots « admin », « Google », « non confirmé », « bloqué », « sans image » et
+« sans série » tiennent lieu de filtres : taper « non confirmé » suffit. L'image de
+chaque compte s'affiche en vignette dans la première colonne, « Image » ; un clic l'agrandit.
 
 **Le premier administrateur se nomme à la main**, une fois la migration 11 de
 `livre.sql` rejouée :

@@ -29,7 +29,7 @@ window.Admin = (() => {
   /* ---------- Chercher ----------
      On cherche dans ce que la ligne DIT d'elle : l'identifiant, l'adresse,
      le numéro, le forfait, et des mots qui tiennent lieu de filtres — « admin »,
-     « Google », « non confirmé », « sans photo », « sans série ». Taper
+     « Google », « non confirmé », « sans image », « sans série ». Taper
      « non confirmé » suffit à retrouver les comptes jamais confirmés : pas de
      boutons de filtre de plus, la même case fait tout. Tous les mots tapés
      doivent se retrouver, accents et casse ignorés. */
@@ -39,7 +39,8 @@ window.Admin = (() => {
     if (l.admin) etiquettes.push("admin", "administrateur");
     if (l.google) etiquettes.push("google");
     if (!l.confirme) etiquettes.push("non confirme");
-    if (!l.photo) etiquettes.push("sans photo");
+    // « sans photo » reste compris : c'était le mot avant que la colonne ne s'appelle « Image ».
+    if (!l.photo) etiquettes.push("sans image", "sans photo");
     if (l.series === 0) etiquettes.push("sans serie");
     return normaliser([l.id, l.identifiant, l.email, ...etiquettes].join(" "));
   }
@@ -399,7 +400,7 @@ window.Admin = (() => {
       }
     });
 
-    /* ---- la photo d'un compte : une vignette, et sa version agrandie ---- */
+    /* ---- l'image d'un compte : une vignette, et sa version agrandie ---- */
     const photoOverlay = document.getElementById("admin-photo-overlay");
     const photoGrande = document.getElementById("admin-photo-grande");
     const photoLegende = document.getElementById("admin-photo-legende");
@@ -409,7 +410,7 @@ window.Admin = (() => {
     function photoOuvrir(bouton) {
       const l = lireLigne(bouton.closest("tr"));
       photoGrande.src = bouton.dataset.photo;
-      photoGrande.alt = "Photo de " + l.identifiant;
+      photoGrande.alt = "Image de " + l.identifiant;
       photoLegende.textContent = l.identifiant + " — " + l.email;
       photoRetour = bouton;
       photoOverlay.classList.remove("hidden");
@@ -437,7 +438,7 @@ window.Admin = (() => {
       else if (e.key === "Tab") L.piegerFocus(photoOverlay, e);
     });
 
-    /* Une photo qui ne se charge pas : le fichier a disparu, ou l'adresse ne répond plus.
+    /* Une image qui ne se charge pas : le fichier a disparu, ou l'adresse ne répond plus.
        La vignette cède la place à un signe, et le dit — sans quoi on croirait la colonne vide. */
     document.addEventListener(
       "error",

@@ -1888,7 +1888,8 @@ html.verification-session body { visibility: hidden; }
 .admin-table .c-email { white-space: normal; overflow-wrap: anywhere; min-width: 180px; }
 .admin-table .c-id,
 .admin-table .c-series { text-align: right; font-variant-numeric: tabular-nums; }
-.admin-table th:first-child,
+/* « Image » est la première colonne, « ID » la deuxième ; « Séries » reste la huitième. */
+.admin-table th:nth-child(2),
 .admin-table th:nth-child(8) { text-align: right; }
 
 .admin-tri {

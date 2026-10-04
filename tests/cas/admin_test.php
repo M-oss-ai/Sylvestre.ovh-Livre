@@ -459,12 +459,28 @@ test('la photo du compte s\'affiche : lue en base, échappée, sans fuite de la 
     contient('loading="lazy"', $page, 'les vignettes se chargent à la demande');
     sans('onerror=', $page, 'la CSP interdit le JavaScript en ligne : le repli passe par js/admin.js');
     contient('class="admin-photo-btn"', $page, 'la vignette est un bouton : on peut l\'agrandir au clavier');
-    contient('adresse refusée par le site', $page, 'une photo dont le site refuse l\'adresse le dit, au lieu d\'un ✓ trompeur');
-    contient('aria-label="Agrandir la photo de', $page, 'et il le dit');
+    contient('adresse refusée par le site', $page, 'une image dont le site refuse l\'adresse le dit, au lieu d\'un ✓ trompeur');
+    contient('aria-label="Agrandir l\'image de', $page, 'et il le dit');
+    sans('Photo', (string) preg_replace('/<!--.*?-->/s', '', $page), 'la page ne dit plus « Photo » : la colonne s\'appelle « Image »');
     contient('id="admin-photo-overlay"', $page, 'la fenêtre qui l\'agrandit existe');
     $js = lire('js/admin.js');
     contient('"admin-photo"', $js, 'js/admin.js attrape l\'échec d\'une photo (un fichier disparu)');
     contient('removeAttribute("src")', $js, 'et ne garde pas l\'image chargée une fois la fenêtre fermée');
+});
+
+test('« Image » est la première colonne, devant « ID »', function () {
+    $page = lire('admin.php');
+    preg_match_all('~<th scope="col">(.*?)</th>~s', $page, $en_tetes);
+    $noms = array_map(static fn (string $h): string => trim(strip_tags($h)), $en_tetes[1]);
+    egale(['Image', 'ID', 'Identifiant', 'E-mail', 'Confirmé', 'Forfait', 'Inscrit le', 'Séries', 'Actions'], $noms,
+        'l\'ordre des colonnes : Image d\'abord, « Photo » n\'existe plus');
+    // Et chaque ligne suit : sa première cellule est celle de l'image, la deuxième celle de l'ID.
+    preg_match('~<tr class="admin-ligne".*?<td class="([^"]+)">.*?<td class="([^"]+)">~s', $page, $m);
+    egale(['c-photo', 'c-id'], [$m[1] ?? '', $m[2] ?? ''], 'les cellules de chaque ligne suivent l\'ordre de l\'en-tête');
+    $css = lire('css/style.css');
+    contient(".admin-table th:nth-child(2),\n.admin-table th:nth-child(8) { text-align: right; }", $css,
+        '« ID » (deuxième) et « Séries » (huitième) restent alignés à droite');
+    sans('.admin-table th:first-child', $css, '« Image », première colonne, n\'est pas alignée comme un nombre');
 });
 
 test('la page charge son script, et rien d\'en ligne', function () {

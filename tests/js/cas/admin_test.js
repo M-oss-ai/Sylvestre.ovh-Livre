@@ -50,14 +50,16 @@ test("le forfait se cherche par son nom : « bloqué », « illimité »", () =>
   faux(A.correspond(compte({ forfait: "standard" }), "bloqué"), "un compte standard n est pas bloqué");
 });
 
-test("des mots tiennent lieu de filtres : admin, Google, non confirmé, sans photo, sans série", () => {
+test("des mots tiennent lieu de filtres : admin, Google, non confirmé, sans image, sans série", () => {
   vrai(A.correspond(compte({ admin: true }), "admin"), "admin");
   faux(A.correspond(compte({ admin: false }), "admin"), "pas admin");
   vrai(A.correspond(compte({ google: true }), "google"), "Google");
   vrai(A.correspond(compte({ confirme: false }), "non confirmé"), "non confirmé");
   faux(A.correspond(compte({ confirme: true }), "non confirmé"), "confirmé : pas dans « non confirmé »");
-  vrai(A.correspond(compte({ photo: false }), "sans photo"), "sans photo");
-  faux(A.correspond(compte({ photo: true }), "sans photo"), "avec photo");
+  vrai(A.correspond(compte({ photo: false }), "sans image"), "sans image");
+  faux(A.correspond(compte({ photo: true }), "sans image"), "avec image");
+  vrai(A.correspond(compte({ photo: false }), "sans photo"), "l'ancien mot, « sans photo », reste compris");
+  faux(A.correspond(compte({ photo: true }), "sans photo"), "et ne trouve pas ceux qui en ont une");
   vrai(A.correspond(compte({ series: 0 }), "sans série"), "sans série");
   faux(A.correspond(compte({ series: 3 }), "sans série"), "avec des séries");
 });
@@ -106,7 +108,7 @@ test("par inscription et par nombre de séries", () => {
 test("les booléens : confirmés d abord en décroissant", () => {
   const l = [compte({ id: 1, confirme: false }), compte({ id: 2, confirme: true }), compte({ id: 3, photo: false })];
   egale("2,3,1", ids(A.trier(l, "confirme", -1)), "confirmés avant les autres, ancienneté à égalité");
-  egale("3,1,2", ids(A.trier(l, "photo", 1)), "sans photo avant ceux qui en ont");
+  egale("3,1,2", ids(A.trier(l, "photo", 1)), "sans image avant ceux qui en ont");
 });
 
 test("à égalité, le plus ancien compte passe d abord — quel que soit le sens", () => {
@@ -185,7 +187,7 @@ test("les attributs deviennent des types", () => {
   const l = A.lireLigne(document.getElementById("t"));
   egale(12, l.id, "id");
   egale("marco", l.identifiant, "identifiant");
-  vrai(l.confirme === true && l.photo === false, "confirmé, sans photo");
+  vrai(l.confirme === true && l.photo === false, "confirmé, sans image");
   egale("bloque", l.forfait, "forfait");
   vrai(l.admin === true && l.google === false && l.moi === true, "admin, pas Google, c est moi");
   egale(1790000000, l.inscrit, "inscription");

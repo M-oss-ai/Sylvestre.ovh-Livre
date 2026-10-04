@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (896 tests : 760 PHP en 52 fichiers, 136 JavaScript)
+php tests/lancer.php              # toute la suite (897 tests : 761 PHP en 52 fichiers, 136 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -544,7 +544,8 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   cible est relue avant d'être effacée (elle a pu devenir administrateur entre-temps).
   Pas son propre compte (par ses Paramètres), pas un administrateur (d'abord lui
   retirer ses droits). Le titulaire est prévenu APRÈS, s'il a une adresse confirmée.
-- **La photo du compte s'affiche dans la colonne « Photo »** (demande de l'utilisateur), en
+- **L'image du compte s'affiche dans la PREMIÈRE colonne, « Image »** (demande de l'utilisateur ;
+  c'est la colonne `utilisateur.photo`, qui garde son nom en interne), en
   vignette ronde que le clic agrandit. L'adresse affichée est `photo_url`, passée par
   `url_image_sure()` (https, ou un fichier de `uploads/` — rien d'autre) ; `photo` dit seulement
   que la colonne n'est pas vide, si bien qu'une valeur refusée (`http://`, `../`) donne un ⚠
