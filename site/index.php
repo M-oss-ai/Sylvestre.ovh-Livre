@@ -293,14 +293,6 @@ $flash = flash_prendre();
         <?php endif; ?>
 
         <div id="cover-results" class="cover-results hidden"></div>
-
-        <!-- Les pages des résultats (COUVERTURE_PAGE_MAX séries par page) : cachées
-             tant qu'il n'y en a qu'une. Voir chercherCouverture dans js/app.js. -->
-        <div id="cover-pages" class="cover-pages hidden">
-          <button type="button" id="cover-prec" class="btn btn-ghost small" aria-label="Page précédente">←</button>
-          <span id="cover-page-info" class="cover-page-info" aria-live="polite"></span>
-          <button type="button" id="cover-suiv" class="btn btn-ghost small" aria-label="Page suivante">→</button>
-        </div>
       </div>
 
       <div class="modal-actions">

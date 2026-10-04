@@ -98,11 +98,6 @@ const REGLAGES = [
         'aide' => "Élargir ne coûte aucun appel de plus. C'est ce réglage qui borne le coût d'une recherche sans limite d'affichage.",
         'min' => 1, 'max' => 100, 'defaut' => 25, 'unite' => 'séries',
     ],
-    'COUVERTURE_PAGE_MAX' => [
-        'groupe' => 'couverture', 'libelle' => 'Séries montrées par page de résultats',
-        'aide' => "Les résultats d'une recherche de couverture sont montrés par pages. Chaque série montrée coûte un appel de plus vers MangaDex, et chaque page demandée compte pour une recherche dans le quota du compte.",
-        'min' => 1, 'max' => 100, 'defaut' => 9, 'unite' => 'séries',
-    ],
     'COUVERTURE_CONTENU_ADULTE' => [
         'groupe' => 'couverture', 'libelle' => 'Séries classées « erotica »',
         'aide' => "Ouvre la possibilité, sans l'accorder : il faut encore que la personne déclare sa majorité et lève le filtre. Un choix qui engage l'éditeur du site.",

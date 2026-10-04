@@ -380,25 +380,3 @@ test("une mesure absente ou absurde ne pose aucun fondu", () => {
   faux(B.bordsDefilement({ gauche: NaN, visible: 351, total: 495 }).droite, "NaN");
   faux(B.bordsDefilement({ gauche: -5, visible: 351, total: 495 }).gauche, "rebond élastique négatif");
 });
-
-groupe("Bibliotheque.pagesCouvertures() — les pages des résultats de recherche");
-
-test("deux pages ou plus : le sélecteur se montre, avec ses flèches", () => {
-  egale({ visible: true, texte: "Page 1 / 3", precedente: null, suivante: 2 }, B.pagesCouvertures(1, 3), "première page");
-  egale({ visible: true, texte: "Page 2 / 3", precedente: 1, suivante: 3 }, B.pagesCouvertures(2, 3), "au milieu");
-  egale({ visible: true, texte: "Page 3 / 3", precedente: 2, suivante: null }, B.pagesCouvertures(3, 3), "dernière page : pas de suivante");
-});
-
-test("une seule page : rien à montrer", () => {
-  egale({ visible: false, texte: "Page 1 / 1", precedente: null, suivante: null }, B.pagesCouvertures(1, 1), "une page");
-});
-
-test("des nombres absurdes sont ramenés à des pages qui existent, jamais NaN", () => {
-  egale("Page 3 / 3", B.pagesCouvertures(99, 3).texte, "page trop grande → la dernière");
-  egale("Page 1 / 3", B.pagesCouvertures(0, 3).texte, "page nulle → la première");
-  egale("Page 1 / 3", B.pagesCouvertures(-5, 3).texte, "page négative → la première");
-  egale({ visible: false, texte: "Page 1 / 1", precedente: null, suivante: null }, B.pagesCouvertures(undefined, undefined), "rien reçu");
-  egale({ visible: false, texte: "Page 1 / 1", precedente: null, suivante: null }, B.pagesCouvertures("x", null), "du texte");
-  egale("Page 2 / 4", B.pagesCouvertures("2", "4").texte, "des nombres en texte (JSON mal typé)");
-  egale("Page 2 / 4", B.pagesCouvertures(2.9, 4.2).texte, "des décimaux : la partie entière");
-});

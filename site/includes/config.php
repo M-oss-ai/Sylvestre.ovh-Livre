@@ -534,18 +534,6 @@ define('COUVERTURE_MAX_SERIES', max(0, (int) env('COUVERTURE_MAX_SERIES', '0')))
 define('COUVERTURE_CANDIDATS',
     min(100, max(max(1, COUVERTURE_MAX_SERIES), (int) env('COUVERTURE_CANDIDATS', '25'))));
 
-/* Séries montrées par PAGE de résultats (demande de l'utilisateur : un système
-   de pages), de 1 à 100. Les séries retenues (COUVERTURE_MAX_SERIES sur
-   COUVERTURE_CANDIDATS examinées) sont rangées, puis montrées par tranches de
-   cette taille : « Page 2 / 3 », avec précédent et suivant.
-
-   C'est aussi ce qui borne le COÛT d'un affichage : chaque série montrée demande
-   un appel /cover de plus, donc une page coûte 1 + COUVERTURE_PAGE_MAX appels au
-   plus, quel que soit le nombre de séries examinées. Chaque page demandée compte
-   pour une recherche dans le quota du compte (couverture_consommer()) : elle coûte
-   la même chose. */
-define('COUVERTURE_PAGE_MAX', min(100, max(1, (int) env('COUVERTURE_PAGE_MAX', '9'))));
-
 /* Autoriser les séries classées « erotica » par MangaDex (nudité, thèmes
    sexuels marqués) dans la recherche automatique de couverture.
 

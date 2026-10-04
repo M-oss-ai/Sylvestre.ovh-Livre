@@ -759,34 +759,6 @@ function couverture_rendre(int $utilisateur_id): void
 }
 
 /**
- * Une PAGE de séries parmi toutes celles qu'on propose : la tranche demandée, et
- * de quoi afficher « Page 2 / 3 ».
- *
- * Retourne ['candidats' => la tranche (clés conservées : le rang d'origine sert au
- * classement), 'page' => la page rendue, 'pages' => combien il y en a, 'total' =>
- * combien de séries en tout].
- *
- * La page demandée est ramenée dans [1, pages] : un numéro trop grand (la liste a
- * raccourci entre deux demandes) ou trop petit rend la dernière ou la première,
- * jamais une page vide. Une taille inférieure à 1 vaut 1. Une liste vide a UNE
- * page, vide. Fonction pure, testée.
- */
-function couverture_page(array $candidats, int $page, int $taille): array
-{
-    $taille = max(1, $taille);
-    $total  = count($candidats);
-    $pages  = max(1, (int) ceil($total / $taille));
-    $page   = max(1, min($pages, $page));
-
-    return [
-        'candidats' => array_slice($candidats, ($page - 1) * $taille, $taille, true),
-        'page'      => $page,
-        'pages'     => $pages,
-        'total'     => $total,
-    ];
-}
-
-/**
  * Cherche la couverture du tome $tome pour les séries correspondant à
  * $titre. Retourne une liste de candidats, le plus probable en premier :
  *
@@ -794,17 +766,9 @@ function couverture_page(array $candidats, int $page, int $taille): array
  *
  * « exact » distingue la vraie couverture du tome demandé de celle de la
  * série, servie en repli. L'utilisateur doit savoir laquelle il choisit.
- *
- * PAGES. Les séries retenues sont rangées une fois, puis montrées par tranches de
- * COUVERTURE_PAGE_MAX : $page (à partir de 1) dit laquelle. Seules les séries de la
- * page demandée coûtent un appel /cover. $pagination (par référence) reçoit
- * ['page', 'pages', 'total'] — de quoi afficher « Page 2 / 3 ». Le premier appel
- * (/manga) est refait à chaque page : même requête, même classement, donc mêmes
- * pages, sans rien garder entre deux demandes.
  */
-function chercher_couvertures(string $titre, int $tome, bool $adulte = false, int $page = 1, ?array &$pagination = null): array
+function chercher_couvertures(string $titre, int $tome, bool $adulte = false): array
 {
-    $pagination = ['page' => 1, 'pages' => 1, 'total' => 0];
     /* « erotica » n'est proposé que si DEUX conditions sont réunies : le
        site l'autorise (COUVERTURE_CONTENU_ADULTE) et l'utilisateur a
        déclaré sa majorité. L'appelant a déjà fait cette vérification ;
@@ -870,12 +834,7 @@ function chercher_couvertures(string $titre, int $tome, bool $adulte = false, in
         $candidats = array_slice($candidats, 0, COUVERTURE_MAX_SERIES);
     }
 
-    /* La page demandée : seules ses séries coûtent un appel de plus. */
-    $tranche    = couverture_page($candidats, $page, COUVERTURE_PAGE_MAX);
-    $candidats  = $tranche['candidats'];
-    $pagination = ['page' => $tranche['page'], 'pages' => $tranche['pages'], 'total' => $tranche['total']];
-
-    /* Second temps : une requête de couvertures par série de la page. */
+    /* Second temps : une requête de couvertures par série retenue. */
     $resultats = [];
 
     foreach ($candidats as $rang => $candidat) {

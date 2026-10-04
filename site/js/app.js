@@ -107,23 +107,6 @@ window.Bibliotheque = (() => {
   }
 
   /**
-   * Les pages des résultats de la recherche de couverture : le texte « Page 2 / 3 »,
-   * la page que visent « ← » et « → » (null quand il n'y en a pas), et si le
-   * sélecteur se montre (au moins deux pages). Les nombres viennent du serveur :
-   * ramenés à des entiers, la page dans [1, pages], jamais NaN.
-   */
-  function pagesCouvertures(page, pages) {
-    const total = Math.max(1, Math.floor(Number(pages)) || 1);
-    const courante = Math.min(total, Math.max(1, Math.floor(Number(page)) || 1));
-    return {
-      visible: total > 1,
-      texte: "Page " + courante + " / " + total,
-      precedente: courante > 1 ? courante - 1 : null,
-      suivante: courante < total ? courante + 1 : null,
-    };
-  }
-
-  /**
    * La couverture de la fiche, réduite à ce qui la distingue : "" sans
    * image, l'adresse pour une URL, nom + taille + date pour un fichier.
    */
@@ -230,7 +213,7 @@ window.Bibliotheque = (() => {
   }
 
   return {
-    voisine, suiviDefilement, annonceQuota, texteQuotaRecherche, pagesCouvertures,
+    voisine, suiviDefilement, annonceQuota, texteQuotaRecherche,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
     panneauApres, panneauMemorise, aucunFiltre, bordsDefilement,
   };
@@ -1458,42 +1441,26 @@ window.Bibliotheque = (() => {
      la couverture cherchée est donc celle-là. Une série « en cours » ou
      « à commencer » se cherche sur le PROCHAIN tome à emprunter, soit
      « tome actuel + 1 ». */
-  /* Les résultats sont montrés par pages (COUVERTURE_PAGE_MAX séries chacune). Une
-     page suivante se demande avec LE MÊME titre et LE MÊME tome que la recherche qui
-     l'a ouverte, même si la fiche a changé depuis : sans quoi « page 2 » serait la
-     page d'une autre recherche. */
-  let rechercheCouv = null; // { titre, tome } de la recherche dont on parcourt les pages
-
-  async function chercherCouverture(page = 1) {
-    let titre;
-    let tome;
-    if (page > 1 && rechercheCouv) {
-      ({ titre, tome } = rechercheCouv);
-    } else {
-      page = 1;
-      titre = $fTitle.value.trim();
-      if (!titre) {
-        $coverStatus.textContent = "Saisissez d'abord un titre.";
-        $fTitle.focus();
-        return;
-      }
-      const volumeActuel = parseInt($fVolume.value, 10) || 0;
-      const statutFini = $fStatus.value === "termine" || $fStatus.value === "abandon";
-      tome = Math.max(1, statutFini ? volumeActuel : volumeActuel + 1);
-      rechercheCouv = { titre, tome };
+  async function chercherCouverture() {
+    const titre = $fTitle.value.trim();
+    if (!titre) {
+      $coverStatus.textContent = "Saisissez d'abord un titre.";
+      $fTitle.focus();
+      return;
     }
+    const volumeActuel = parseInt($fVolume.value, 10) || 0;
+    const statutFini = $fStatus.value === "termine" || $fStatus.value === "abandon";
+    const tome = Math.max(1, statutFini ? volumeActuel : volumeActuel + 1);
 
     $coverStatus.textContent = "Recherche du tome " + tome + "…";
     const focusAuDepart = document.activeElement; // voir montrerResultats()
     $coverResults.classList.add("hidden");
     $coverResults.replaceChildren();
-    $coverPages.classList.add("hidden");
     document.querySelectorAll(".majorite").forEach((n) => n.remove());
 
     try {
-      const r = await L.api("couverture.chercher", { titre, tome, page });
+      const r = await L.api("couverture.chercher", { titre, tome });
       if (r.recherches) majQuotaRecherche(r.recherches);
-      majPagesCouvertures(r.page);
       const resultats = r.resultats || [];
       if (!resultats.length) {
         $coverStatus.textContent = r.message || "Aucun résultat.";
@@ -1633,32 +1600,7 @@ window.Bibliotheque = (() => {
     $modale.scrollBy({ top: statut.top - haut - 8, behavior: doux ? "smooth" : "auto" });
   }
 
-  /* Le sélecteur de pages : « ← Page 2 / 3 → ». Il ne se montre qu'à partir de
-     deux pages ; chaque flèche redemande la page voisine (une recherche de plus
-     pour le quota du compte, voir api.php). */
-  const $coverPages = document.getElementById("cover-pages");
-  const $coverPrec = document.getElementById("cover-prec");
-  const $coverSuiv = document.getElementById("cover-suiv");
-  const $coverPageInfo = document.getElementById("cover-page-info");
-  let pageVisee = { precedente: null, suivante: null };
-
-  function majPagesCouvertures(p) {
-    const etat = B.pagesCouvertures(p && p.page, p && p.pages);
-    pageVisee = etat;
-    $coverPageInfo.textContent = etat.texte;
-    $coverPrec.disabled = etat.precedente === null;
-    $coverSuiv.disabled = etat.suivante === null;
-    $coverPages.classList.toggle("hidden", !etat.visible);
-  }
-
-  $coverPrec.addEventListener("click", () => {
-    if (pageVisee.precedente !== null) chercherCouverture(pageVisee.precedente);
-  });
-  $coverSuiv.addEventListener("click", () => {
-    if (pageVisee.suivante !== null) chercherCouverture(pageVisee.suivante);
-  });
-
-  document.getElementById("btn-search-cover").addEventListener("click", () => chercherCouverture(1));
+  document.getElementById("btn-search-cover").addEventListener("click", chercherCouverture);
 
   $coverResults.addEventListener("click", (e) => {
     const el = e.target.closest(".cover-result");
