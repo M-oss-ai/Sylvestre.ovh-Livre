@@ -246,7 +246,8 @@ function nouveautes_statut_ecrit(PDO $pdo, int $id, string $attendu): bool
 /**
  * Les séries à vérifier, les plus anciennement vérifiées d'abord.
  * $utilisateur_id : celles d'un compte (la bibliothèque), ou null pour tout le
- * site (le cron). $limite : combien, au plus.
+ * site (le cron). $limite : combien, au plus ; 0 = sans limite (voir
+ * nouveautes_limite_sql()).
  *
  * Une série est candidate quand elle est :
  *   - « En cours » ou « En attente », et liée à MangaDex ;
@@ -270,9 +271,20 @@ function nouveautes_series_a_verifier(PDO $pdo, ?int $utilisateur_id, int $limit
                AND (s.verifie_le IS NULL OR s.verifie_le < NOW() - INTERVAL " . (int) NOUVEAUTE_HEURES . " HOUR)
                AND u.forfait <> 'bloque'"
         . ($utilisateur_id !== null ? ' AND s.utilisateur_id = ' . $utilisateur_id : '')
-        . ' ORDER BY s.verifie_le ASC, s.id ASC LIMIT ' . max(1, $limite);
+        . ' ORDER BY s.verifie_le ASC, s.id ASC' . nouveautes_limite_sql($limite);
 
     return $pdo->query($sql)->fetchAll();
+}
+
+/**
+ * La clause LIMIT d'une liste de séries à vérifier : ' LIMIT n', ou rien quand
+ * $limite vaut 0 (ou moins) — « sans limite », comme NOUVEAUTE_MAX_VISITE et
+ * NOUVEAUTE_MAX_CRON à 0. C'est alors le budget de temps de
+ * nouveautes_verifier() qui arrête le relevé.
+ */
+function nouveautes_limite_sql(int $limite): string
+{
+    return $limite > 0 ? ' LIMIT ' . $limite : '';
 }
 
 /**

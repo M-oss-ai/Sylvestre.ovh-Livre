@@ -218,7 +218,8 @@ if (!$etat_lisible) {
    Nouveaux tomes (includes/nouveautes.php)
 
    Les séries « à jour » sont revérifiées chez MangaDex : NOUVEAUTE_MAX_CRON
-   au plus par passage, les plus anciennement vérifiées d'abord. Un tome de
+   au plus par passage (0 = sans limite : le budget de temps arrête le relevé),
+   les plus anciennement vérifiées d'abord. Un tome de
    plus, c'est la couverture prise, la série remontée en tête, l'annonce
    posée pour la prochaine visite — et UNE notification push par compte, sur
    chacun de ses appareils enregistrés (includes/push.php). Jamais d'e-mail :

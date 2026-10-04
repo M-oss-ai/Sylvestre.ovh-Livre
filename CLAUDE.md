@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1061 tests : 894 PHP en 55 fichiers, 167 JavaScript)
+php tests/lancer.php              # toute la suite (1064 tests : 897 PHP en 55 fichiers, 167 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -144,11 +144,12 @@ ou un plafond : un `.env` mal rempli ne doit jamais pouvoir *supprimer* une
 protection.
 `tests/cas/config_planchers_test.php` et `couvertures_reglages_test.php`
 imposent des valeurs absurdes et vérifient qu'elles sont relevées.
-**Seule exception : les quotas de recherche** (`COUVERTURE_QUOTA`,
-`COUVERTURE_QUOTA_ILLIMITE`), où 0 ou une ligne absente veut dire « sans
-limite ». Ils répartissent l'usage entre comptes, ils ne protègent pas le
-serveur — la file d'attente vers MangaDex s'en charge, et elle garde son
-plancher.
+**Seules exceptions : les quotas de recherche** (`COUVERTURE_QUOTA`,
+`COUVERTURE_QUOTA_ILLIMITE`) **et les nombres de séries du relevé des nouveaux
+tomes** (`NOUVEAUTE_MAX_VISITE`, `NOUVEAUTE_MAX_CRON`), où 0 ou une ligne absente
+veut dire « sans limite ». Les quotas répartissent l'usage entre comptes, ils ne
+protègent pas le serveur — la file d'attente vers MangaDex s'en charge, et elle
+garde son plancher ; le relevé, lui, s'arrête à son budget de temps.
 
 **La CSP interdit le JavaScript et le CSS en ligne.** Pas de `onclick=`,
 pas de `<style>`, pas de `style="…"` posé depuis PHP. Les données
@@ -559,9 +560,14 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
 - **La notification push** — `includes/push.php`, `sw.js`, `js/push.js`, voir la règle
   suivante. Le cron envoie UNE notification par compte et par passage, à tous ses
   appareils (`push_envoyer_a_compte()`), jamais à un compte bloqué.
-- **Réglages** : `NOUVEAUTE_HEURES` (1 à 168), `NOUVEAUTE_MAX_VISITE` (1 à 20),
-  `NOUVEAUTE_MAX_CRON` (1 à 500), dans le `.env`, planchers et plafonds testés. Ils ne sont
-  PAS dans `REGLAGES` (admin.php) : ils protègent le débit de MangaDex.
+- **Réglages** : `NOUVEAUTE_HEURES` (1 à 168), `NOUVEAUTE_MAX_VISITE` et
+  `NOUVEAUTE_MAX_CRON` (**0 ou ligne absente = sans limite**, demande de l'utilisateur, comme les
+  quotas de recherche : ni plancher ni plafond, un nombre négatif vaut 0), dans le `.env`. Sans
+  limite de nombre, ce qui garde la visite et le cron est le BUDGET DE TEMPS de
+  `nouveautes_verifier()` (`nouveautes_budget()`, `'temps'`) et la file d'attente vers MangaDex : ce
+  qui n'a pas passé passe au tour suivant, les plus anciennement vérifiées d'abord.
+  `NOUVEAUTE_HEURES`, elle, garde son plancher d'une heure : c'est elle qui espace les appels.
+  Ils ne sont PAS dans `REGLAGES` (admin.php) : ils touchent le débit de MangaDex.
 - **Pour essayer** : une base jetable (voir « Commandes »), `livre.sql` rejoué, un compte
   de test et des séries liées à de vraies séries MangaDex — Berserk
   (`801513ba-a712-498c-8f57-cae55b38cc92`, en cours), Attack on Titan

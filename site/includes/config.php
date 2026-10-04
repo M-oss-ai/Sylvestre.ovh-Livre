@@ -606,22 +606,28 @@ define('COUVERTURE_QUOTA_ILLIMITE', couverture_quota_illimite(
    Une série « à jour » (le tome lu est le dernier que MangaDex illustre)
    est revérifiée : à l'arrivée sur la bibliothèque, et à chaque passage du
    cron. Chaque vérification est UN appel à MangaDex, donc une part du débit
-   que tous les comptes se partagent : ces trois bornes l'encadrent, et la
-   file d'attente (COUVERTURE_ESPACEMENT) espace de toute façon les appels.
+   que tous les comptes se partagent : NOUVEAUTE_HEURES l'encadre, et la file
+   d'attente (COUVERTURE_ESPACEMENT) espace de toute façon les appels.
 
-   Planchers et plafonds comme partout : un « 0 » ne doit pas faire interroger
-   MangaDex à chaque page, ni arrêter la fonction sans le dire. */
+   NOUVEAUTE_HEURES a son plancher, comme partout : un « 0 » interrogerait
+   MangaDex à chaque page. Les deux AUTRES bornes sont des limites de nombre,
+   et « 0 » (ou ligne absente, ou commentée par #) veut dire SANS LIMITE — comme
+   les quotas de recherche (demande de l'utilisateur). Ce qui garde la visite et
+   le cron, alors, c'est le budget de temps de nouveautes_verifier() : ce qui n'a
+   pas passé aujourd'hui passera au tour suivant, les plus anciennement
+   vérifiées d'abord. */
 
 /* Heures minimales entre deux vérifications de la MÊME série. */
 define('NOUVEAUTE_HEURES', min(168, max(1, (int) env('NOUVEAUTE_HEURES', '1'))));
 
-/* Séries vérifiées au plus par arrivée sur la bibliothèque : la vérification
-   part en arrière-plan, mais elle occupe un processus PHP le temps de ses
-   appels. Les plus anciennement vérifiées passent d'abord. */
-define('NOUVEAUTE_MAX_VISITE', min(20, max(1, (int) env('NOUVEAUTE_MAX_VISITE', '6'))));
+/* Séries vérifiées au plus par arrivée sur la bibliothèque. 0 = sans limite :
+   la vérification part en arrière-plan, et s'arrête à son budget de temps. Un
+   nombre négatif vaut 0. */
+define('NOUVEAUTE_MAX_VISITE', max(0, (int) env('NOUVEAUTE_MAX_VISITE', '0')));
 
-/* Séries vérifiées au plus par passage du cron, tous comptes confondus. */
-define('NOUVEAUTE_MAX_CRON', min(500, max(1, (int) env('NOUVEAUTE_MAX_CRON', '40'))));
+/* Séries vérifiées au plus par passage du cron, tous comptes confondus.
+   0 = sans limite (le budget de temps du passage décide). */
+define('NOUVEAUTE_MAX_CRON', max(0, (int) env('NOUVEAUTE_MAX_CRON', '0')));
 
 /* --- Notifications push (includes/push.php) ---------------------------
    Les deux clés VAPID identifient le site auprès des services de

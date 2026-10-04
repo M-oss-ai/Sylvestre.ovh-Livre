@@ -1230,8 +1230,9 @@ switch ($action) {
 
        Elle n'entame pas le quota de recherche, comme couverture.rafraichir :
        un appel par série, espacés par la file d'attente qui protège
-       l'adresse du serveur. NOUVEAUTE_MAX_VISITE borne leur nombre ; le
-       compte bloqué n'y a pas accès (ACTIONS_BLOQUEES). */
+       l'adresse du serveur. NOUVEAUTE_MAX_VISITE borne leur nombre (0 = sans
+       limite : le budget de temps ci-dessous arrête le relevé) ; le compte
+       bloqué n'y a pas accès (ACTIONS_BLOQUEES). */
     case 'serie.nouveautes': {
         /* Ce qui suit attend MangaDex, parfois plusieurs secondes : la
            session est libérée AVANT, sans quoi un « → » cliqué entre-temps

@@ -371,7 +371,8 @@ bloqués.
 **Couvert, nouveaux tomes** — `nouveautes_test.php`, `carte_a_venir_test.php`,
 `push_test.php`, `tests/js/cas/push_test.js`, `tests/js/cas/sw_test.js`, et les planchers/plafonds de
 `NOUVEAUTE_*` et `PUSH_*`
-(`config_planchers_test.php`, `cle_acces_plafonds_test.php`). Les décisions
+(`config_planchers_test.php`, `cle_acces_plafonds_test.php` ; `NOUVEAUTE_MAX_VISITE` et
+`_MAX_CRON` n'ont ni plancher ni plafond : 0 = sans limite, et `nouveautes_limite_sql()`). Les décisions
 PURES de `includes/nouveautes.php` : `fin_de_serie` (terminée, à venir, en
 route, inconnu — le dernier volume DÉCLARÉ compte autant que la dernière
 couverture), `nouveaute_evaluer` (annoncer, apprendre sans annoncer, ne jamais

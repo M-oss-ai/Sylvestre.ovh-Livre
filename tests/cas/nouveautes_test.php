@@ -272,10 +272,31 @@ test('un nom de fichier étrange est encodé, pas injecté', function () {
 
 groupe('Les bornes du .env');
 
-test('NOUVEAUTE_HEURES, _MAX_VISITE et _MAX_CRON ont des valeurs sûres par défaut', function () {
+test('NOUVEAUTE_HEURES vaut une heure par défaut, _MAX_VISITE et _MAX_CRON « sans limite »', function () {
     egale(1, NOUVEAUTE_HEURES, 'une heure entre deux vérifications d\'une même série');
-    egale(6, NOUVEAUTE_MAX_VISITE, 'six séries par arrivée');
-    egale(40, NOUVEAUTE_MAX_CRON, 'quarante par passage du cron');
+    egale(0, NOUVEAUTE_MAX_VISITE, 'ligne absente du .env : 0, donc autant de séries que le temps le permet');
+    egale(0, NOUVEAUTE_MAX_CRON, 'idem pour un passage du cron');
+});
+
+test('nouveautes_limite_sql() : 0 (ou moins) ne limite rien, un nombre limite', function () {
+    egale('', nouveautes_limite_sql(0), '0 = sans limite');
+    egale('', nouveautes_limite_sql(-3), 'un nombre négatif vaut 0');
+    egale(' LIMIT 1', nouveautes_limite_sql(1), 'la bibliothèque s\'en sert pour savoir s\'il y a quelque chose à vérifier');
+    egale(' LIMIT 40', nouveautes_limite_sql(40), 'un nombre');
+});
+
+test('nouveautes_series_a_verifier() n\'impose plus de LIMIT quand on lui donne 0', function () {
+    $q = corps_de(source('includes/nouveautes.php'), 'nouveautes_series_a_verifier');
+    contient('nouveautes_limite_sql($limite)', $q, 'la clause vient de nouveautes_limite_sql()');
+    sans('max(1, $limite)', $q, 'plus de plancher à 1 : 0 veut dire sans limite');
+});
+
+test('sans limite de nombre, le budget de temps arrête quand même le relevé', function () {
+    $src = source('includes/nouveautes.php');
+    contient('$budget_secondes', corps_de($src, 'nouveautes_verifier'), 'nouveautes_verifier() compte son temps');
+    contient("'temps'", corps_de($src, 'nouveautes_verifier'), 'et le dit quand il s\'arrête');
+    contient('nouveautes_budget()', source('purger.php'), 'le cron lui donne son budget');
+    contient('nouveautes_budget()', source('api.php'), 'la visite aussi');
 });
 
 test('le budget de temps laisse de la marge', function () {

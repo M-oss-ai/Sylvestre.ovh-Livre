@@ -44,8 +44,8 @@ putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait mu
 putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
 putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait mort avant d'être lu
 putenv('NOUVEAUTE_HEURES=0');             // 0 h : MangaDex interrogé à chaque page, pour chaque série
-putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 série : la fonction deviendrait muette sans le dire
-putenv('NOUVEAUTE_MAX_CRON=-5');
+putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 : sans limite de nombre (le budget de temps garde)
+putenv('NOUVEAUTE_MAX_CRON=-5');          // jamais un nombre négatif : lu comme 0
 putenv('PUSH_MAX_APPAREILS=0');           // 0 appareil : la fonction deviendrait muette sans le dire
 putenv('PUSH_TTL=0');                     // un message non remis serait jeté à l'instant
 putenv('PUSH_TIMEOUT=0');                 // un envoi qui échoue avant d'avoir commencé
@@ -185,9 +185,11 @@ test('NOUVEAUTE_HEURES ne descend jamais sous 1 heure', function () {
     egale(1, NOUVEAUTE_HEURES, 'le .env demandait 0');
 });
 
-test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON ne descendent jamais sous 1', function () {
-    egale(1, NOUVEAUTE_MAX_VISITE, 'le .env demandait 0');
-    egale(1, NOUVEAUTE_MAX_CRON, 'le .env demandait -5');
+test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON : 0 et les nombres négatifs valent « sans limite »', function () {
+    /* Exception voulue au plancher, comme les quotas de recherche : c'est le
+       budget de temps du relevé qui le garde (nouveautes_verifier()). */
+    egale(0, NOUVEAUTE_MAX_VISITE, 'le .env demandait 0');
+    egale(0, NOUVEAUTE_MAX_CRON, 'le .env demandait -5 : jamais un nombre négatif');
 });
 
 groupe('Notifications push');

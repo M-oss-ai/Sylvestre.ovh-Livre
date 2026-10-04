@@ -184,7 +184,7 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `VAPID_PUBLIC` · `VAPID_PRIVATE` | Clés des notifications push, à générer une fois (`php outils/vapid.php`). Vides : pas de notifications. **La privée est un secret** |
 | `PUSH_MAX_APPAREILS` · `PUSH_TTL` · `PUSH_TIMEOUT` | Appareils par compte (10, de 1 à 50), durée de garde d'un message non remis (86 400 s, de 60 à 2 419 200), délai d'un envoi (5 s, de 1 à 20) |
-| `NOUVEAUTE_HEURES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : heures minimales entre deux vérifications d'une même série (1, de 1 à 168), séries vérifiées au plus par arrivée sur la page (6, de 1 à 20) et par passage du cron (40, de 1 à 500) |
+| `NOUVEAUTE_HEURES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : heures minimales entre deux vérifications d'une même série (1, de 1 à 168), séries vérifiées au plus par arrivée sur la page et par passage du cron (**0 = sans limite**, c'est la valeur par défaut : le relevé s'arrête alors à son budget de temps) |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
 | `CLE_ACCES_MAX` · `CLE_ACCES_DEFI_DUREE` | Clés d'accès : nombre par compte (10, plafond 50) et validité du défi envoyé au navigateur (300 s, entre 60 et 900) |
@@ -622,8 +622,9 @@ tout ce qui est paru depuis toujours.
 
 Chaque vérification est un appel à MangaDex, donc une part du débit partagé :
 `NOUVEAUTE_HEURES` espace deux vérifications d'une même série, et
-`NOUVEAUTE_MAX_VISITE` / `NOUVEAUTE_MAX_CRON` bornent leur nombre (les
-plus anciennement vérifiées passent d'abord). La file d'attente décrite
+`NOUVEAUTE_MAX_VISITE` / `NOUVEAUTE_MAX_CRON` peuvent borner leur nombre
+(0, la valeur par défaut, ou ligne absente : sans limite, le temps seul
+décide). Les plus anciennement vérifiées passent d'abord. La file d'attente décrite
 plus haut s'applique, et le relevé s'arrête plutôt que d'insister quand elle
 refuse un appel, quand MangaDex ne répond plus trois fois de suite, ou quand son
 temps est épuisé.
