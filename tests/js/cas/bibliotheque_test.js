@@ -380,3 +380,42 @@ test("une mesure absente ou absurde ne pose aucun fondu", () => {
   faux(B.bordsDefilement({ gauche: NaN, visible: 351, total: 495 }).droite, "NaN");
   faux(B.bordsDefilement({ gauche: -5, visible: 351, total: 495 }).gauche, "rebond élastique négatif");
 });
+
+groupe("Bibliotheque.pagesSeries() — la bibliothèque par pages");
+
+test("plus de séries qu'une page : le bouton se montre, avec ce qu'il ajoute", () => {
+  const p = B.pagesSeries(120, 30, 1);
+  egale([30, 30, 90, 30, true], [p.limite, p.affichees, p.reste, p.suivantes, p.visible], "120 séries, pages de 30, une page affichée");
+  egale("Afficher 30 séries de plus", p.texte, "le texte du bouton");
+  egale("30 sur 120 séries affichées", p.info, "le décompte");
+});
+
+test("chaque clic ajoute une page, la dernière n'ajoute que le reste", () => {
+  egale([60, 60, 60], [B.pagesSeries(120, 30, 2).limite, B.pagesSeries(120, 30, 2).affichees, B.pagesSeries(120, 30, 2).reste], "deux pages");
+  const derniere = B.pagesSeries(125, 30, 4);
+  egale([120, 5, true], [derniere.affichees, derniere.reste, derniere.visible], "quatre pages sur cinq");
+  egale("Afficher 5 séries de plus", derniere.texte, "il ne reste que 5 séries");
+  egale("Afficher 1 série de plus", B.pagesSeries(121, 30, 4).texte, "une seule série : pas de pluriel");
+  egale(false, B.pagesSeries(125, 30, 5).visible, "tout est montré : le bouton disparaît");
+  egale("125 sur 125 séries affichées", B.pagesSeries(125, 30, 5).info, "le décompte final");
+});
+
+test("tout tient dans une page, ou rien à montrer : pas de bouton", () => {
+  egale(false, B.pagesSeries(30, 30, 1).visible, "pile une page");
+  egale(false, B.pagesSeries(12, 30, 1).visible, "moins qu'une page");
+  egale(false, B.pagesSeries(0, 30, 1).visible, "aucune série");
+  egale("0 sur 0 séries affichées", B.pagesSeries(0, 30, 1).info, "décompte à zéro");
+});
+
+test("sans taille de page (0) : aucun découpage", () => {
+  const p = B.pagesSeries(120, 0, 1);
+  egale([120, 120, 0, false], [p.limite, p.affichees, p.reste, p.visible], "tout est montré");
+});
+
+test("des nombres absurdes sont ramenés à du sens, jamais NaN", () => {
+  egale(false, B.pagesSeries("x", "y", "z").visible, "du texte");
+  egale(30, B.pagesSeries(120, 30, 0).affichees, "zéro page → une");
+  egale(30, B.pagesSeries(120, 30, -3).affichees, "pages négatives → une");
+  egale(60, B.pagesSeries("120", "30", "2").affichees, "des nombres en texte (attribut data-)");
+  egale(30, B.pagesSeries(120, 30.9, 1).affichees, "décimaux : la partie entière");
+});

@@ -66,6 +66,7 @@ $flash = flash_prendre();
       data-quota-series="<?= (int) $quota_series ?>" data-bloque="<?= $bloque ? '1' : '0' ?>"
       data-quota-recherche="<?= (int) $quota_recherche ?>" data-tranche-recherche="<?= e($tranche) ?>"
       data-compte="<?= (int) $moi['id'] ?>" data-flash="<?= e($flash) ?>" data-prive="1"
+      data-series-par-page="<?= (int) SERIES_PAGES_MAX ?>"
       data-nouveautes="<?= $a_verifier ? '1' : '0' ?>">
 
 <!-- Premier arrêt au clavier : sans lui, atteindre la première série
@@ -185,6 +186,14 @@ $flash = flash_prendre();
         echo carte_html($s, $bloque);
     }
   ?></div>
+
+  <!-- Les séries au-delà de la page affichée (SERIES_PAGES_MAX par page) : caché
+       tant que tout tient. Le texte et l'état viennent de js/app.js
+       (Bibliotheque.pagesSeries), qui découpe la liste dans le navigateur. -->
+  <div id="plus-series" class="plus-series hidden">
+    <button type="button" id="btn-plus-series" class="btn btn-ghost"></button>
+    <p id="plus-info" class="plus-info" aria-live="polite"></p>
+  </div>
 
   <div id="empty-collection" class="empty-state<?= $series ? ' hidden' : '' ?>">
     <p class="empty-emoji">📖</p>

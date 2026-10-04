@@ -164,7 +164,7 @@ stockées telles quelles et le gain de poids disparaît.
 
 ## Configuration
 
-Tout se règle dans `.env`, documenté dans `.env.example`. Trente et une de ces valeurs
+Tout se règle dans `.env`, documenté dans `.env.example`. Trente-deux de ces valeurs
 peuvent aussi se changer depuis l'administration (carte « Réglages ») : la valeur
 saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 
@@ -177,6 +177,7 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `UPLOAD_SECRET` | Sel des noms de fichiers envoyés |
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |
+| `SERIES_PAGES_MAX` | Séries affichées par page dans la bibliothèque (30, de 1 à 100), puis un bouton « Afficher plus ». Modifiable depuis l'administration |
 | `ASSETS_VERSION` | Version des URL `css/` et `js/`. À incrémenter au déploiement |
 | `COUVERTURE_CANDIDATS` · `COUVERTURE_MAX_SERIES` | Séries examinées / proposées à la recherche de couverture |
 | `COUVERTURE_QUOTA` · `COUVERTURE_FENETRE` | Recherches autorisées par compte et par tranche |
@@ -407,7 +408,7 @@ forfait** : on peut être bloqué et administrateur.
   confirmée ; un envoi raté ne défait pas le changement, la page le dit.
 - **Nommer ou révoquer** un administrateur. Jamais soi-même : un autre doit le faire,
   il en reste donc toujours un.
-- **Réglages** : trente et une valeurs du `.env` — quotas, recherche de couverture, durées, freins
+- **Réglages** : trente-deux valeurs du `.env` — quotas, recherche de couverture, durées, freins
   anti-force-brute — se changent depuis la page, sans renvoyer de fichier. Une valeur
   enregistrée **remplace celle du `.env`** et s'applique dès la requête suivante, pour tout le
   monde ; « ↩ .env » l'efface. Chaque réglage a ses bornes (3 à 20 tentatives et 60 à 600 s de

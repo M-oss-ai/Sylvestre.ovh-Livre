@@ -72,6 +72,12 @@ const REGLAGES = [
         'min' => 1, 'max' => 100, 'defaut' => 30, 'unite' => 'appareils',
     ],
 
+    'SERIES_PAGES_MAX' => [
+        'groupe' => 'quotas', 'libelle' => 'Séries affichées par page',
+        'aide' => "La bibliothèque montre ce nombre de séries, puis un bouton « Afficher plus » pour les suivantes. La recherche et les filtres portent sur toutes les séries, pas seulement sur la page affichée.",
+        'min' => 1, 'max' => 100, 'defaut' => 30, 'unite' => 'séries',
+    ],
+
     // ---- Recherche de couverture ----
     'COUVERTURE_QUOTA' => [
         'groupe' => 'couverture', 'libelle' => 'Recherches par compte et par tranche',

@@ -107,6 +107,37 @@ window.Bibliotheque = (() => {
   }
 
   /**
+   * Les séries affichées par pages (SERIES_PAGES_MAX par page) : combien de séries
+   * sont montrées, combien restent, et le texte du bouton « Afficher plus ».
+   *
+   *   total    : les séries qui répondent aux filtres et à la recherche ;
+   *   parPage  : la taille d'une page (0 ou moins : pas de découpage) ;
+   *   pages    : combien de pages sont affichées (à partir de 1).
+   *
+   * Retourne { limite, affichees, reste, suivantes, visible, texte, info } : `limite`
+   * est le nombre de séries à garder visibles, `visible` dit si le bouton se montre.
+   * Les nombres sont ramenés à des entiers sensés, jamais NaN.
+   */
+  function pagesSeries(total, parPage, pages) {
+    const n = Math.max(0, Math.floor(Number(total)) || 0);
+    const taille = Math.max(0, Math.floor(Number(parPage)) || 0);
+    const p = Math.max(1, Math.floor(Number(pages)) || 1);
+    const limite = taille > 0 ? taille * p : n;
+    const affichees = Math.min(n, limite);
+    const reste = n - affichees;
+    const suivantes = taille > 0 ? Math.min(taille, reste) : 0;
+    return {
+      limite,
+      affichees,
+      reste,
+      suivantes,
+      visible: reste > 0,
+      texte: "Afficher " + suivantes + (suivantes > 1 ? " séries" : " série") + " de plus",
+      info: affichees + " sur " + n + " séries affichées",
+    };
+  }
+
+  /**
    * La couverture de la fiche, réduite à ce qui la distingue : "" sans
    * image, l'adresse pour une URL, nom + taille + date pour un fichier.
    */
@@ -213,7 +244,7 @@ window.Bibliotheque = (() => {
   }
 
   return {
-    voisine, suiviDefilement, annonceQuota, texteQuotaRecherche,
+    voisine, suiviDefilement, annonceQuota, texteQuotaRecherche, pagesSeries,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
     panneauApres, panneauMemorise, aucunFiltre, bordsDefilement,
   };
@@ -257,6 +288,16 @@ window.Bibliotheque = (() => {
   /* Rang d'origine des séries créées depuis le chargement. Négatif et
      décroissant : elles se placent en tête, la plus récente devant. */
   let ordreNouveau = -1;
+  /* Les pages de la bibliothèque (SERIES_PAGES_MAX séries chacune, posé par
+     index.php) : combien sont affichées, et pour quelle vue. Changer de filtre ou
+     de recherche revient à la première page ; tout le reste (une série créée,
+     modifiée, supprimée) garde le nombre de pages affichées. 0 = pas de découpage. */
+  const SERIES_PAR_PAGE = parseInt(document.body.dataset.seriesParPage || "0", 10) || 0;
+  let pagesAffichees = 1;
+  let signatureVue = "";
+  const $plusSeries = document.getElementById("plus-series");
+  const $btnPlus = document.getElementById("btn-plus-series");
+  const $plusInfo = document.getElementById("plus-info");
   // Série MangaDex de la fiche ouverte, ou "" si elle n'est pas liée.
   let lienMangadex = "";
   let coverEnAttente = null; // null | {type:'url'|'file', …}
@@ -355,6 +396,31 @@ window.Bibliotheque = (() => {
       ordreBouscule = false;
     }
 
+    /* Les pages. L'ordre du DOM est maintenant définitif (pertinence ou ordre du
+       serveur) : on garde les `limite` premières cartes qui répondent, et les
+       suivantes se cachent comme n'importe quelle carte filtrée (« hidden »), si
+       bien que la navigation au clavier ne les voit pas non plus. Une vue
+       différente — autre filtre, autre recherche — repart de la première page. */
+    const signature = JSON.stringify([[...filtresStatut].sort(), [...filtresImage].sort(), favorisSeuls, prep.q]);
+    if (signature !== signatureVue) {
+      signatureVue = signature;
+      pagesAffichees = 1;
+    }
+    const etatPages = B.pagesSeries(visibles, SERIES_PAR_PAGE, pagesAffichees);
+    if (etatPages.reste > 0) {
+      let rang = 0;
+      $grid.querySelectorAll(".card:not(.hidden)").forEach((c) => {
+        if (++rang > etatPages.limite) c.classList.add("hidden");
+      });
+    }
+    if ($plusSeries) {
+      $plusSeries.classList.toggle("hidden", !etatPages.visible);
+      $btnPlus.textContent = etatPages.texte;
+      $plusInfo.textContent = etatPages.info;
+    }
+
+    // Les séries qui répondent (`visibles`), pas celles qu'on en montre : « aucune
+    // série » ne se dit que s'il n'y en a vraiment aucune.
     $emptyCollection.classList.toggle("hidden", toutes.length !== 0);
     $emptySearch.classList.toggle("hidden", !(toutes.length > 0 && visibles === 0));
     $grid.classList.toggle("hidden", visibles === 0);
@@ -1663,6 +1729,26 @@ window.Bibliotheque = (() => {
     } catch (e) {
       /* Silence : voir plus haut. */
     }
+  }
+
+  /* « Afficher plus » : une page de plus. Le bouton disparaît quand tout est
+     montré — avec le focus dessus : on le rend alors à la première série qui vient
+     d'apparaître (sans faire défiler la page), pour que le clavier ne retombe pas
+     en haut du document. */
+  if ($btnPlus) {
+    $btnPlus.addEventListener("click", () => {
+      const avant = visiblesDansLOrdre().length;
+      pagesAffichees++;
+      appliquerVue();
+      if ($plusSeries.classList.contains("hidden")) {
+        const nouvelle = visiblesDansLOrdre()[avant];
+        if (nouvelle) {
+          rendreActive(nouvelle);
+          const cible = nouvelle.querySelector(".card-cover");
+          if (cible) cible.focus({ preventScroll: true });
+        }
+      }
+    });
   }
 
   document.getElementById("nouveautes-ok").addEventListener("click", () => {

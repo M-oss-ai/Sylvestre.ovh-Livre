@@ -392,6 +392,12 @@ maj_le` pour tout ce qui n'est pas une modification, les écritures gardées
 contre un changement en cours d'appel, la session libérée avant d'attendre
 MangaDex, le cron sans `fonctions.php`, la migration 13 rejouable.
 
+**Couvert, bibliothèque par pages** — `series_pages_test.php` (bornes de `SERIES_PAGES_MAX` face à un
+`.env` hostile, branchement `index.php` / `js/app.js` / administration / `.env.example`) et
+`Bibliotheque.pagesSeries()` dans `tests/js/cas/bibliotheque_test.js` (taille de page, reste, pluriel,
+nombres absurdes). Le branchement sur la page (recherche, filtres, « Afficher plus » à l'écran) se vérifie
+à la main : le banc ne charge pas la grille.
+
 **Couvert, notifications push** — `push_test.php`, `tests/js/cas/push_test.js`,
 `tests/js/cas/sw_test.js`. Le chiffrement contre l'exemple de la RFC 8291
 (octet pour octet), un aller-retour avec un déchiffrement écrit à part, un message

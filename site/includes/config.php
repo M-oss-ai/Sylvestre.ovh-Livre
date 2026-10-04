@@ -194,6 +194,14 @@ define('REMEMBER_DUREE_VIP', max(0, (int) env('REMEMBER_DUREE_VIP', '31536000'))
    (notifications push, tous forfaits) — au-delà, l'ajout est refusé. */
 define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
 
+/* Séries affichées par PAGE dans la bibliothèque (index.php), de 1 à 100 :
+   au-delà, un bouton « Afficher plus » montre les suivantes, par tranches de ce
+   nombre. Le découpage se fait dans le navigateur : toutes les séries restent
+   chargées, si bien que la recherche, les filtres et les compteurs portent sur
+   TOUTES les séries et non sur la seule page affichée. Changer de filtre ou de
+   recherche revient à la première page. */
+define('SERIES_PAGES_MAX', min(100, max(1, (int) env('SERIES_PAGES_MAX', '30'))));
+
 /* Connexion avec Google (voir google.php et includes/google.php).
    L'identifiant et le secret se créent dans la console Google Cloud
    (« Identifiants » › « ID client OAuth », type « Application Web »),

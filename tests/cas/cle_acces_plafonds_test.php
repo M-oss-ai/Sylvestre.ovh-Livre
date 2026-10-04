@@ -14,6 +14,7 @@ putenv('CLE_ACCES_DEFI_DUREE=999999'); // un défi oublié ne traîne pas des jo
 putenv('ADMIN_SUPPRESSION_DUREE=99999999'); // un lien oublié dans une boîte mail ne reste pas une arme
 putenv('CRON_HEURES=99999');           // un cron plus espacé qu'une semaine, .env compris
 putenv('RAPPORT_HEURES=99999');
+putenv('SERIES_PAGES_MAX=99999');      // une « page » de cent mille séries ne découperait plus rien
 putenv('NOUVEAUTE_MINUTES=99999999');  // une série jamais revérifiée n'annoncerait plus jamais rien
 putenv('NOUVEAUTE_PUBLICATION_JOURS=99999'); // une mention jamais relue resterait fausse des années
 putenv('NOUVEAUTE_MAX_VISITE=99999');  // pas de plafond : 0 les rend déjà illimitées, un plafond n'aurait aucun sens
@@ -22,6 +23,12 @@ putenv('PUSH_TTL=99999999');           // les services refusent au-delà de quat
 putenv('PUSH_TIMEOUT=99999');          // un service muet ne retient pas un processus PHP une heure
 
 require __DIR__ . '/../lanceur.php';
+
+groupe('Bibliothèque par pages — plafond');
+
+test('SERIES_PAGES_MAX est plafonné à 100', function () {
+    egale(100, SERIES_PAGES_MAX, 'le .env demandait 99999 séries par page');
+});
 
 groupe('Nouveaux tomes — plafonds');
 

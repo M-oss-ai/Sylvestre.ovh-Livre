@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1100 tests : 933 PHP en 55 fichiers, 167 JavaScript)
+php tests/lancer.php              # toute la suite (1114 tests : 942 PHP en 56 fichiers, 172 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -138,7 +138,7 @@ rien hors de la bibliothèque — c'est ce qui permet au banc de le charger.
 ## Règles tacites
 
 **Tout réglage passe par le `.env`, jamais en dur ailleurs** — sauf les
-trente et un de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
+trente-deux de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
 (voir plus bas). Et chaque constante de `config.php` est bornée par un plancher
 ou un plafond : un `.env` mal rempli ne doit jamais pouvoir *supprimer* une
 protection.
@@ -268,6 +268,27 @@ clés sont `image-<type>` et les identifiants `count-image-<type>`, remis
 renvoie. L'ordre des boutons est celui d'`IMAGES_TYPES` (MangaDex, Lien,
 Importée, Pas d'image), que `index.php` parcourt, comme il parcourt
 `STATUTS` pour les statuts.
+
+**La bibliothèque s'affiche par pages : `SERIES_PAGES_MAX` séries, puis « Afficher plus »**
+(demande de l'utilisateur, 1 à 100, défaut 30, `.env` ET `admin.php`, groupe « Quotas »). Réponses de
+l'utilisateur aux questions posées : le réglage est un nombre de séries PAR PAGE (pas un nombre de
+pages) ; le découpage est fait **dans le navigateur** (pas par le serveur) ; la navigation est un
+bouton « Afficher plus », pas des numéros de page. **Conséquence voulue : `index.php` rend TOUJOURS
+toutes les séries** (`data-series-par-page` sur `<body>` ne fait que dire la taille d'une page) :
+la recherche, les filtres et les compteurs portent donc sur TOUTES les séries, pas seulement sur la page
+montrée. `appliquerVue()` (js/app.js) découpe APRÈS le filtre et le classement par pertinence : il garde
+les `limite` premières cartes qui répondent, dans leur ordre définitif, et cache les suivantes avec la
+même classe `hidden` que les cartes filtrées — la navigation au clavier ne les voit donc pas non plus.
+`Bibliotheque.pagesSeries(total, parPage, pages)` (pure, testée) donne la limite, le reste, le texte du
+bouton (« Afficher 5 séries de plus ») et le décompte (« 10 sur 12 séries affichées »). **Une autre vue
+repart de la première page** : la signature de la vue est (filtres de statut, d'image, favoris,
+recherche) ; une série créée, modifiée, supprimée ne la change pas, donc ne remet rien à zéro. « Aucune
+série ne correspond » et le masquage de la grille se décident sur les séries qui RÉPONDENT
+(`visibles`), jamais sur celles qu'on en montre. Quand le bouton disparaît (tout est montré) alors qu'il
+avait le focus, celui-ci passe à la première série qui vient d'apparaître, sans faire défiler la page.
+Rien n'est mémorisé d'une visite à l'autre : le nombre de pages montrées repart à 1 au chargement.
+**Ce que le découpage n'allège PAS** : le HTML et le DOM contiennent toujours toutes les séries
+(`content-visibility: auto` fait déjà le gros du travail de rendu) ; seul l'affichage est réduit.
 
 **Les filtres tiennent sur UNE rangée au repos : « Toutes », « Statut ▾ »,
 « ★ Favoris », « Image ▾ »** (demande de l'utilisateur : la barre était
@@ -768,7 +789,7 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   valeur sort de PHP par `e()`. Un identifiant est du texte choisi par quelqu'un
   d'autre.
 
-**Trente et un réglages se changent depuis `admin.php`, et la base prime sur le
+**Trente-deux réglages se changent depuis `admin.php`, et la base prime sur le
 `.env`** (demande de l'utilisateur : « les limites et les durées, pas de mot de
 passe ni de connexion »). La table `reglage` ne porte que l'ÉCART : une ligne par
 réglage changé, et « ↩ .env » l'efface. `config.php` ouvre la base AVANT ses
