@@ -241,3 +241,58 @@ test("un bouton en tabindex -1 n est jamais le premier arrêt non plus", () => {
   vrai(empeche, "Maj+Tab depuis le premier champ réel est retenu");
   egale("m-ok", document.activeElement.id, "et boucle vers le dernier bouton");
 });
+
+groupe("Lib.tirage() — tirer la page vers le bas pour l actualiser");
+
+test("sous le seuil, le rond suit à moitié et rien n est prêt", () => {
+  const t = Lib.tirage(40);
+  egale(20, t.distance, "il résiste : la moitié de la course du doigt");
+  faux(t.pret, "pas encore prêt");
+  egale(0, Lib.tirage(0).distance, "doigt immobile : le rond ne bouge pas");
+});
+
+test("au seuil, c est prêt — pas avant", () => {
+  faux(Lib.tirage(Lib.TIRAGE_SEUIL_PX - 1).pret, "un pixel avant");
+  vrai(Lib.tirage(Lib.TIRAGE_SEUIL_PX).pret, "au seuil");
+  vrai(Lib.tirage(Lib.TIRAGE_SEUIL_PX + 200).pret, "bien au-delà");
+});
+
+test("le rond ne descend jamais plus bas que son maximum", () => {
+  egale(64, Lib.tirage(500).distance, "plafonné");
+  egale(64, Lib.tirage(5000).distance, "même tout en bas de l écran");
+});
+
+test("un doigt qui remonte, ou une valeur absurde, ne tire rien", () => {
+  egale(0, Lib.tirage(-30).distance, "doigt remonté");
+  faux(Lib.tirage(-30).pret, "pas prêt");
+  for (const v of [NaN, Infinity, -Infinity, undefined, null, "abc"]) {
+    const t = Lib.tirage(v);
+    egale(0, t.distance, String(v) + " : aucun mouvement");
+    faux(t.pret, String(v) + " : jamais prêt");
+  }
+});
+
+groupe("Lib.tirageDirection() — est-ce un tirage vers le bas ?");
+
+test("trop près du point de départ : on attend", () => {
+  egale("attente", Lib.tirageDirection(0, 0), "immobile");
+  egale("attente", Lib.tirageDirection(3, 4), "tremblement");
+  egale("attente", Lib.tirageDirection(0, -5), "même vers le haut, trop tôt pour le dire");
+});
+
+test("un doigt qui descend droit tire", () => {
+  egale("tirer", Lib.tirageDirection(0, 20), "tout droit");
+  egale("tirer", Lib.tirageDirection(10, 30), "un peu de travers");
+  egale("tirer", Lib.tirageDirection(-10, 30), "de l autre côté");
+});
+
+test("un doigt qui remonte ne tire pas : la page défile", () => {
+  egale("annuler", Lib.tirageDirection(0, -20), "vers le haut");
+  egale("annuler", Lib.tirageDirection(5, -40), "vers le haut, de travers");
+});
+
+test("un glissement de côté ne tire pas : les rangées de filtres coulissent", () => {
+  egale("annuler", Lib.tirageDirection(30, 10), "plutôt horizontal");
+  egale("annuler", Lib.tirageDirection(-30, 10), "de l autre côté");
+  egale("annuler", Lib.tirageDirection(20, 20), "diagonale exacte : pas assez descendant");
+});

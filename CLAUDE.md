@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1130 tests : 958 PHP en 56 fichiers, 172 JavaScript)
+php tests/lancer.php              # toute la suite (1144 tests : 964 PHP en 56 fichiers, 180 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -366,6 +366,31 @@ zoomerait à côté de ses champs. Une première version annulait le second appu
 au `touchend` et rejouait son clic : un détour inutile, retiré.
 **Non vérifié sur un iPhone** : le diagnostic repose sur le comportement
 documenté de WebKit et sur ce que l'utilisateur observe, pas sur une mesure.
+
+**Tirer la page vers le bas depuis le haut l'actualise, dans l'application installée** (demande de
+l'utilisateur : « comme sur navigateur »). Une application sur l'écran d'accueil (`display: standalone`)
+n'a ni barre d'adresse ni bouton « actualiser », et Safari n'y offre pas le geste. Tout est dans
+`js/commun.js` (section « Tirer la page vers le bas »), donc sur les pages qui le chargent — bibliothèque,
+Paramètres, administration —, pas sur la connexion ni l'inscription.
+- **Branché seulement si `(pointer: coarse)` ET `modeApplication()`** (`navigator.standalone` sur iOS,
+  `(display-mode: standalone)` ailleurs). **Jamais dans un onglet de navigateur** : il actualise déjà de
+  son côté, un second geste rechargerait DEUX fois. Pour la même raison, `style.css` pose
+  `overscroll-behavior-y: contain` sur `html` en mode installé (Chrome sur Android recharge sinon aussi).
+- **Le geste** : un doigt posé quand la page est tout en haut, pas dans une fenêtre ouverte
+  (`.overlay:not(.hidden)`), pas dans un champ, pas dans une zone déjà défilée (`scrollTop > 0`). Il est
+  reconnu au bout de 8 px s'il descend plutôt qu'il ne glisse de côté (les rangées de filtres coulissent) ;
+  s'il remonte, le geste est abandonné pour de bon et la page défile comme d'habitude. Un second doigt
+  (pincement) l'abandonne aussi. **`preventDefault()` n'est appelé qu'une fois le tirage reconnu**, par un
+  écouteur `{ passive: false }` (un écouteur passif ne peut pas annuler), et seulement si `e.cancelable`.
+- **Le rond** (`.tirer-indicateur`, créé au premier tirage, `aria-hidden`) suit à moitié le doigt (`tirage()`),
+  se dore à `TIRAGE_SEUIL_PX` (90 px de course) ; lâché au-delà, `location.reload()` et le rond tourne ;
+  en deçà, il remonte. Posé par la propriété `--tirer`, **en CSSOM** (la CSP refuse l'attribut `style`).
+- **Décisions pures, testées** : `Lib.tirage(dy)` et `Lib.tirageDirection(dx, dy)` (`tests/js/cas/commun_test.js`) ;
+  le branchement est gardé par des tests de sources (`tests/cas/tactile_test.php`). **Vérifié dans le
+  navigateur intégré** avec `matchMedia` truqué (mode installé, tactile) et de faux évènements tactiles : tirage,
+  relâchement court, geste annulé, glissement de côté, champ, fenêtre ouverte, page défilée, pincement,
+  rechargement réel. **Non vérifié sur un iPhone ni un Android réels** : le geste vrai (rebond de Safari,
+  évènements du doigt) n'a pas été essayé.
 
 **Les filtres se collent sous la barre du haut, à sa hauteur mesurée.**
 `js/app.js` pose `--hauteur-topbar` (et `--hauteur-filtres`, dont se

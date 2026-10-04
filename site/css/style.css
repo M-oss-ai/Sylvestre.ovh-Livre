@@ -786,6 +786,56 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 
 .hidden { display: none !important; }
 
+/* ---------- Tirer la page vers le bas pour l'actualiser (js/commun.js) ----------
+
+   Le rond est créé par le script au premier tirage, et posé par --tirer (0 à 64, en
+   pixels, fixé en CSSOM). Au repos il est hors de l'écran et transparent. */
+.tirer-indicateur {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 50%;
+  z-index: 60;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  font-size: 20px;
+  line-height: 1;
+  pointer-events: none;
+  opacity: calc(var(--tirer, 0) / 40);
+  transform: translate(-50%, calc(var(--tirer, 0) * 1px - 44px));
+}
+
+/* Pas de transition sous le doigt (il doit suivre) ; une seule au relâchement. */
+.tirer-indicateur.tirer-relache { transition: transform 0.2s ease, opacity 0.2s ease; }
+
+/* Assez tiré : lâcher actualise. */
+.tirer-indicateur.tirer-pret { color: var(--gold); border-color: var(--gold); }
+
+.tirer-fleche {
+  display: block;
+  transform: rotate(calc(var(--tirer, 0) * 4deg));
+}
+
+.tirer-actualise .tirer-fleche { animation: tirer-tourne 0.8s linear infinite; }
+
+@keyframes tirer-tourne {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Application installée : le script tient le geste. Sans cette ligne, Chrome sur Android
+   recharge aussi de son côté, et la page se rechargerait deux fois. */
+@media (display-mode: standalone) {
+  html { overscroll-behavior-y: contain; }
+}
+
 /* ---------- Boutons ---------- */
 
 .btn {

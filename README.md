@@ -363,6 +363,14 @@ garde le curseur dans le Titre.
 `carte.php` pose `tabindex="-1"` partout, `js/app.js` rend le sien à la
 carte active — et le garde à la carte qui la remplace après une action.
 
+### Actualiser l'application installée
+
+Une application ajoutée à l'écran d'accueil n'a ni barre d'adresse ni bouton « actualiser » : on
+**tire la page vers le bas depuis le haut**, comme dans un navigateur. Un rond descend avec le doigt et
+se dore quand c'est assez ; on lâche, la page se recharge. En deçà, il remonte et rien ne se passe. Le geste
+n'existe que dans l'application installée (un onglet de navigateur le fait déjà), sur la bibliothèque, les
+Paramètres et l'administration, et jamais depuis un champ, une fenêtre ouverte ou une liste déjà défilée.
+
 ### Limite de séries
 
 Le forfait standard est annoncé dès 90 % de la limite (« 148 / 150 »),

@@ -299,6 +299,15 @@ lui qui empêche Safari de zoomer au double-appui) et ne bloque pas le zoom. Un
 garde-fou, pas une mesure du navigateur : que le double-appui ne zoome plus
 ne se constate que sur un iPhone.
 
+Le même fichier garde **tirer la page vers le bas pour l'actualiser** (`js/commun.js`) : le geste n'est branché
+qu'en application installée sur écran tactile (jamais dans un onglet : double rechargement), l'écouteur du
+mouvement est non passif et n'annule qu'un tirage reconnu, il ne part ni d'un champ, ni d'une fenêtre, ni d'une
+zone défilée, le rond se pose en CSSOM, et `style.css` désactive le geste natif en mode installé. Les décisions
+pures — `Lib.tirage` (course, plafond, seuil, valeurs absurdes) et `Lib.tirageDirection` (en attente, vers le
+bas, vers le haut, de côté) — sont dans `tests/js/cas/commun_test.js`. Le branchement lui-même (écouteurs,
+`location.reload()`) ne se teste pas dans le banc, qui n'est pas une application installée : il a été essayé à
+la main avec de faux évènements tactiles, jamais sur un vrai téléphone.
+
 **Couvert, administration** — `admin_test.php`, `mailer_admin_test.php`,
 `tests/js/cas/admin_test.js`. Les décisions PURES de `includes/admin.php` :
 `est_admin` (seul `1` ouvre la page, colonne absente = personne), un compte bloqué

@@ -101,3 +101,61 @@ test('aucune page n interdit le zoom au pincement', function () {
         sans('maximum-scale', $source, $nom . ' ne plafonne pas le zoom');
     }
 });
+
+groupe('Tirer la page vers le bas pour l\'actualiser (js/commun.js)');
+
+/** commun.js sans ses commentaires : on regarde le code, pas ce qu'il raconte. */
+function commun_sans_commentaires(): string
+{
+    $js = (string) file_get_contents(CHEMIN_SITE . '/js/commun.js');
+    return (string) preg_replace('~/\*.*?\*/~s', '', $js);
+}
+
+test('le geste n\'est branché que dans une application installée, sur écran tactile', function () {
+    $code = commun_sans_commentaires();
+    /* Un onglet de navigateur actualise déjà : le brancher là rechargerait deux fois. */
+    contient('window.matchMedia("(pointer: coarse)").matches && modeApplication()', $code, 'tactile ET installée');
+    contient('window.navigator.standalone === true', $code, 'l\'écran d\'accueil de l\'iPhone');
+    contient('(display-mode: standalone)', $code, 'et celui des autres navigateurs');
+});
+
+test('le mouvement n\'est annulé que par un écouteur non passif, et seulement s\'il le peut', function () {
+    $code = commun_sans_commentaires();
+    $debut = (int) strpos($code, 'const finDuGeste');
+    $bloc = substr($code, (int) strpos($code, 'let geste = null;'), $debut - (int) strpos($code, 'let geste = null;'));
+    contient('{ passive: false }', $bloc, 'sans cela preventDefault() ne fait rien');
+    contient('if (e.cancelable) e.preventDefault();', $bloc, 'et il ne s\'y essaie que si l\'évènement le permet');
+    egale(1, substr_count($bloc, 'preventDefault'), 'un seul endroit annule le mouvement : le tirage reconnu');
+});
+
+test('le geste ne part pas d\'une fenêtre, d\'un champ, ni d\'une zone qui défile', function () {
+    $code = commun_sans_commentaires();
+    contient('.overlay:not(.hidden)', $code, 'une fenêtre ouverte garde son geste');
+    contient('e.target.closest("input, textarea, select")', $code, 'un champ : le doigt y sélectionne du texte');
+    contient('el.scrollTop > 0', $code, 'une zone déjà défilée remonte d\'abord');
+    contient('<= 0', $code, 'et la page doit être tout en haut');
+});
+
+test('le rond se pose en CSSOM : aucun attribut « style », que la CSP refuse', function () {
+    $code = commun_sans_commentaires();
+    sans('setAttribute("style"', $code, 'pas d\'attribut style');
+    sans('cssText', $code, 'ni de cssText');
+    contient('indicateur.style.setProperty("--tirer"', $code, 'une propriété personnalisée, posée en CSSOM');
+    contient('setAttribute("aria-hidden", "true")', $code, 'et il n\'est pas lu par un lecteur d\'écran');
+});
+
+test('commun.js est chargé par les pages de l\'application (bibliothèque, paramètres, administration)', function () {
+    foreach (['index.php', 'parametres.php', 'admin.php'] as $page) {
+        contient("actif('js/commun.js')", (string) file_get_contents(CHEMIN_SITE . '/' . $page), $page);
+    }
+});
+
+test('style.css : le rond, son rechargement, et la désactivation du geste natif en mode installé', function () use ($css) {
+    foreach (['.tirer-indicateur {', '.tirer-indicateur.tirer-pret', '.tirer-fleche {', '@keyframes tirer-tourne'] as $regle) {
+        contient($regle, $css, $regle);
+    }
+    motif('/@media \(display-mode: standalone\)\s*\{\s*html\s*\{\s*overscroll-behavior-y:\s*contain;/', $css,
+        'Chrome sur Android ne recharge pas aussi de son côté');
+    contient('pointer-events: none;', substr($css, (int) strpos($css, '.tirer-indicateur {'), 700), 'le rond ne capte aucun toucher');
+    sans('touch-action: none', $css, 'et le pincement reste permis');
+});

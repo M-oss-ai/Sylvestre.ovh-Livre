@@ -852,6 +852,160 @@ window.Lib = (() => {
     });
   }
 
+  /* ---------- Tirer la page vers le bas pour l'actualiser ----------
+
+     (demande de l'utilisateur : « comme sur navigateur »). Une application
+     installée sur l'écran d'accueil (display: standalone) n'a ni barre
+     d'adresse ni bouton « actualiser », et Safari n'y offre pas le geste. Un
+     onglet de navigateur, lui, l'offre déjà : le brancher là rechargerait
+     DEUX fois — d'où la condition modeApplication(). Écrans tactiles seulement.
+
+     Le geste : un doigt, posé alors que la page est tout en haut (et pas dans
+     une fenêtre ouverte, ni dans une zone qui défile, ni dans un champ), qui
+     descend plutôt qu'il ne glisse de côté. Un rond tombe du haut avec le doigt,
+     se dore à TIRAGE_SEUIL_PX ; lâché au-delà, la page se recharge, en deçà il
+     remonte. Le mouvement n'est annulé (preventDefault) qu'une fois le geste
+     reconnu comme un tirage : avant, et dès que le doigt remonte, la page
+     défile comme d'habitude. Le rond est posé en CSSOM (--tirer), que la CSP
+     accepte, jamais en attribut « style ».
+
+     Les décisions sont pures et testées (tirage, tirageDirection) ; le
+     branchement ne l'est pas — le banc n'est pas une application installée. */
+  const TIRAGE_SEUIL_PX = 90;  // course du doigt qui déclenche l'actualisation
+  const TIRAGE_MAX_PX = 64;    // le plus que le rond descend
+  const TIRAGE_AMORCE_PX = 8;  // en deçà, on ne sait pas encore ce que fait le doigt
+  const TIRAGE_TENU_PX = 48;   // où le rond reste pendant le rechargement
+
+  // dy : de combien le doigt est descendu depuis sa pose (négatif : il a remonté).
+  const tirage = (dy) => {
+    const course = Number.isFinite(dy) ? Math.max(0, dy) : 0;
+    return {
+      distance: Math.min(TIRAGE_MAX_PX, Math.round(course * 0.5)), // le rond suit à moitié : il résiste
+      pret: course >= TIRAGE_SEUIL_PX,
+    };
+  };
+
+  // Que fait le doigt ? « attente » (trop tôt pour le dire), « tirer » (il descend,
+  // plutôt droit), « annuler » (il remonte ou glisse de côté : ce n'est pas notre geste).
+  const tirageDirection = (dx, dy) => {
+    if (Math.hypot(dx, dy) < TIRAGE_AMORCE_PX) return "attente";
+    return dy > 0 && dy > Math.abs(dx) ? "tirer" : "annuler";
+  };
+
+  const modeApplication = () =>
+    window.navigator.standalone === true
+    || (!!window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+
+  if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches && modeApplication()) {
+    let geste = null;          // { x, y, etat: "attente" | "tirer" | "annule", dy }
+    let indicateur = null;     // le rond, créé au premier tirage
+    let actualisation = false; // le rechargement est lancé : plus de geste
+
+    const enHaut = () => (document.scrollingElement ? document.scrollingElement.scrollTop : window.scrollY) <= 0;
+
+    // Une fenêtre ouverte (fiche, confirmation…) : le geste est le sien.
+    const fenetreOuverte = () => !!document.querySelector(".overlay:not(.hidden)");
+
+    // Une zone qui défile et qui n'est pas en haut : tirer vers le bas la fait remonter.
+    const defileEnDessous = (cible) => {
+      for (let el = cible; el && el !== document.body; el = el.parentElement) {
+        if (el.scrollTop > 0) return true;
+      }
+      return false;
+    };
+
+    const creerIndicateur = () => {
+      if (!indicateur) {
+        indicateur = document.createElement("div");
+        indicateur.className = "tirer-indicateur";
+        indicateur.setAttribute("aria-hidden", "true");
+        const fleche = document.createElement("span");
+        fleche.className = "tirer-fleche";
+        fleche.textContent = "↻";
+        indicateur.append(fleche);
+        document.body.append(indicateur);
+      }
+      return indicateur;
+    };
+
+    // Le rond remonte (avec une transition) ; le geste, lui, est fini.
+    const relacher = () => {
+      if (!indicateur) return;
+      indicateur.classList.add("tirer-relache");
+      indicateur.classList.remove("tirer-pret");
+      indicateur.style.setProperty("--tirer", "0");
+    };
+
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        geste = null;
+        const doigt = e.touches[0];
+        if (actualisation || e.touches.length !== 1 || !doigt || !(e.target instanceof Element)) return;
+        if (!enHaut() || fenetreOuverte() || defileEnDessous(e.target) || e.target.closest("input, textarea, select")) return;
+        geste = { x: doigt.clientX, y: doigt.clientY, etat: "attente", dy: 0 };
+      },
+      { passive: true }
+    );
+
+    document.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!geste || geste.etat === "annule") return;
+        const doigt = e.touches[0];
+        if (!doigt || e.touches.length !== 1) { // un second doigt : un pincement, pas un tirage
+          if (geste.etat === "tirer") relacher();
+          geste.etat = "annule";
+          return;
+        }
+        const dx = doigt.clientX - geste.x;
+        const dy = doigt.clientY - geste.y;
+        if (geste.etat === "attente") {
+          const sens = tirageDirection(dx, dy);
+          if (sens === "attente") return;
+          if (sens === "annuler") { geste.etat = "annule"; return; }
+          geste.etat = "tirer";
+          creerIndicateur().classList.remove("tirer-relache");
+        }
+        if (dy <= 0) { // le doigt est revenu au point de départ : on lâche, la page reprend la main
+          relacher();
+          geste.etat = "annule";
+          return;
+        }
+        if (e.cancelable) e.preventDefault(); // sans cela, le navigateur rebondit ou recharge de son côté
+        geste.dy = dy;
+        const t = tirage(dy);
+        indicateur.style.setProperty("--tirer", String(t.distance));
+        indicateur.classList.toggle("tirer-pret", t.pret);
+      },
+      { passive: false } // pour pouvoir annuler : un écouteur passif ne le peut pas
+    );
+
+    const finDuGeste = (e) => {
+      const g = geste;
+      geste = null;
+      if (!g || g.etat !== "tirer") return;
+      if (e.type === "touchend" && tirage(g.dy).pret) {
+        actualisation = true;
+        indicateur.classList.add("tirer-actualise", "tirer-pret");
+        indicateur.style.setProperty("--tirer", String(TIRAGE_TENU_PX));
+        window.location.reload();
+      } else {
+        relacher();
+      }
+    };
+    document.addEventListener("touchend", finDuGeste, { passive: true });
+    document.addEventListener("touchcancel", finDuGeste, { passive: true });
+
+    // Revenu du cache de navigation (« Précédent ») avec le rond encore tournant : on l'efface.
+    window.addEventListener("pageshow", (e) => {
+      if (!e.persisted) return;
+      actualisation = false;
+      geste = null;
+      if (indicateur) { indicateur.remove(); indicateur = null; }
+    });
+  }
+
   /* ---------- Retour arrière sur une page privée ----------
 
      Le navigateur peut garder une page entière en mémoire et la
@@ -885,5 +1039,6 @@ window.Lib = (() => {
     wireImagePicker, brancherToggleMotDePasse, piegerFocus,
     erreurChamp, effacerErreur, effacerErreurs, erreursSurChamps, urlImageAcceptee,
     MESSAGE_URL_REFUSEE,
+    tirage, tirageDirection, TIRAGE_SEUIL_PX,
   };
 })();
