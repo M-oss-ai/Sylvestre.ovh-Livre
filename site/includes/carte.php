@@ -80,9 +80,16 @@ function serie_fin_etiquette(array $s): string
  *
  * Retourne ['texte' => la mention, 'aide' => une ou deux phrases qui disent ce
  * qu'elle veut dire et d'où elle vient]. Les deux sont '' quand on ne sait rien.
- * L'aide dit toujours QUI parle — « MangaDex indique que… » — parce que ce sont des
- * informations de MangaDex, saisies par des bénévoles, pas des certitudes du site.
- * Fonction pure, testée : une mention sans explication ferait un « ⓘ » vide.
+ *
+ * **Seules les mentions SANS numéro de tome ont une aide** (demande de l'utilisateur :
+ * « le ⓘ seulement sur les messages sans tomes ou flous, comme “En cours de
+ * publication” et “Série terminée” ») : « En cours de publication », « En pause »,
+ * « Série terminée », « Série arrêtée » — celles qu'on ne comprend pas d'un coup d'œil.
+ * « Tome 44 en attente », « En pause au tome 43 »… se suffisent : 'aide' vaut '' et la
+ * carte n'a pas de « ⓘ ». L'aide dit toujours QUI parle — « MangaDex indique que… » —
+ * parce que ce sont des informations de MangaDex, saisies par des bénévoles, pas des
+ * certitudes du site. Fonction pure, testée : un « ⓘ » n'existe que s'il a quelque
+ * chose à dire (carte_html() le décide sur 'aide').
  */
 function serie_fin_info(array $s): array
 {
@@ -97,42 +104,22 @@ function serie_fin_info(array $s): array
         switch ($publication) {
             case 'ongoing':
                 if ($dernier > 0) {
-                    return [
-                        'texte' => 'Tome ' . ($dernier + 1) . ' en attente',
-                        'aide'  => 'La série paraît toujours. MangaDex connaît les tomes jusqu\'au ' . $dernier
-                            . ' : le ' . ($dernier + 1) . ' n\'y est pas encore. Il a pu sortir en librairie avant d\'apparaître chez MangaDex.',
-                    ];
+                    return ['texte' => 'Tome ' . ($dernier + 1) . ' en attente', 'aide' => ''];
                 }
                 break;
             case 'hiatus':
-                return [
-                    'texte' => 'En pause au tome ' . $connu,
-                    'aide'  => 'MangaDex indique que la série est en pause : l\'auteur a interrompu la publication. Le dernier tome qu\'il connaît est le ' . $connu . '.',
-                ];
+                return ['texte' => 'En pause au tome ' . $connu, 'aide' => ''];
             case 'completed':
-                return [
-                    'texte' => 'Se termine au tome ' . $connu,
-                    'aide'  => 'MangaDex indique que la publication est terminée : la série compte ' . $connu . ' tome' . ($connu > 1 ? 's' : '') . '.',
-                ];
+                return ['texte' => 'Se termine au tome ' . $connu, 'aide' => ''];
             default:
-                return [
-                    'texte' => 'Arrêtée au tome ' . $connu,
-                    'aide'  => 'MangaDex indique que la série a été arrêtée avant sa fin. Le dernier tome qu\'il connaît est le ' . $connu . '.',
-                ];
+                return ['texte' => 'Arrêtée au tome ' . $connu, 'aide' => ''];
         }
     }
     if ($statut === 'attente') {
-        return [
-            'texte' => 'Tome ' . ($tome + 1) . ' en attente',
-            'aide'  => 'Vous avez mis cette série « En attente » : vous attendez la sortie du tome ' . ($tome + 1) . '.',
-        ];
+        return ['texte' => 'Tome ' . ($tome + 1) . ' en attente', 'aide' => ''];
     }
     if ($connu > 0 && $tome > $connu) {
-        return [
-            'texte' => "MangaDex s'arrête au tome " . $connu,
-            'aide'  => 'Vous avez lu plus de tomes que MangaDex n\'en connaît (' . $connu . ') : ses informations ont du retard. '
-                . 'Le site ne peut pas dire où en est la série.',
-        ];
+        return ['texte' => "MangaDex s'arrête au tome " . $connu, 'aide' => ''];
     }
     if ($lu && $connu === 0) {
         return match ($publication) {
@@ -212,18 +199,24 @@ function carte_html(array $s, bool $lecture_seule = false): string
         : '<span class="no-cover" aria-hidden="true">📕</span>';
 
     $etiquette = $emprunter ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>' : '';
-    /* La mention, et son « ⓘ » : un bouton qui déplie l'explication juste dessous
-       (js/app.js, « card-info »). Pas de data-action : ce n'est pas une commande, et un
-       compte bloqué le garde (« aucune action pour le script »). tabindex="-1" comme
-       tout ce qui se focalise dans une carte ; la carte active le rend (app.js,
-       FOCUSABLES_CARTE). aria-expanded dit s'il est déplié. */
+    /* La mention ; et, SEULEMENT quand elle n'a pas de numéro de tome (« En cours de
+       publication », « Série terminée »… : serie_fin_info() lui donne une aide), un « ⓘ » :
+       un bouton qui déplie l'explication juste dessous (js/app.js, « card-info »). Pas de
+       data-action : ce n'est pas une commande, et un compte bloqué le garde (« aucune
+       action pour le script »). tabindex="-1" comme tout ce qui se focalise dans une
+       carte ; la carte active le rend (app.js, FOCUSABLES_CARTE). aria-expanded dit s'il
+       est déplié. */
     $fin_html = '';
     if ($mention !== '') {
-        $aide_id  = 'aide-fin-' . (int) $s['id'];
-        $fin_html = '<p class="card-fin"><span class="card-fin-texte">' . e($mention) . '</span>'
-            . '<button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="' . $aide_id . '"'
-            . ' aria-label="Que veut dire « ' . e($mention) . ' » ?" title="Que veut dire ce message ?">ⓘ</button></p>'
-            . '<p class="card-fin-aide hidden" id="' . $aide_id . '" role="note">' . e($info['aide']) . '</p>';
+        $bouton = '';
+        $aide   = '';
+        if ($info['aide'] !== '') {
+            $aide_id = 'aide-fin-' . (int) $s['id'];
+            $bouton  = '<button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="' . $aide_id . '"'
+                . ' aria-label="Que veut dire « ' . e($mention) . ' » ?" title="Que veut dire ce message ?">ⓘ</button>';
+            $aide    = '<p class="card-fin-aide hidden" id="' . $aide_id . '" role="note">' . e($info['aide']) . '</p>';
+        }
+        $fin_html = '<p class="card-fin"><span class="card-fin-texte">' . e($mention) . '</span>' . $bouton . '</p>' . $aide;
     }
 
     /* Le même libellé quel que soit le statut : c'est le dernier tome

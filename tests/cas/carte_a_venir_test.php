@@ -126,7 +126,13 @@ test('en lecture seule (compte bloqué), la mention se lit toujours', function (
     contient('<span class="card-fin-texte">Tome 44 en attente</span>', $html, 'c\'est une information, pas une commande');
     sans('data-action', $html, 'aucune commande pour le script : ni avancer, ni reculer, ni modifier');
     sans('role="button"', $html, 'la couverture n\'est pas un bouton');
-    contient('class="card-info"', $html, 'seul le « ⓘ » reste : il ne change rien, il explique');
+    sans('card-info', $html, '« Tome 44 en attente » a un numéro : il se comprend seul, pas de « ⓘ »');
+});
+
+test('en lecture seule (compte bloqué), le « ⓘ » d\'une mention sans numéro reste : il ne change rien, il explique', function () {
+    $html = carte_html(serie_en_attente(['statut' => 'cours', 'publication' => 'ongoing', 'dernier_tome' => 0, 'tome_final' => 0]), true);
+    contient('class="card-info"', $html, 'le « ⓘ »');
+    sans('data-action', $html, 'et toujours aucune commande');
 });
 groupe('serie_fin_etiquette() — la mention de la série liée à MangaDex, même au tome 2');
 
@@ -323,44 +329,53 @@ test('la fiche propose le statut : le menu parcourt STATUTS', function () {
 
 groupe('serie_fin_info() — l\'explication du « ⓘ »');
 
-test('chaque mention a une explication, et inversement', function () {
-    $cas = [
-        'ongoing, au bout'        => serie_mangadex('ongoing', 43, 43),
-        'ongoing, tome 2'         => serie_mangadex('ongoing', 2, 43),
-        'hiatus'                  => serie_mangadex('hiatus', 2, 43),
-        'completed'               => serie_mangadex('completed', 2, 50, 50),
-        'cancelled'               => serie_mangadex('cancelled', 2, 43),
-        'en retard'               => serie_mangadex('ongoing', 5, 3),
-        'en attente à la main'    => serie_mangadex('', 20, 0, 0, 'attente'),
-        'ongoing sans tome'       => serie_mangadex('ongoing', 2, 0),
-        'hiatus sans tome'        => serie_mangadex('hiatus', 2, 0),
-        'completed sans tome'     => serie_mangadex('completed', 2, 0),
-        'cancelled sans tome'     => serie_mangadex('cancelled', 2, 0),
+test('SEULES les mentions sans numéro de tome ont une explication (demande de l\'utilisateur)', function () {
+    $sans_numero = [
+        'ongoing sans tome'   => serie_mangadex('ongoing', 2, 0),
+        'hiatus sans tome'    => serie_mangadex('hiatus', 2, 0),
+        'completed sans tome' => serie_mangadex('completed', 2, 0),
+        'cancelled sans tome' => serie_mangadex('cancelled', 2, 0),
     ];
-    foreach ($cas as $nom => $serie) {
+    foreach ($sans_numero as $nom => $serie) {
         $i = serie_fin_info($serie);
         vrai($i['texte'] !== '', $nom . ' : une mention');
         vrai(mb_strlen($i['aide'], 'UTF-8') >= 30, $nom . ' : une explication, pas un mot');
+        contient('MangaDex indique', $i['aide'], $nom . ' : on dit QUI parle');
         egale($i['texte'], serie_fin_etiquette($serie), $nom . ' : serie_fin_etiquette() est le texte de serie_fin_info()');
     }
-    egale(['texte' => '', 'aide' => ''], serie_fin_info(serie_mangadex('', 2, 43)), 'rien de connu : ni mention ni explication — pas de « ⓘ » vide');
+    $avec_numero = [
+        'ongoing, au bout'     => serie_mangadex('ongoing', 43, 43),
+        'ongoing, tome 2'      => serie_mangadex('ongoing', 2, 43),
+        'hiatus'               => serie_mangadex('hiatus', 2, 43),
+        'completed'            => serie_mangadex('completed', 2, 50, 50),
+        'cancelled'            => serie_mangadex('cancelled', 2, 43),
+        'en retard'            => serie_mangadex('ongoing', 5, 3),
+        'en attente à la main' => serie_mangadex('', 20, 0, 0, 'attente'),
+    ];
+    foreach ($avec_numero as $nom => $serie) {
+        $i = serie_fin_info($serie);
+        vrai($i['texte'] !== '', $nom . ' : une mention');
+        egale('', $i['aide'], $nom . ' : un numéro de tome se comprend seul, pas d\'explication');
+        egale($i['texte'], serie_fin_etiquette($serie), $nom . ' : serie_fin_etiquette() est le texte de serie_fin_info()');
+    }
+    egale(['texte' => '', 'aide' => ''], serie_fin_info(serie_mangadex('', 2, 43)), 'rien de connu : ni mention ni explication');
     egale(['texte' => '', 'aide' => ''], serie_fin_info([]), 'une ligne vide');
 });
 
-test('l\'explication dit QUI parle : MangaDex, pas le site', function () {
-    foreach (['hiatus', 'completed', 'cancelled'] as $etat) {
-        contient('MangaDex indique', serie_fin_info(serie_mangadex($etat, 2, 43))['aide'], $etat);
+test('une aide n\'existe jamais sans mention, et une mention porte son numéro OU son aide', function () {
+    foreach (['', 'ongoing', 'hiatus', 'completed', 'cancelled'] as $pub) {
+        foreach ([[2, 0, 0], [2, 43, 0], [43, 43, 0], [5, 3, 0], [2, 45, 50], [1, 1, 1]] as [$lu, $dernier, $final]) {
+            foreach (['cours', 'attente', 'termine', 'abandon', 'envie'] as $statut) {
+                $i = serie_fin_info(serie_mangadex($pub, $lu, $dernier, $final, $statut));
+                $nom = "$pub $lu/$dernier/$final $statut";
+                if ($i['texte'] === '') {
+                    egale('', $i['aide'], $nom . ' : pas de mention, pas d\'aide');
+                } else {
+                    vrai(preg_match('/\d/', $i['texte']) === 1 xor $i['aide'] !== '', $nom . ' : « ' . $i['texte'] . ' » a un numéro ou une aide, pas les deux, pas aucun');
+                }
+            }
+        }
     }
-    contient('MangaDex connaît', serie_fin_info(serie_mangadex('ongoing', 2, 43))['aide'], 'ongoing : ce que MangaDex connaît');
-    contient('ses informations ont du retard', serie_fin_info(serie_mangadex('ongoing', 5, 3))['aide'], 'en retard : le dit');
-});
-
-test('les chiffres de l\'explication sont ceux de la mention', function () {
-    $i = serie_fin_info(serie_mangadex('ongoing', 2, 43));
-    contient('jusqu\'au 43', $i['aide'], 'le dernier tome connu');
-    contient('le 44', $i['aide'], 'et celui qui manque');
-    contient('50 tomes', serie_fin_info(serie_mangadex('completed', 2, 45, 50))['aide'], 'le dernier volume DÉCLARÉ, pas la dernière couverture');
-    contient('1 tome.', serie_fin_info(serie_mangadex('completed', 1, 1))['aide'], 'pas de pluriel pour un seul tome');
 });
 
 test('« Série terminée » est expliquée par rapport au statut « Terminée » de la pastille (la confusion qu\'on a eue)', function () {
@@ -378,15 +393,42 @@ test('« En cours de publication » dit pourquoi il n\'y a pas de numéro', func
 groupe('carte_html() — le « ⓘ »');
 
 test('un bouton accessible, avec son explication cachée juste dessous', function () {
-    $html = carte_html(serie_mangadex('completed', 2, 50, 50));
-    contient('<button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="aide-fin-7"', $html,
-        'un <button>, replié, relié à son explication (tabindex -1 : la carte active le rend)');
-    contient('aria-label="Que veut dire « Se termine au tome 50 » ?"', $html, 'le lecteur d\'écran sait de quoi il s\'agit');
+    $html = carte_html(serie_mangadex('completed', 2, 0));
+    contient('<span class="card-fin-texte">Série terminée</span><button type="button" class="card-info" tabindex="-1" aria-expanded="false" aria-controls="aide-fin-7"', $html,
+        'un <button> à côté de la mention, replié, relié à son explication (tabindex -1 : la carte active le rend)');
+    contient('aria-label="Que veut dire « Série terminée » ?"', $html, 'le lecteur d\'écran sait de quoi il s\'agit');
     contient('title="Que veut dire ce message ?"', $html, 'et la souris aussi');
     contient('>ⓘ</button>', $html, 'le signe');
-    contient('<p class="card-fin-aide hidden" id="aide-fin-7" role="note">MangaDex indique que la publication est terminée', $html, 'l\'explication, cachée au départ');
+    contient('<p class="card-fin-aide hidden" id="aide-fin-7" role="note">MangaDex indique que la publication de la série est terminée', $html, 'l\'explication, cachée au départ');
     vrai(strpos($html, 'class="card-fin"') < strpos($html, 'class="card-fin-aide'), 'sous la mention');
     vrai(strpos($html, 'class="card-fin-aide') < strpos($html, 'class="card-actions"'), 'et avant les boutons');
+});
+
+test('les quatre mentions sans numéro ont leur « ⓘ »', function () {
+    foreach (['ongoing' => 'En cours de publication', 'hiatus' => 'En pause', 'completed' => 'Série terminée', 'cancelled' => 'Série arrêtée'] as $etat => $texte) {
+        $html = carte_html(serie_mangadex($etat, 2, 0));
+        contient('<span class="card-fin-texte">' . $texte . '</span>', $html, $etat . ' : la mention');
+        contient('class="card-info"', $html, $etat . ' : son « ⓘ »');
+        contient('class="card-fin-aide hidden"', $html, $etat . ' : son explication');
+    }
+});
+
+test('une mention avec un numéro de tome n\'a PAS de « ⓘ » (demande de l\'utilisateur)', function () {
+    $cas = [
+        'Tome 44 en attente'    => serie_mangadex('ongoing', 2, 43),
+        'En pause au tome 43'   => serie_mangadex('hiatus', 2, 43),
+        'Se termine au tome 50' => serie_mangadex('completed', 2, 50, 50),
+        'Arrêtée au tome 43'    => serie_mangadex('cancelled', 2, 43),
+        "MangaDex s'arrête au tome 3" => serie_mangadex('ongoing', 5, 3),
+        'Tome 21 en attente'    => serie_mangadex('', 20, 0, 0, 'attente'),
+    ];
+    foreach ($cas as $mention => $serie) {
+        $html = carte_html($serie);
+        contient('<span class="card-fin-texte">' . e($mention) . '</span></p>', $html, $mention . ' : la mention, seule');
+        sans('card-info', $html, $mention . ' : pas de bouton');
+        sans('card-fin-aide', $html, $mention . ' : pas d\'explication cachée');
+        sans('aria-controls', $html, $mention . ' : rien à relier');
+    }
 });
 
 test('pas de mention, pas de « ⓘ »', function () {
@@ -396,15 +438,16 @@ test('pas de mention, pas de « ⓘ »', function () {
 });
 
 test('l\'identifiant de l\'explication est celui de la série : deux cartes ne se confondent pas', function () {
-    $a = carte_html(serie_mangadex('hiatus', 2, 43) + ['id' => 7]);
-    $b = carte_html(['id' => 8] + serie_mangadex('hiatus', 2, 43));
+    $a = carte_html(serie_mangadex('hiatus', 2, 0) + ['id' => 7]);
+    $b = carte_html(['id' => 8] + serie_mangadex('hiatus', 2, 0));
     contient('id="aide-fin-7"', $a, 'série 7');
     contient('id="aide-fin-8"', $b, 'série 8');
 });
 
 test('tout est échappé : un titre ou une explication ne devient jamais du HTML', function () {
-    $html = carte_html(serie_mangadex('completed', 2, 50, 50) + ['titre' => '"><script>alert(1)</script>']);
+    $html = carte_html(serie_mangadex('completed', 2, 0) + ['titre' => '"><script>alert(1)</script>']);
     sans('<script>', $html, 'aucune balise injectée');
+    contient('class="card-info"', $html, 'et le « ⓘ » est bien là : le test porte sur une carte qui en a un');
 });
 
 test('js/app.js : le « ⓘ » plie et déplie, sans rien envoyer au serveur ni sélectionner la carte', function () {

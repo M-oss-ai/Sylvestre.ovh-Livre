@@ -600,8 +600,10 @@ tome de plus sort — et se choisit aussi à la main dans la fiche.
 « En cours ». Un statut choisi à la main au milieu des tomes (on attend l'édition française, on a
 lâché) ne bouge pas. Une série « Terminée » ou « Abandonnée » ne cherche jamais de nouveau tome.
 
-**La mention** que porte chaque série liée à MangaDex (suivie d'un **ⓘ** : un clic déplie une explication
-claire de ce qu'elle veut dire, d'où elle vient et de ce qu'elle ne dit pas), sous « Vous avez lu le tome x » et avant les
+**La mention** que porte chaque série liée à MangaDex (quand elle n'a pas de numéro de tome — « En cours de
+publication », « En pause », « Série terminée », « Série arrêtée » —, elle est suivie d'un **ⓘ** : un clic déplie
+une explication claire de ce qu'elle veut dire et d'où elle vient ; « Tome 44 en attente » et les autres se
+comprennent seules), sous « Vous avez lu le tome x » et avant les
 boutons : « Tome 44 en attente » (en cours de publication), « En pause au tome 43 », « Se termine au
 tome 50 », « Arrêtée au tome 43 ». Elle décrit la série, pas la lecture : on la voit même au tome 2, et
 quel que soit le statut (« Terminée », « Abandonnée » et « Envie » aussi). Si vous avez lu plus de tomes
