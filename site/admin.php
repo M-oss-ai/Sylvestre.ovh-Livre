@@ -295,14 +295,21 @@ function admin_oui_non(bool $oui, string $quoi): string
         <code>.env</code> gouverne seul.
       </p>
     <?php else: ?>
-      <p class="hint">
+      <p class="hint admin-reglages-intro">
         Une valeur enregistrée ici <b>remplace celle du .env</b> et s'applique dès la requête suivante, pour
         tout le monde. « ↩ .env » efface votre valeur et rend la main au fichier. Chaque réglage a ses bornes.
       </p>
 
       <?php foreach (REGLAGES_GROUPES as $groupe => $titre_groupe): ?>
-        <h3 class="settings-sous-titre"><?= e($titre_groupe) ?></h3>
-        <div class="admin-reglages">
+        <!-- Un groupe se replie (js/admin.js) : le titre est un bouton, le chevron est à sa droite. -->
+        <div class="admin-groupe" data-groupe="<?= e($groupe) ?>">
+        <h3 class="settings-sous-titre admin-groupe-titre">
+          <button type="button" class="admin-groupe-bouton" aria-expanded="true" aria-controls="admin-reglages-<?= e($groupe) ?>">
+            <span class="admin-groupe-nom"><?= e($titre_groupe) ?></span>
+            <span class="admin-chevron" aria-hidden="true"></span>
+          </button>
+        </h3>
+        <div class="admin-reglages" id="admin-reglages-<?= e($groupe) ?>">
         <?php foreach ($vues as $cle => $v): if ($v['groupe'] !== $groupe) { continue; } ?>
           <?php $champ = 'reg-' . strtolower($cle); ?>
           <form class="admin-reglage" data-cle="<?= e($cle) ?>" data-initial="<?= e($v['saisie']) ?>" novalidate>
@@ -335,6 +342,7 @@ function admin_oui_non(bool $oui, string $quoi): string
                     <?= $v['source'] === 'base' ? '' : 'disabled' ?>>↩ .env</button>
           </form>
         <?php endforeach; ?>
+        </div>
         </div>
       <?php endforeach; ?>
     <?php endif; ?>

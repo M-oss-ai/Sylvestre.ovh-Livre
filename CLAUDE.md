@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1155 tests : 967 PHP en 56 fichiers, 188 JavaScript)
+php tests/lancer.php              # toute la suite (1167 tests : 973 PHP en 56 fichiers, 194 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -905,6 +905,25 @@ valeur de la base passe par le MÊME `max(…, min(…))` que si elle venait du 
   la largeur dite dans `style.css` à la plus grande unité de `REGLAGES` : une unité plus longue
   fait échouer le test. Un menu (`choix`) occupe toute la case, ses libellés tiennent donc en
   14 caractères.
+- **La mise en page de la carte « Réglages »** (demande de l'utilisateur : « pas assez clair »).
+  **(1) L'introduction (« Une valeur enregistrée ici remplace celle du .env… ») se lit SOUS le titre
+  « Réglages », pas contre « Quotas »** : elle touchait le titre du premier groupe, qui n'avait aucune marge
+  au-dessus (celle des autres venait de la liste qui les précède) et semblait lui appartenir. Classe
+  `.admin-reglages-intro`, 22 px dessous, testée. **(2) Chaque groupe se replie** : un bloc
+  `<div class="admin-groupe" data-groupe="…">` porte un `<h3 class="settings-sous-titre admin-groupe-titre">` qui
+  contient un VRAI `<button class="admin-groupe-bouton" aria-expanded aria-controls="admin-reglages-<groupe>">` (le nom à
+  gauche, `.admin-chevron` à droite, toute la rangée se clique) et la liste `.admin-reglages#admin-reglages-<groupe>`. Le
+  chevron descend (⌄) quand le groupe est ouvert et pointe à droite (>) quand il est replié. **La marge (18 px) est sur
+  `.admin-groupe`, jamais sur la liste** : repliée, la liste disparaît (classe `hidden`) avec sa marge, et les groupes se
+  colleraient. Tout est ouvert au départ. **Les groupes repliés sont mémorisés dans ce navigateur**
+  (`localStorage`, clé `livre.admin.groupes.replies`, une liste JSON de noms de groupes) parce que « ↩ .env » recharge la page
+  et les rouvrirait tous ; c'est un confort d'affichage, pas une donnée : chaque accès est dans un `try`, sans stockage tout
+  reste ouvert. Logique pure et testée : `Admin.groupesReplies(brut)` (texte absent, cassé ou d'un autre genre : `[]`, seuls
+  des noms sont gardés) et `Admin.basculerGroupe(liste, groupe, replie)` (jamais deux fois le même, l'originale intacte).
+  **(3) Les lignes alternent deux nuances** de la couleur du fond : plus sombre (`rgba(0, 0, 0, 0.18)`), puis teintée d'or
+  (`:nth-child(even)`, `rgba(201, 168, 124, 0.07)`, la couleur du site) ; un cadre arrondi les tient ensemble et il n'y a
+  plus de filet entre elles. `nth-child` compte DANS chaque groupe : la première ligne de chacun est sombre. Vérifié dans
+  le navigateur (ordinateur et 375 px, sans débordement) avec un vrai clic : replier, recharger (reste replié), rouvrir.
 - **Deux jeux de bornes, ne pas les confondre** : celles de `REGLAGES` valent pour ce
   qu'on saisit et ce qu'on relit de la base ; celles de `config.php` valent pour le
   `.env` ET pour ce qui vient de la base (la valeur y repasse). Quand le code déduit

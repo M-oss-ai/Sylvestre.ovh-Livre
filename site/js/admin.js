@@ -98,6 +98,28 @@ window.Admin = (() => {
     return s !== "" && s !== String(initiale == null ? "" : initiale).trim();
   }
 
+  /* Les groupes de réglages se replient (demande de l'utilisateur : une flèche à droite du titre,
+     « comme sur Google »). Ceux qu'on a repliés sont mémorisés dans ce navigateur : « ↩ .env »
+     recharge la page, qui les rouvrirait tous sinon. Un confort d'affichage, pas une donnée :
+     sans stockage, tout reste ouvert. */
+  const CLE_GROUPES = "livre.admin.groupes.replies";
+
+  /** La liste mémorisée des groupes repliés, lue sans rien supposer : du texte absent, cassé ou d'un autre genre donne []. */
+  function groupesReplies(brut) {
+    try {
+      const liste = JSON.parse(brut);
+      return Array.isArray(liste) ? liste.filter((g) => typeof g === "string" && g !== "") : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /** La liste après avoir replié (replie = true) ou rouvert (false) un groupe : jamais deux fois le même, l'originale intacte. */
+  function basculerGroupe(liste, groupe, replie) {
+    const autres = (Array.isArray(liste) ? liste : []).filter((g) => g !== groupe);
+    return replie ? [...autres, groupe] : autres;
+  }
+
   /** Les chiffres du bandeau, comptés sur les lignes de la page (même calcul que admin_totaux() côté PHP). */
   function totaux(lignes) {
     const t = { comptes: 0, confirmes: 0, nonConfirmes: 0, bloques: 0, illimites: 0, admins: 0, series: 0 };
@@ -477,6 +499,34 @@ window.Admin = (() => {
       /* Stockage indisponible : rien à montrer. */
     }
 
+    // Les groupes : le titre est un bouton, il replie la liste de ses réglages.
+    let replies = [];
+    try {
+      replies = groupesReplies(localStorage.getItem(CLE_GROUPES));
+    } catch (e) {
+      /* Stockage indisponible : tout reste ouvert. */
+    }
+    document.querySelectorAll(".admin-groupe").forEach((bloc) => {
+      const bouton = bloc.querySelector(".admin-groupe-bouton");
+      const liste = bloc.querySelector(".admin-reglages");
+      if (!bouton || !liste) return;
+      const poser = (replie) => {
+        bouton.setAttribute("aria-expanded", replie ? "false" : "true");
+        liste.classList.toggle("hidden", replie);
+      };
+      poser(replies.includes(bloc.dataset.groupe));
+      bouton.addEventListener("click", () => {
+        const replie = bouton.getAttribute("aria-expanded") === "true"; // ouvert : on le replie
+        poser(replie);
+        replies = basculerGroupe(replies, bloc.dataset.groupe, replie);
+        try {
+          localStorage.setItem(CLE_GROUPES, JSON.stringify(replies));
+        } catch (e) {
+          /* Stockage indisponible : le groupe se replie quand même, pour cette visite. */
+        }
+      });
+    });
+
     document.querySelectorAll("form.admin-reglage").forEach((form) => {
       const champ = form.querySelector("input, select");
       const enregistrer = form.querySelector(".admin-enregistrer");
@@ -542,5 +592,5 @@ window.Admin = (() => {
   if (document.getElementById("admin-table")) brancher();
   if (document.getElementById("reglages")) brancherReglages();
 
-  return { FORFAITS, normaliser, correspond, trier, sensApres, totaux, lireLigne, texteForfait, texteDroits, texteSuppression, sourceTexte, reglageChange };
+  return { FORFAITS, normaliser, correspond, trier, sensApres, totaux, lireLigne, texteForfait, texteDroits, texteSuppression, sourceTexte, reglageChange, groupesReplies, basculerGroupe };
 })();

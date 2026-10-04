@@ -244,3 +244,42 @@ test("la suppression : un e-mail part vers ADMIN_EMAIL, rien n est supprimé tou
   contient("admin@exemple.test", t, "où part le lien");
   contient("Rien n'est supprimé tout de suite", t, "et que rien n'est fait encore");
 });
+
+groupe("Admin.groupesReplies() et basculerGroupe() — replier un groupe de réglages");
+
+test("la liste mémorisée se lit, et un texte absent ou cassé donne une liste vide", () => {
+  egale(["quotas", "durees"], A.groupesReplies('["quotas","durees"]'), "une liste");
+  egale([], A.groupesReplies(null), "rien de mémorisé (getItem rend null)");
+  egale([], A.groupesReplies(""), "vide");
+  egale([], A.groupesReplies("{pas du json"), "cassé");
+  egale([], A.groupesReplies('{"quotas":true}'), "un objet : pas une liste");
+  egale([], A.groupesReplies('"quotas"'), "un texte : pas une liste");
+});
+
+test("seuls des noms de groupe sont gardés", () => {
+  egale(["quotas"], A.groupesReplies('["quotas", 3, null, "", {"a":1}, ["x"]]'), "des nombres, null, vide, objets : écartés");
+});
+
+test("replier ajoute le groupe, rouvrir le retire", () => {
+  egale(["quotas"], A.basculerGroupe([], "quotas", true), "replié");
+  egale(["quotas", "durees"], A.basculerGroupe(["quotas"], "durees", true), "un second");
+  egale(["durees"], A.basculerGroupe(["quotas", "durees"], "quotas", false), "rouvert");
+});
+
+test("jamais deux fois le même groupe", () => {
+  egale(["quotas"], A.basculerGroupe(["quotas"], "quotas", true), "replier deux fois");
+  egale([], A.basculerGroupe([], "quotas", false), "rouvrir ce qui est ouvert");
+});
+
+test("la liste d'origine n'est pas modifiée", () => {
+  const avant = ["quotas"];
+  A.basculerGroupe(avant, "durees", true);
+  A.basculerGroupe(avant, "quotas", false);
+  egale(["quotas"], avant, "intacte");
+});
+
+test("une liste absurde ne casse rien", () => {
+  egale(["quotas"], A.basculerGroupe(null, "quotas", true), "null");
+  egale(["quotas"], A.basculerGroupe(undefined, "quotas", true), "undefined");
+  egale([], A.basculerGroupe("quotas", "quotas", false), "un texte");
+});

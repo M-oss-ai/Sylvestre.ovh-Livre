@@ -2159,16 +2159,65 @@ th[aria-sort="none"] .admin-tri { color: var(--text-dim); }
 
 /* Les réglages : une ligne par réglage — le texte, la case, d'où vient la
    valeur, et les deux boutons. Sur téléphone, tout s'empile. */
-.admin-reglages { display: flex; flex-direction: column; margin-bottom: 18px; }
+/* L'introduction se lit SOUS le titre « Réglages » (demande de l'utilisateur : elle touchait
+   « Quotas », le premier groupe, et semblait lui appartenir) : collée à son titre, puis une vraie
+   respiration avant le premier groupe. */
+.admin-reglages-intro { margin: 0 0 22px; }
+
+/* Un groupe : son titre (un bouton qui le replie, chevron à droite, comme sur Google) et ses lignes.
+   La marge est sur le GROUPE, pas sur la liste : repliée, la liste disparaît avec sa marge, et les
+   groupes se colleraient. */
+.admin-groupe { margin-bottom: 18px; }
+.admin-groupe-titre { margin: 0 0 8px; }
+.admin-groupe-bouton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.admin-groupe-bouton:hover { background: rgba(201, 168, 124, 0.08); }
+.admin-groupe-bouton:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* Le chevron : vers le BAS quand le groupe est ouvert, vers la DROITE (>) quand il est replié. */
+.admin-chevron {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-right: 2px solid var(--gold);
+  border-bottom: 2px solid var(--gold);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.admin-groupe-bouton[aria-expanded="false"] .admin-chevron { transform: rotate(-45deg); }
+
+/* Les lignes alternent deux nuances de la couleur du fond (demande de l'utilisateur) : plus sombre,
+   puis teintée d'or. Un cadre arrondi les tient ensemble, sans filet entre elles. */
+.admin-reglages {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
 .admin-reglage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   gap: 8px 12px;
   align-items: center;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.18);
 }
-.admin-reglage:last-child { border-bottom: 0; }
+.admin-reglage:nth-child(even) { background: rgba(201, 168, 124, 0.07); }
 /* Sans min-width, un menu aux libellés longs élargissait la colonne et la page débordait sur téléphone. */
 .admin-reglage > * { min-width: 0; }
 .admin-reglage-texte label { font-weight: 600; }

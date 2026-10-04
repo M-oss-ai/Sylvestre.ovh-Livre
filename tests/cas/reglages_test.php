@@ -514,3 +514,76 @@ test('la migration 12 crée la table, rejouable, avec les bornes qu\'il faut', f
     contient('`valeur`      VARCHAR(190) NOT NULL', $mig, 'la valeur');
     contient('ON DELETE SET NULL', $mig, 'le réglage survit à son auteur');
 });
+
+groupe('La page des réglages — introduction, groupes repliables, lignes alternées');
+
+test('l\'introduction est sous le titre « Réglages », avant le premier groupe, et respire', function () {
+    $page = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/admin.php'));
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    $titre = (int) strpos($page, 'id="admin-reglages-titre"');
+    $intro = (int) strpos($page, 'admin-reglages-intro');
+    $groupes = (int) strpos($page, 'foreach (REGLAGES_GROUPES');
+    vrai($titre > 0 && $titre < $intro && $intro < $groupes, 'le titre, puis l\'introduction, puis les groupes');
+    contient('Une valeur enregistrée ici', substr($page, $intro, 200), 'c\'est bien elle');
+    preg_match('/\.admin-reglages-intro\s*\{[^}]*margin:\s*0 0 (\d+)px/', $css, $m);
+    vrai(isset($m[1]) && (int) $m[1] >= 18, 'elle laisse de la place sous elle (' . ($m[1] ?? '?') . ' px) : elle ne touche plus « Quotas »');
+});
+
+test('chaque groupe a un titre qui est un bouton replié/déplié, relié à sa liste', function () {
+    $page = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/admin.php'));
+    contient('<div class="admin-groupe" data-groupe="<?= e($groupe) ?>">', $page, 'un bloc par groupe, son nom en data-');
+    contient('<h3 class="settings-sous-titre admin-groupe-titre">', $page, 'le titre reste un titre (h3)');
+    contient('<button type="button" class="admin-groupe-bouton" aria-expanded="true" aria-controls="admin-reglages-<?= e($groupe) ?>">', $page,
+        'un vrai bouton, ouvert au départ, relié à la liste');
+    contient('<span class="admin-chevron" aria-hidden="true"></span>', $page, 'le chevron, décoratif, à droite du nom');
+    contient('<div class="admin-reglages" id="admin-reglages-<?= e($groupe) ?>">', $page, 'la liste porte l\'id que le bouton désigne');
+    egale(1, substr_count($page, 'class="admin-groupe-bouton"'), 'écrit une fois, dans la boucle');
+    /* Le bloc se ferme : un <div> de plus ouvert, un de plus fermé. */
+    $debut = (int) strpos($page, 'foreach (REGLAGES_GROUPES');
+    $fin = (int) strpos($page, '</section>', $debut);
+    $zone = substr($page, $debut, $fin - $debut);
+    egale(substr_count($zone, '<div'), substr_count($zone, '</div>'), 'autant de <div> ouverts que fermés dans les groupes');
+});
+
+test('style.css : le chevron descend quand le groupe est ouvert, va à droite quand il est replié', function () {
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    preg_match('/\.admin-chevron\s*\{([^}]*)\}/', $css, $m);
+    contient('transform: rotate(45deg)', (string) ($m[1] ?? ''), 'ouvert : la pointe vers le bas');
+    contient('.admin-groupe-bouton[aria-expanded="false"] .admin-chevron { transform: rotate(-45deg); }', $css, 'replié : la pointe vers la droite (>)');
+    contient('.admin-groupe-bouton:focus-visible', $css, 'un cadre au clavier');
+    preg_match('/\.admin-groupe-bouton\s*\{([^}]*)\}/', $css, $b);
+    contient('justify-content: space-between', (string) ($b[1] ?? ''), 'le nom à gauche, le chevron à droite');
+    contient('width: 100%', (string) ($b[1] ?? ''), 'toute la rangée se clique');
+});
+
+test('style.css : la marge est sur le groupe, pas sur la liste (replié, la liste disparaît avec sa marge)', function () {
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    contient('.admin-groupe { margin-bottom: 18px; }', $css, 'la marge du groupe');
+    preg_match('/\.admin-reglages\s*\{([^}]*)\}/', $css, $m);
+    sans('margin-bottom', (string) ($m[1] ?? ''), 'la liste n\'en porte pas');
+});
+
+test('style.css : les lignes alternent deux nuances, sans filet entre elles', function () {
+    $css = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/css/style.css'));
+    preg_match('/\.admin-reglage\s*\{([^}]*)\}/', $css, $m);
+    $ligne = (string) ($m[1] ?? '');
+    motif('/background:\s*rgba\(0, 0, 0, 0\.\d+\)/', $ligne, 'les lignes impaires : une nuance plus sombre');
+    sans('border-bottom', $ligne, 'plus de filet : les nuances séparent');
+    motif('/\.admin-reglage:nth-child\(even\)\s*\{\s*background:\s*rgba\(201, 168, 124, 0\.\d+\)/', $css, 'les paires : teintées d\'or, la couleur du site');
+    preg_match('/\.admin-reglages\s*\{([^}]*)\}/', $css, $c);
+    contient('overflow: hidden', (string) ($c[1] ?? ''), 'un cadre arrondi tient les rangées');
+    sans('.admin-reglage:last-child', $css, 'l\'ancien filet du dernier est retiré');
+});
+
+test('js/admin.js : le repli est branché, mémorisé sans rien supposer du stockage', function () {
+    $js = str_replace("\r\n", "\n", (string) file_get_contents(CHEMIN_SITE . '/js/admin.js'));
+    contient('document.querySelectorAll(".admin-groupe").forEach((bloc) => {', $js, 'un branchement par groupe');
+    contient('bouton.setAttribute("aria-expanded", replie ? "false" : "true");', $js, 'aria-expanded suit');
+    contient('liste.classList.toggle("hidden", replie);', $js, 'la liste se cache comme le reste du site (classe hidden)');
+    contient('localStorage.setItem(CLE_GROUPES', $js, 'les groupes repliés sont mémorisés');
+    /* Chaque lecture et chaque écriture du stockage est dans un try : navigation privée, stockage bloqué. */
+    egale(2, substr_count($js, 'localStorage.'), 'une lecture et une écriture');
+    contient("/* Stockage indisponible : tout reste ouvert. */", $js, 'la lecture a son « catch » : tout reste ouvert');
+    contient("/* Stockage indisponible : le groupe se replie quand même, pour cette visite. */", $js, 'l\'écriture aussi : le groupe se replie quand même');
+    sans('innerHTML', $js, 'rien n\'est fabriqué en HTML');
+});

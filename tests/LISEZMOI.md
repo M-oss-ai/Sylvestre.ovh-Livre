@@ -348,7 +348,11 @@ dans ses bornes ou ignoré), les unités (`reglage_vers_saisie`, `reglage_plage_
 `reglage_source`, `reglage_vue` (ce qui est saisi, et « en vigueur » quand le code en
 déduit autre chose), `env()` contre `env_brut()`. Le branchement : la base s'ouvre avant
 la première constante réglable, `reglages.php` ne dépend de rien, une table absente se
-tait, une autre panne est consignée, la migration 12. Ce qui change réellement à la
+tait, une autre panne est consignée, la migration 12. La mise en page de la carte : l'introduction sous le titre
+et avant le premier groupe (avec sa marge), le titre de chaque groupe en vrai bouton `aria-expanded` relié à sa liste,
+le chevron (bas ouvert, droite replié), la marge portée par le groupe et non par la liste, les lignes alternées
+sans filet, et le branchement du repli (`localStorage` toujours dans un `try`) ; côté JavaScript,
+`Admin.groupesReplies` et `Admin.basculerGroupe`. Ce qui change réellement à la
 requête suivante (quota de séries, durée du cookie de session, inscriptions fermées,
 freins) se vérifie en HTTP sur un site de test (CLAUDE.md, « Déploiement »).
 
