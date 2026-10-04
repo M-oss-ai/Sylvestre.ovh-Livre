@@ -101,6 +101,11 @@ $configuration_de_test = [
     'SMTP_PASSWORD'       => '',
     'SMTP_TIMEOUT'        => '1',
 
+    // Garde-fou : la vraie clé privée du .env ne signe rien en test (les
+    // cas qui ont besoin de clés posent les leurs avant d'inclure l'amorce).
+    'VAPID_PUBLIC'        => '',
+    'VAPID_PRIVATE'       => '',
+
     // Valeurs fixes, pour que les tests ne dépendent pas de votre .env.
     'APP_URL'             => 'https://exemple.test/bibliotheque',
     'ADMIN_EMAIL'         => 'admin@exemple.test',

@@ -164,7 +164,7 @@ stockées telles quelles et le gain de poids disparaît.
 
 ## Configuration
 
-Tout se règle dans `.env`, documenté dans `.env.example`. Trente de ces valeurs
+Tout se règle dans `.env`, documenté dans `.env.example`. Trente et une de ces valeurs
 peuvent aussi se changer depuis l'administration (carte « Réglages ») : la valeur
 saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 
@@ -183,8 +183,8 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
 | `VAPID_PUBLIC` · `VAPID_PRIVATE` | Clés des notifications push, à générer une fois (`php outils/vapid.php`). Vides : pas de notifications. **La privée est un secret** |
-| `PUSH_MAX_APPAREILS` · `PUSH_TTL` · `PUSH_TIMEOUT` | Appareils par compte (10, de 1 à 50), durée de garde d'un message non remis (86 400 s, de 60 à 2 419 200), délai d'un envoi (5 s, de 1 à 20) |
-| `NOUVEAUTE_HEURES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : heures minimales entre deux vérifications d'une même série (1, de 1 à 168), séries vérifiées au plus par arrivée sur la page et par passage du cron (**0 = sans limite**, c'est la valeur par défaut : le relevé s'arrête alors à son budget de temps) |
+| `PUSH_TTL` · `PUSH_TIMEOUT` | Durée de garde d'un message non remis (86 400 s, de 60 à 2 419 200), délai d'un envoi (5 s, de 1 à 20) |
+| `NOUVEAUTE_MINUTES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : minutes minimales entre deux vérifications d'une même série (60, de 60 à 10 080 ; modifiable depuis l'administration), séries vérifiées au plus par arrivée sur la page et par passage du cron (**0 = sans limite**, c'est la valeur par défaut : le relevé s'arrête alors à son budget de temps) |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
 | `CLE_ACCES_MAX` · `CLE_ACCES_DEFI_DUREE` | Clés d'accès : nombre par compte (10, plafond 50) et validité du défi envoyé au navigateur (300 s, entre 60 et 900) |
@@ -406,7 +406,7 @@ forfait** : on peut être bloqué et administrateur.
   confirmée ; un envoi raté ne défait pas le changement, la page le dit.
 - **Nommer ou révoquer** un administrateur. Jamais soi-même : un autre doit le faire,
   il en reste donc toujours un.
-- **Réglages** : trente valeurs du `.env` — quotas, recherche de couverture, durées, freins
+- **Réglages** : trente et une valeurs du `.env` — quotas, recherche de couverture, durées, freins
   anti-force-brute — se changent depuis la page, sans renvoyer de fichier. Une valeur
   enregistrée **remplace celle du `.env`** et s'applique dès la requête suivante, pour tout le
   monde ; « ↩ .env » l'efface. Chaque réglage a ses bornes (3 à 20 tentatives et 60 à 600 s de
@@ -621,7 +621,7 @@ elle n'annonce rien, sinon toutes les séries d'avant la fonction annonceraient
 tout ce qui est paru depuis toujours.
 
 Chaque vérification est un appel à MangaDex, donc une part du débit partagé :
-`NOUVEAUTE_HEURES` espace deux vérifications d'une même série, et
+`NOUVEAUTE_MINUTES` espace deux vérifications d'une même série, et
 `NOUVEAUTE_MAX_VISITE` / `NOUVEAUTE_MAX_CRON` peuvent borner leur nombre
 (0, la valeur par défaut, ou ligne absente : sans limite, le temps seul
 décide). Les plus anciennement vérifiées passent d'abord. La file d'attente décrite
@@ -668,7 +668,7 @@ requêtes.
   POSTe : seules les adresses des vrais services sont acceptées (https, port 443,
   Google, Mozilla, Apple, Microsoft), sinon ce serait un moyen de faire appeler
   n'importe quoi par le serveur ;
-- `PUSH_MAX_APPAREILS` appareils par compte (10), appliqué dans l'`INSERT` ;
+- `MAX_APPAREILS` appareils par compte (30, le même réglage que les connexions mémorisées), appliqué dans l'`INSERT` ;
   `PUSH_TTL` (86 400 s : un message non remis est gardé un jour) et `PUSH_TIMEOUT` (5 s) ;
 - un navigateur n'appartient qu'à **un** compte à la fois : celui qui l'active en dernier
   le reprend, pour que personne ne reçoive les notifications d'un autre sur un poste

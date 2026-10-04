@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1064 tests : 897 PHP en 55 fichiers, 167 JavaScript)
+php tests/lancer.php              # toute la suite (1065 tests : 898 PHP en 55 fichiers, 167 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -138,7 +138,7 @@ rien hors de la bibliothèque — c'est ce qui permet au banc de le charger.
 ## Règles tacites
 
 **Tout réglage passe par le `.env`, jamais en dur ailleurs** — sauf les
-trente de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
+trente et un de `REGLAGES` que l'administrateur peut surcharger depuis `admin.php`
 (voir plus bas). Et chaque constante de `config.php` est bornée par un plancher
 ou un plafond : un `.env` mal rempli ne doit jamais pouvoir *supprimer* une
 protection.
@@ -506,7 +506,7 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   vérifier (`data-nouveautes`) ; et `purger.php`, à chaque passage. Une série est
   candidate quand elle est « En cours », liée, « à jour » (`tome_actuel >=
   dernier_tome`) ou jamais vérifiée (`dernier_tome = 0`), pas vue depuis
-  `NOUVEAUTE_HEURES`, et que son compte n'est pas bloqué. **La première vérification
+  `NOUVEAUTE_MINUTES`, et que son compte n'est pas bloqué. **La première vérification
   apprend sans annoncer** (`nouveaute_evaluer()` : `memoriser`) : sinon toute série
   d'avant la fonction annoncerait tout ce qui est paru. Un tome nouveau : couverture
   du tome à emprunter, `maj_le = NOW()` (la série remonte en tête), `nouveau_tome`
@@ -560,14 +560,14 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
 - **La notification push** — `includes/push.php`, `sw.js`, `js/push.js`, voir la règle
   suivante. Le cron envoie UNE notification par compte et par passage, à tous ses
   appareils (`push_envoyer_a_compte()`), jamais à un compte bloqué.
-- **Réglages** : `NOUVEAUTE_HEURES` (1 à 168), `NOUVEAUTE_MAX_VISITE` et
+- **Réglages** : `NOUVEAUTE_MINUTES` (60 à 10 080 minutes, **modifiable depuis `admin.php`**), `NOUVEAUTE_MAX_VISITE` et
   `NOUVEAUTE_MAX_CRON` (**0 ou ligne absente = sans limite**, demande de l'utilisateur, comme les
   quotas de recherche : ni plancher ni plafond, un nombre négatif vaut 0), dans le `.env`. Sans
   limite de nombre, ce qui garde la visite et le cron est le BUDGET DE TEMPS de
   `nouveautes_verifier()` (`nouveautes_budget()`, `'temps'`) et la file d'attente vers MangaDex : ce
   qui n'a pas passé passe au tour suivant, les plus anciennement vérifiées d'abord.
-  `NOUVEAUTE_HEURES`, elle, garde son plancher d'une heure : c'est elle qui espace les appels.
-  Ils ne sont PAS dans `REGLAGES` (admin.php) : ils touchent le débit de MangaDex.
+  `NOUVEAUTE_MINUTES`, elle, garde son plancher d'une heure : c'est elle qui espace les appels.
+  Les deux nombres de séries ne sont PAS dans `REGLAGES` (admin.php), seule `NOUVEAUTE_MINUTES` y est.
 - **Pour essayer** : une base jetable (voir « Commandes »), `livre.sql` rejoué, un compte
   de test et des séries liées à de vraies séries MangaDex — Berserk
   (`801513ba-a712-498c-8f57-cae55b38cc92`, en cours), Attack on Titan
@@ -593,7 +593,7 @@ chiffrement RFC 8291 (`aes128gcm`), identification VAPID (RFC 8292, jeton ES256)
   l'ajouter à ces deux listes, avec son test.
 - **Un appareil = une ligne de `abonnement_push`, et un navigateur n'appartient qu'à UN compte** :
   index UNIQUE sur l'empreinte de l'adresse, le dernier compte qui l'active le reprend (poste
-  partagé). Le plafond `PUSH_MAX_APPAREILS` s'applique dans l'`INSERT`, comme celui des séries.
+  partagé). Le plafond d'appareils est `MAX_APPAREILS` (le MÊME réglage que les connexions mémorisées, demande de l'utilisateur : plus de `PUSH_MAX_APPAREILS`), appliqué dans l'`INSERT`, comme celui des séries.
   Le compte est celui de la SESSION, jamais un champ du POST. Un appareil que le service
   déclare périmé (404, 410) est effacé par le cron.
 - **La page ne s'abonne JAMAIS seule** : l'état de l'interrupteur vient du serveur (`push.etat`),
@@ -709,7 +709,7 @@ premier se pose à la main (`UPDATE utilisateur SET admin = 1 WHERE identifiant 
   valeur sort de PHP par `e()`. Un identifiant est du texte choisi par quelqu'un
   d'autre.
 
-**Trente réglages se changent depuis `admin.php`, et la base prime sur le
+**Trente et un réglages se changent depuis `admin.php`, et la base prime sur le
 `.env`** (demande de l'utilisateur : « les limites et les durées, pas de mot de
 passe ni de connexion »). La table `reglage` ne porte que l'ÉCART : une ligne par
 réglage changé, et « ↩ .env » l'efface. `config.php` ouvre la base AVANT ses

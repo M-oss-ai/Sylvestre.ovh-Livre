@@ -1306,14 +1306,14 @@ switch ($action) {
         $etat = push_enregistrer(
             $pdo, $mon_id,
             (string) ($_POST['endpoint'] ?? ''), (string) ($_POST['p256dh'] ?? ''), (string) ($_POST['auth'] ?? ''),
-            PUSH_MAX_APPAREILS
+            MAX_APPAREILS
         );
         if ($etat === 'invalide') {
             reponse_json(['ok' => false, 'erreur' =>
                 "Ce navigateur a donné un abonnement que le site ne peut pas utiliser."], 422);
         }
         if ($etat === 'plein') {
-            reponse_json(['ok' => false, 'erreur' => 'Vous avez atteint la limite de ' . PUSH_MAX_APPAREILS
+            reponse_json(['ok' => false, 'erreur' => 'Vous avez atteint la limite de ' . MAX_APPAREILS
                 . ' appareils. Retirez-en un avant d\'en ajouter.', 'appareils' => push_compter($pdo, $mon_id)], 422);
         }
         reponse_json(['ok' => true, 'appareils' => push_compter($pdo, $mon_id),

@@ -14,10 +14,9 @@ putenv('CLE_ACCES_DEFI_DUREE=999999'); // un défi oublié ne traîne pas des jo
 putenv('ADMIN_SUPPRESSION_DUREE=99999999'); // un lien oublié dans une boîte mail ne reste pas une arme
 putenv('CRON_HEURES=99999');           // un cron plus espacé qu'une semaine, .env compris
 putenv('RAPPORT_HEURES=99999');
-putenv('NOUVEAUTE_HEURES=99999');      // une série jamais revérifiée n'annoncerait plus jamais rien
+putenv('NOUVEAUTE_MINUTES=99999999');  // une série jamais revérifiée n'annoncerait plus jamais rien
 putenv('NOUVEAUTE_MAX_VISITE=99999');  // pas de plafond : 0 les rend déjà illimitées, un plafond n'aurait aucun sens
 putenv('NOUVEAUTE_MAX_CRON=99999');
-putenv('PUSH_MAX_APPAREILS=99999');    // un compte n'inscrit pas des milliers d'appareils : autant d'envois à chaque passage
 putenv('PUSH_TTL=99999999');           // les services refusent au-delà de quatre semaines
 putenv('PUSH_TIMEOUT=99999');          // un service muet ne retient pas un processus PHP une heure
 
@@ -25,14 +24,13 @@ require __DIR__ . '/../lanceur.php';
 
 groupe('Nouveaux tomes — plafonds');
 
-test('NOUVEAUTE_HEURES est plafonné à une semaine', function () {
-    egale(168, NOUVEAUTE_HEURES, 'le .env demandait 99999 heures');
+test('NOUVEAUTE_MINUTES est plafonné à une semaine (10 080 minutes)', function () {
+    egale(10080, NOUVEAUTE_MINUTES, 'le .env demandait 99999999 minutes');
 });
 
 groupe('Notifications push — plafonds');
 
-test('PUSH_MAX_APPAREILS est plafonné à 50, PUSH_TTL à quatre semaines, PUSH_TIMEOUT à 20 secondes', function () {
-    egale(50, PUSH_MAX_APPAREILS, 'le .env demandait 99999');
+test('PUSH_TTL est plafonné à quatre semaines, PUSH_TIMEOUT à 20 secondes', function () {
     egale(2419200, PUSH_TTL, 'quatre semaines : le maximum que les services acceptent');
     egale(20, PUSH_TIMEOUT, 'le .env demandait 99999 secondes');
 });

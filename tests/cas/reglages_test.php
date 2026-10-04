@@ -46,10 +46,19 @@ test('ce que l\'utilisateur a demandé y est : quotas, couverture, durées, frei
         'MAX_UTILISATEURS', 'MAX_SERIES_PAR_UTILISATEUR', 'MAX_APPAREILS',
         'COUVERTURE_QUOTA', 'COUVERTURE_QUOTA_ILLIMITE', 'COUVERTURE_FENETRE', 'COUVERTURE_MAX_SERIES',
         'COUVERTURE_CANDIDATS', 'COUVERTURE_CONTENU_ADULTE',
-        'ADMIN_SUPPRESSION_DUREE', 'RAPPORT_HEURES', 'CRON_HEURES', 'SESSION_DUREE', 'REMEMBER_DUREE_VIP', 'CLE_ACCES_MAX',
+        'ADMIN_SUPPRESSION_DUREE', 'RAPPORT_HEURES', 'CRON_HEURES', 'NOUVEAUTE_MINUTES', 'SESSION_DUREE', 'REMEMBER_DUREE_VIP', 'CLE_ACCES_MAX',
     ] as $cle) {
         vrai(isset(REGLAGES[$cle]), "$cle est modifiable");
     }
+});
+
+test('les nouveaux tomes : NOUVEAUTE_MINUTES de 60 à 10 080 minutes, saisi en minutes', function () {
+    egale([60, 10080, 60], [REGLAGES['NOUVEAUTE_MINUTES']['min'], REGLAGES['NOUVEAUTE_MINUTES']['max'], REGLAGES['NOUVEAUTE_MINUTES']['defaut']], 'NOUVEAUTE_MINUTES');
+    egale(1, reglage_facteur('NOUVEAUTE_MINUTES'), 'la page saisit dans l\'unité du .env : des minutes');
+    estNul(reglage_valider('NOUVEAUTE_MINUTES', '59')[0], '59 min : moins d\'une heure');
+    estNul(reglage_valider('NOUVEAUTE_MINUTES', '10081')[0], '10 081 min : plus d\'une semaine');
+    faux(isset(REGLAGES['NOUVEAUTE_MAX_VISITE']) || isset(REGLAGES['NOUVEAUTE_MAX_CRON']) || isset(REGLAGES['PUSH_MAX_APPAREILS']),
+        'les nombres de séries du relevé restent dans le .env, et il n\'y a pas de réglage d\'appareils pour les notifications');
 });
 
 test('tous les freins anti-force-brute y sont — les quinze du .env', function () {

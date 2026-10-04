@@ -43,10 +43,9 @@ putenv('RAPPORT_HEURES=-3');
 putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait muette sans le dire
 putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
 putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait mort avant d'être lu
-putenv('NOUVEAUTE_HEURES=0');             // 0 h : MangaDex interrogé à chaque page, pour chaque série
+putenv('NOUVEAUTE_MINUTES=0');            // 0 min : MangaDex interrogé à chaque page, pour chaque série
 putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 : sans limite de nombre (le budget de temps garde)
 putenv('NOUVEAUTE_MAX_CRON=-5');          // jamais un nombre négatif : lu comme 0
-putenv('PUSH_MAX_APPAREILS=0');           // 0 appareil : la fonction deviendrait muette sans le dire
 putenv('PUSH_TTL=0');                     // un message non remis serait jeté à l'instant
 putenv('PUSH_TIMEOUT=0');                 // un envoi qui échoue avant d'avoir commencé
 putenv('APP_URL=https://exemple.test/bibliotheque/');   // avec un / final
@@ -179,10 +178,10 @@ test('CLE_ACCES_DEFI_DUREE ne descend jamais sous une minute', function () {
 
 groupe('Nouveaux tomes');
 
-test('NOUVEAUTE_HEURES ne descend jamais sous 1 heure', function () {
+test('NOUVEAUTE_MINUTES ne descend jamais sous 60 minutes', function () {
     /* À 0, chaque arrivée sur la bibliothèque interrogerait MangaDex pour
        chaque série à jour : le débit que tous les comptes se partagent. */
-    egale(1, NOUVEAUTE_HEURES, 'le .env demandait 0');
+    egale(60, NOUVEAUTE_MINUTES, 'le .env demandait 0');
 });
 
 test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON : 0 et les nombres négatifs valent « sans limite »', function () {
@@ -194,8 +193,9 @@ test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON : 0 et les nombres négatifs va
 
 groupe('Notifications push');
 
-test('PUSH_MAX_APPAREILS ne descend jamais sous 1', function () {
-    egale(1, PUSH_MAX_APPAREILS, 'le .env demandait 0 : plus personne ne pourrait activer ses notifications');
+test('il n\'y a plus de PUSH_MAX_APPAREILS : les notifications suivent MAX_APPAREILS', function () {
+    faux(defined('PUSH_MAX_APPAREILS'), 'une seule limite d\'appareils');
+    vrai(MAX_APPAREILS >= 1, 'et elle ne descend jamais sous 1 : plus personne ne pourrait activer ses notifications');
 });
 
 test('PUSH_TTL ne descend jamais sous une minute, PUSH_TIMEOUT sous une seconde', function () {

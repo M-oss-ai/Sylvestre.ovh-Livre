@@ -254,7 +254,7 @@ function nouveautes_statut_ecrit(PDO $pdo, int $id, string $attendu): bool
  *   - à jour — son tome lu a atteint le dernier connu — ou jamais vérifiée
  *     (dernier_tome = 0) : la première vérification ne fait qu'apprendre le
  *     nombre de tomes, sans rien annoncer (nouveaute_evaluer()) ;
- *   - pas vérifiée depuis NOUVEAUTE_HEURES.
+ *   - pas vérifiée depuis NOUVEAUTE_MINUTES.
  * Jamais celles d'un compte bloqué : la consultation seule ne sollicite pas
  * MangaDex (voir ACTIONS_BLOQUEES).
  *
@@ -268,7 +268,7 @@ function nouveautes_series_a_verifier(PDO $pdo, ?int $utilisateur_id, int $limit
              WHERE s.statut IN ('cours', 'attente')
                AND s.mangadex_id <> ''
                AND (s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome)
-               AND (s.verifie_le IS NULL OR s.verifie_le < NOW() - INTERVAL " . (int) NOUVEAUTE_HEURES . " HOUR)
+               AND (s.verifie_le IS NULL OR s.verifie_le < NOW() - INTERVAL " . (int) NOUVEAUTE_MINUTES . " MINUTE)
                AND u.forfait <> 'bloque'"
         . ($utilisateur_id !== null ? ' AND s.utilisateur_id = ' . $utilisateur_id : '')
         . ' ORDER BY s.verifie_le ASC, s.id ASC' . nouveautes_limite_sql($limite);

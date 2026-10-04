@@ -272,8 +272,9 @@ test('un nom de fichier étrange est encodé, pas injecté', function () {
 
 groupe('Les bornes du .env');
 
-test('NOUVEAUTE_HEURES vaut une heure par défaut, _MAX_VISITE et _MAX_CRON « sans limite »', function () {
-    egale(1, NOUVEAUTE_HEURES, 'une heure entre deux vérifications d\'une même série');
+test('NOUVEAUTE_MINUTES vaut 60 par défaut, _MAX_VISITE et _MAX_CRON « sans limite »', function () {
+    egale(60, NOUVEAUTE_MINUTES, 'une heure entre deux vérifications d\'une même série');
+    faux(defined('NOUVEAUTE_HEURES'), 'l\'ancien nom n\'existe plus');
     egale(0, NOUVEAUTE_MAX_VISITE, 'ligne absente du .env : 0, donc autant de séries que le temps le permet');
     egale(0, NOUVEAUTE_MAX_CRON, 'idem pour un passage du cron');
 });
@@ -355,7 +356,7 @@ test('les écritures du relevé sont gardées contre un changement en cours d\'a
     contient("AND tome_actuel = ? AND statut = 'cours'", $fin, 'fin de série : la série n\'a pas bougé pendant l\'appel');
 });
 
-test('les séries à vérifier : en cours, liées, à jour, pas vues depuis NOUVEAUTE_HEURES, jamais d\'un compte bloqué', function () {
+test('les séries à vérifier : en cours, liées, à jour, pas vues depuis NOUVEAUTE_MINUTES, jamais d\'un compte bloqué', function () {
     $q = corps_de(source('includes/nouveautes.php'), 'nouveautes_series_a_verifier');
     contient("s.statut IN ('cours', 'attente')", $q, 'une série en cours, ou déjà en attente, attend un tome — jamais une série terminée ou abandonnée');
     sans("'termine'", $q, 'terminée : jamais revérifiée');
@@ -363,7 +364,8 @@ test('les séries à vérifier : en cours, liées, à jour, pas vues depuis NOUV
     contient('s.statut,', $q, 'le statut est sélectionné : la décision en a besoin');
     contient("s.mangadex_id <> ''", $q, 'liée à MangaDex');
     contient('s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome', $q, 'à jour, ou jamais vérifiée');
-    contient('NOUVEAUTE_HEURES', $q, 'pas plus d\'une fois par NOUVEAUTE_HEURES');
+    contient('NOUVEAUTE_MINUTES', $q, 'pas plus d\'une fois par NOUVEAUTE_MINUTES');
+    contient('MINUTE)', $q, 'l\'intervalle est bien en minutes');
     contient("u.forfait <> 'bloque'", $q, 'la consultation seule ne sollicite pas MangaDex');
     contient('ORDER BY s.verifie_le ASC', $q, 'les plus anciennement vérifiées d\'abord : aucune ne reste à l\'écart');
 });

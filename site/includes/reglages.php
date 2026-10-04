@@ -67,8 +67,8 @@ const REGLAGES = [
         'min' => 1, 'max' => 10000, 'defaut' => 150, 'unite' => 'séries',
     ],
     'MAX_APPAREILS' => [
-        'groupe' => 'quotas', 'libelle' => 'Appareils mémorisés par compte illimité',
-        'aide' => "Au-delà, le plus ancien est oublié.",
+        'groupe' => 'quotas', 'libelle' => 'Appareils par compte',
+        'aide' => "Appareils mémorisés (compte illimité : au-delà, le plus ancien est oublié) et appareils notifiés (au-delà, l'ajout est refusé).",
         'min' => 1, 'max' => 100, 'defaut' => 30, 'unite' => 'appareils',
     ],
 
@@ -120,6 +120,11 @@ const REGLAGES = [
         'groupe' => 'durees', 'libelle' => 'Passage de la tâche planifiée, tous les',
         'aide' => "Doit rester l'espacement réglé chez l'hébergeur : ce réglage ne le change pas, il dit au rapport de combien il est.",
         'min' => 1, 'max' => 168, 'defaut' => 24, 'unite' => 'h',
+    ],
+    'NOUVEAUTE_MINUTES' => [
+        'groupe' => 'durees', 'libelle' => "Nouveaux tomes : vérification d'une même série, au plus toutes les",
+        'aide' => "Chaque vérification est un appel à MangaDex. De 60 min (une heure) à 10 080 min (une semaine).",
+        'min' => 60, 'max' => 10080, 'defaut' => 60, 'unite' => 'min',
     ],
     'SESSION_DUREE' => [
         'groupe' => 'durees', 'libelle' => 'Durée de la session',

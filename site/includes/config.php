@@ -188,9 +188,10 @@ define('SESSION_DUREE', max(0, (int) env('SESSION_DUREE', '0')));
    appareil, en secondes (défaut 1 an) — voir creer_session_persistante(). */
 define('REMEMBER_DUREE_VIP', max(0, (int) env('REMEMBER_DUREE_VIP', '31536000')));
 
-/* Nombre maximum d'appareils mémorisés (« se souvenir de moi ») par
-   compte illimité. Au-delà, le plus ancien jeton est supprimé : un vieux
-   téléphone revendu ne garde pas un accès valide un an. */
+/* Nombre maximum d'appareils par compte : mémorisés (« se souvenir de
+   moi ») pour un compte illimité — au-delà, le plus ancien jeton est supprimé :
+   un vieux téléphone revendu ne garde pas un accès valide un an — et notifiés
+   (notifications push, tous forfaits) — au-delà, l'ajout est refusé. */
 define('MAX_APPAREILS', max(1, (int) env('MAX_APPAREILS', '30')));
 
 /* Connexion avec Google (voir google.php et includes/google.php).
@@ -606,19 +607,20 @@ define('COUVERTURE_QUOTA_ILLIMITE', couverture_quota_illimite(
    Une série « à jour » (le tome lu est le dernier que MangaDex illustre)
    est revérifiée : à l'arrivée sur la bibliothèque, et à chaque passage du
    cron. Chaque vérification est UN appel à MangaDex, donc une part du débit
-   que tous les comptes se partagent : NOUVEAUTE_HEURES l'encadre, et la file
+   que tous les comptes se partagent : NOUVEAUTE_MINUTES l'encadre, et la file
    d'attente (COUVERTURE_ESPACEMENT) espace de toute façon les appels.
 
-   NOUVEAUTE_HEURES a son plancher, comme partout : un « 0 » interrogerait
-   MangaDex à chaque page. Les deux AUTRES bornes sont des limites de nombre,
+   NOUVEAUTE_MINUTES a son plancher (une heure), comme partout : un « 0 »
+   interrogerait MangaDex à chaque page. Les deux AUTRES bornes sont des limites de nombre,
    et « 0 » (ou ligne absente, ou commentée par #) veut dire SANS LIMITE — comme
    les quotas de recherche (demande de l'utilisateur). Ce qui garde la visite et
    le cron, alors, c'est le budget de temps de nouveautes_verifier() : ce qui n'a
    pas passé aujourd'hui passera au tour suivant, les plus anciennement
    vérifiées d'abord. */
 
-/* Heures minimales entre deux vérifications de la MÊME série. */
-define('NOUVEAUTE_HEURES', min(168, max(1, (int) env('NOUVEAUTE_HEURES', '1'))));
+/* Minutes minimales entre deux vérifications de la MÊME série : de 60 (une
+   heure) à 10 080 (une semaine). Modifiable depuis admin.php. */
+define('NOUVEAUTE_MINUTES', min(10080, max(60, (int) env('NOUVEAUTE_MINUTES', '60'))));
 
 /* Séries vérifiées au plus par arrivée sur la bibliothèque. 0 = sans limite :
    la vérification part en arrière-plan, et s'arrête à son budget de temps. Un
@@ -642,9 +644,10 @@ define('NOUVEAUTE_MAX_CRON', max(0, (int) env('NOUVEAUTE_MAX_CRON', '0')));
 define('VAPID_PUBLIC', trim(env('VAPID_PUBLIC', '')));
 define('VAPID_PRIVATE', trim(env('VAPID_PRIVATE', '')));
 
-/* Appareils (navigateurs) par compte. Un plafond : chaque appareil est un
-   envoi de plus à chaque passage du cron. */
-define('PUSH_MAX_APPAREILS', min(50, max(1, (int) env('PUSH_MAX_APPAREILS', '10'))));
+/* Le nombre d'appareils (navigateurs) notifiés par compte est MAX_APPAREILS,
+   déjà plus haut (demande de l'utilisateur : un seul réglage d'appareils, plutôt
+   qu'un PUSH_MAX_APPAREILS à côté). Chaque appareil est un envoi de plus à
+   chaque passage du cron. */
 
 /* Combien de temps le service garde un message qu'il n'a pas pu remettre
    (appareil éteint), en secondes. De 1 minute à 4 semaines, le maximum que

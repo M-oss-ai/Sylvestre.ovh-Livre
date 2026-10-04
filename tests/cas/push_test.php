@@ -555,7 +555,8 @@ test('api.php : les actions push, le compte de la session, le serveur reste maî
     }
     contient('push_enregistrer(' . "\n" . '            $pdo, $mon_id,', $api, 'l\'appareil est rangé au compte DE LA SESSION');
     sans("\$_POST['utilisateur", $api, 'aucun compte lu dans le POST');
-    contient('PUSH_MAX_APPAREILS', $api, 'le plafond d\'appareils');
+    contient('            MAX_APPAREILS' . "\n" . '        );', $api, 'le plafond d\'appareils est MAX_APPAREILS, pas un réglage de plus');
+    sans('PUSH_MAX_APPAREILS', $api, 'il n\'y a plus de réglage à part');
     contient("\$_SESSION['push_test_le']", $api, 'un essai à la fois : 20 secondes entre deux');
     $bloc = substr($api, (int) strpos($api, "case 'push.tester': {"), 1400);
     vrai(strpos($bloc, 'session_write_close();') < strpos($bloc, 'push_envoyer_a_compte('), 'la session est libérée AVANT d\'attendre les services');
@@ -644,13 +645,14 @@ test('livre.sql : migration 14, rejouable, l\'appareil disparaît avec le compte
     sans('`notif_tomes`  TINYINT', $sql, 'le schéma neuf n\'a plus la colonne d\'e-mail');
 });
 
-test('les clés VAPID, le plafond d\'appareils, le TTL et le délai sont dans le .env', function () {
+test('les clés VAPID, le TTL et le délai sont dans le .env', function () {
     $cfg = source('includes/config.php');
-    foreach (['VAPID_PUBLIC', 'VAPID_PRIVATE', 'PUSH_MAX_APPAREILS', 'PUSH_TTL', 'PUSH_TIMEOUT'] as $c) {
+    foreach (['VAPID_PUBLIC', 'VAPID_PRIVATE', 'PUSH_TTL', 'PUSH_TIMEOUT'] as $c) {
         contient("define('" . $c . "'", $cfg, $c . ' est une constante de config.php');
     }
+    sans("define('PUSH_MAX_APPAREILS'", $cfg, 'le plafond d\'appareils est MAX_APPAREILS');
     $env = source_racine('.env.example');
-    foreach (['VAPID_PUBLIC', 'VAPID_PRIVATE', 'PUSH_MAX_APPAREILS'] as $c) {
+    foreach (['VAPID_PUBLIC', 'VAPID_PRIVATE'] as $c) {
         contient($c, $env, $c . ' est expliqué dans .env.example');
     }
     sans('VAPID_PRIVATE=y', $env, 'et aucune VRAIE clé n\'est dans l\'exemple');

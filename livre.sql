@@ -589,7 +589,7 @@ CREATE TABLE IF NOT EXISTS `reglage` (
 --                       « Tome N pas encore paru » au lieu de « à emprunter ».
 --      `serie.verifie_le` : la dernière interrogation de MangaDex pour cette
 --                       série, pour ne pas la refaire à chaque page (voir
---                       NOUVEAUTE_HEURES). NULL = jamais.
+--                       NOUVEAUTE_MINUTES). NULL = jamais.
 --      `serie.nouveau_tome` : le tome à emprunter dont l'arrivée n'a pas encore
 --                       été annoncée à l'écran. Le bandeau de la bibliothèque
 --                       le lit, et se vide d'un clic. 0 = rien à annoncer.
