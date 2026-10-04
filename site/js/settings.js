@@ -325,26 +325,149 @@ window.Parametres = (() => {
     demanderConfirmation(libelle + " ?", "", libelle, "compte.motdepasse", finirMotDePasse, false);
   });
 
-  /* ---------------- E-mail des nouveaux tomes ----------------
-     Une préférence, enregistrée à chaque bascule. Le serveur dit la valeur
-     retenue : l'interrupteur la reprend, il ne la devine pas. Absente de la
-     page d'un compte bloqué. */
+  /* ---------------- Notifications push ----------------
+     Présent seulement si les clés VAPID sont dans le .env, et pas pour un compte
+     bloqué (voir la carte « Notifications » de parametres.php). Un interrupteur
+     PAR APPAREIL : chaque navigateur s'abonne pour lui-même, auprès de SON
+     service de notification, et le serveur n'en retient que l'adresse et deux
+     clés publiques (includes/push.php).
 
-  const $notif = document.getElementById("notif-tomes");
-  if ($notif) {
-    $notif.addEventListener("change", async () => {
-      $notif.disabled = true;
+     L'interrupteur reste désactivé tant qu'on ne sait pas ce que ce navigateur
+     permet (window.Push.diagnostic) : sur iPhone, hors de l'écran d'accueil, il
+     ne peut rien faire, et le dit.
+
+     La page ne s'abonne JAMAIS seule : l'état de l'interrupteur vient du
+     serveur (« cet appareil est-il à MOI ? »), jamais d'un abonnement trouvé en
+     chemin. Sur un poste partagé, prendre l'appareil d'une autre personne sans
+     qu'on l'ait demandé lui volerait ses notifications. */
+
+  const $push = document.getElementById("push-actif");
+  if ($push && window.Push) {
+    const PN = window.Push;
+    const $pushStatut = document.getElementById("push-statut");
+    const $pushAppareils = document.getElementById("push-appareils");
+    const $pushTester = document.getElementById("push-tester");
+    const $pushTous = document.getElementById("push-tous");
+    let inscription = null; // l'inscription du service worker
+
+    function montrerAppareils(n) {
+      $pushAppareils.textContent = PN.texteAppareils(n);
+      $pushTous.classList.toggle("hidden", !(n > 0));
+      $pushTester.disabled = !inscription || !(n > 0);
+    }
+
+    async function activerPush() {
+      /* D'abord, dans le geste de la personne : Safari refuse la demande
+         d'autorisation faite après un « await » sans rapport. */
+      if (Notification.permission !== "granted") {
+        const reponse = await Notification.requestPermission();
+        if (reponse !== "granted") throw Object.assign(new Error(), { name: "NotAllowedError" });
+      }
+
+      let abonnement = await inscription.pushManager.getSubscription();
+      // Un abonnement garde la clé du site qu'il a vue : si elle a changé, le service refuserait tous nos messages.
+      if (abonnement && !PN.memeCle(abonnement.options && abonnement.options.applicationServerKey, $push.dataset.cle)) {
+        await abonnement.unsubscribe();
+        abonnement = null;
+      }
+      if (!abonnement) {
+        abonnement = await inscription.pushManager.subscribe({
+          userVisibleOnly: true, // exigé : chaque message montre une notification
+          applicationServerKey: PN.cleServeur($push.dataset.cle),
+        });
+      }
+
+      const champs = PN.champs(abonnement);
+      if (!champs) throw new Error("Ce navigateur a donné un abonnement incomplet.");
       try {
-        const r = await L.api("compte.notifications", { actives: $notif.checked ? "1" : "0" });
-        $notif.checked = r.actives;
+        const r = await L.api("push.abonner", champs);
+        montrerAppareils(r.appareils);
         L.toast(r.message);
       } catch (err) {
-        $notif.checked = !$notif.checked; // on rend à l'écran l'état réel
-        L.toast(err.message);
+        // Le serveur n'en veut pas (limite, adresse inconnue) : on ne garde pas un abonnement qu'il ignore.
+        await abonnement.unsubscribe().catch(() => {});
+        throw err;
+      }
+    }
+
+    async function desactiverPush() {
+      const abonnement = await inscription.pushManager.getSubscription();
+      if (abonnement) {
+        const r = await L.api("push.desabonner", { endpoint: abonnement.endpoint });
+        montrerAppareils(r.appareils);
+        await abonnement.unsubscribe();
+        L.toast(r.message);
+      }
+    }
+
+    $push.addEventListener("change", async () => {
+      const veut = $push.checked;
+      $push.disabled = true;
+      try {
+        await (veut ? activerPush() : desactiverPush());
+      } catch (err) {
+        $push.checked = !veut; // on rend à l'écran l'état réel
+        // Une erreur du serveur porte déjà sa phrase (err.donnees, voir Lib.api) ; celle du navigateur, non.
+        L.toast(err.donnees ? err.message : PN.messageErreur(err));
       } finally {
-        $notif.disabled = false;
+        $push.disabled = false;
       }
     });
+
+    $pushTester.addEventListener("click", async () => {
+      $pushTester.disabled = true;
+      try {
+        const r = await L.api("push.tester", {});
+        L.toast(r.message);
+      } catch (err) {
+        L.toast(err.message);
+      } finally {
+        $pushTester.disabled = !inscription;
+      }
+    });
+
+    $pushTous.addEventListener("click", async () => {
+      $pushTous.disabled = true;
+      try {
+        const r = await L.api("push.desabonner", { tous: "1" });
+        const abonnement = inscription && (await inscription.pushManager.getSubscription());
+        if (abonnement) await abonnement.unsubscribe();
+        $push.checked = false;
+        montrerAppareils(r.appareils);
+        L.toast(r.message);
+      } catch (err) {
+        L.toast(err.message);
+      } finally {
+        $pushTous.disabled = false;
+      }
+    });
+
+    (async () => {
+      const nombre = Number($push.dataset.appareils) || 0;
+      $pushAppareils.textContent = PN.texteAppareils(nombre);
+      const diag = PN.diagnostic(PN.detecter(window));
+      if (!diag.possible) {
+        $pushStatut.textContent = diag.message; // l'interrupteur reste désactivé
+        return;
+      }
+      try {
+        inscription = await navigator.serviceWorker.register("sw.js", { updateViaCache: "none" });
+        await navigator.serviceWorker.ready;
+        const abonnement = await inscription.pushManager.getSubscription();
+        let abonne = false;
+        if (abonnement) {
+          const r = await L.api("push.etat", { endpoint: abonnement.endpoint });
+          abonne = r.abonne;
+          montrerAppareils(r.appareils);
+        } else {
+          montrerAppareils(nombre);
+        }
+        $push.checked = abonne;
+        $push.disabled = false;
+      } catch (err) {
+        $pushStatut.textContent = PN.messageErreur(err);
+      }
+    })();
   }
 
   /* ---------------- Filtre des images sensibles ----------------

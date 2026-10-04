@@ -679,7 +679,7 @@ window.Bibliotheque = (() => {
     L.api("couverture.rafraichir", { id })
       .then((r) => {
         poserCarte(r.carte, id);
-        /* Arrivée au dernier tome connu (fin de série, ou « à venir ») : la
+        /* Arrivée au dernier tome connu (fin de série, ou « pas encore paru ») : la
            réponse porte les compteurs — « Terminée » change de statut — et
            un message. Un simple changement d'image n'en porte pas, et reste
            silencieux. */

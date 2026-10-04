@@ -77,6 +77,22 @@ Options -Indexes -MultiViews
     AddOutputFilterByType DEFLATE image/svg+xml
 </IfModule>
 
+# Le manifeste de l'application (écran d'accueil, notifications sur iPhone) :
+# tous les Apache ne connaissent pas encore l'extension « .webmanifest ».
+AddType application/manifest+json .webmanifest
+
+# Le service worker (sw.js, les notifications push) n'a pas d'empreinte dans
+# son adresse : le navigateur le revérifie à chaque visite, et un cache d'un an
+# retarderait d'autant toute correction. Jamais de cache pour lui.
+<FilesMatch "^sw\.js$">
+    <IfModule mod_expires.c>
+        ExpiresActive Off
+    </IfModule>
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-cache"
+    </IfModule>
+</FilesMatch>
+
 # Cache navigateur. css/ et js/ sont servis avec l'empreinte du fichier
 # dans l'URL (voir la fonction actif() dans includes/fonctions.php) :
 # une modification change l'URL, donc un cache d'un an ne risque jamais
@@ -98,4 +114,5 @@ Options -Indexes -MultiViews
     ExpiresByType image/webp            "access plus 1 year"
     ExpiresByType image/svg+xml         "access plus 1 year"
     ExpiresByType text/html             "access plus 0 seconds"
+    ExpiresByType application/manifest+json "access plus 1 day"
 </IfModule>

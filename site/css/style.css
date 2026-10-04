@@ -610,7 +610,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
-/* « Tome N à venir » : le tome suivant n'est pas paru. Même place que « à
+/* « Tome N pas encore paru » : le tome suivant n'est pas paru. Même place que « à
    emprunter », mais en retrait — ce n'est pas encore quelque chose à faire. */
 .next-tag-avenir {
   color: var(--text-dim);
@@ -2104,3 +2104,11 @@ th[aria-sort="none"] .admin-tri { color: var(--text-dim); }
   background: rgba(0, 0, 0, 0.25);
 }
 .admin-photo-legende { text-align: center; margin-top: 10px; overflow-wrap: anywhere; }
+
+/* La carte « Notifications » des Paramètres : les deux boutons, côte à côte. */
+.push-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}

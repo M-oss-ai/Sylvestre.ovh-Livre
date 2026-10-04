@@ -52,7 +52,7 @@ test('série finie ou abandonnée au dernier tome : terminée', function () {
     egale('termine', fin_de_serie('cancelled', 0, 12, 12), 'cancelled : MangaDex ne déclare pas de dernier volume, la dernière couverture suffit');
 });
 
-test('série en cours ou en pause au dernier tome : à venir', function () {
+test('série en cours ou en pause au dernier tome : le suivant n\'est pas paru', function () {
     egale('a_venir', fin_de_serie('ongoing', 0, 43, 43), 'ongoing');
     egale('a_venir', fin_de_serie('hiatus', 0, 20, 20), 'hiatus');
 });
@@ -96,6 +96,24 @@ test('la première vérification apprend sans rien annoncer', function () {
        lui en découvrir un « nouveau » ferait annoncer tout ce qui est paru. */
     egale('memoriser', nouveaute_evaluer(43, 0, 43), 'à jour, on le note');
     egale('memoriser', nouveaute_evaluer(10, 0, 43), 'en retard de 33 tomes, on le note sans l\'annoncer');
+});
+
+test('seule une personne ARRIVÉE AU BOUT des tomes est prévenue', function () {
+    /* Au tome 1 d'une série dont le tome 4 est le dernier connu, le tome 5 qui
+       sort n'est pas une nouvelle : il reste trois tomes à lire avant. */
+    egale('memoriser', nouveaute_evaluer(1, 4, 5), 'au tome 1, le 5 sort : rien à dire');
+    egale('memoriser', nouveaute_evaluer(3, 4, 5), 'au tome 3 sur 4 : rien non plus');
+    egale('nouveau', nouveaute_evaluer(4, 4, 5), 'au tome 4 sur 4 : le 5 est LA suite');
+    egale('nouveau', nouveaute_evaluer(5, 4, 6), 'déjà au-delà de ce qu\'on savait (saisie à la main) : le 6 est à lire');
+});
+
+test('seule une personne ARRIVÉE AU BOUT des tomes est prévenue', function () {
+    /* Au tome 1 d'une série dont le tome 4 est le dernier connu, le tome 5 qui
+       sort n'est pas une nouvelle : il reste trois tomes à lire avant. */
+    egale('memoriser', nouveaute_evaluer(1, 4, 5), 'au tome 1, le 5 sort : rien à dire');
+    egale('memoriser', nouveaute_evaluer(3, 4, 5), 'au tome 3 sur 4 : rien non plus');
+    egale('nouveau', nouveaute_evaluer(4, 4, 5), 'au tome 4 sur 4 : le 5 est LA suite');
+    egale('nouveau', nouveaute_evaluer(5, 4, 6), 'déjà au-delà de ce qu\'on savait (saisie à la main) : le 6 est à lire');
 });
 
 test('des tomes nouveaux mais déjà lus ne sont pas annoncés', function () {
@@ -366,20 +384,13 @@ test('purger.php : le cron charge nouveautes.php, jamais fonctions.php', functio
     $nouveautes = source('includes/nouveautes.php');
     sans('fonctions.php', preg_replace('#/\*.*?\*/#s', '', $nouveautes), 'nouveautes.php ne le charge pas non plus');
     contient('nouveautes_verifier(', $cron, 'il lance le relevé');
-    contient('avertir_nouveaux_tomes(', $cron, 'et prévient');
-});
-
-test('purger.php : pas d\'e-mail à une adresse non confirmée, à qui l\'a refusé, ni à un compte bloqué', function () {
-    $cron = source('purger.php');
-    contient("(int) \$u['email_verifie'] !== 1", $cron, 'adresse confirmée');
-    contient("(int) \$u['notif_tomes'] !== 1", $cron, 'préférence respectée');
-    contient("\$u['forfait'] === 'bloque'", $cron, 'compte bloqué');
+    contient('push_envoyer_a_compte(', $cron, 'et prévient, par notification push');
 });
 
 test('purger.php : un schéma pas migré devient une anomalie bruyante, pas un plantage', function () {
     $cron = source('purger.php');
     contient('catch (PDOException $e)', $cron, 'l\'erreur est attrapée');
-    contient('migration 13', $cron, 'et dit quoi faire');
+    contient('migrations 13 et 14', $cron, 'et dit quoi faire');
 });
 
 test('purger.php : la ligne du bilan ne contient pas « e-mail » (le rapport les écarte)', function () {
@@ -411,7 +422,7 @@ test('livre.sql : migration 13, rejouable et sans ADD COLUMN IF NOT EXISTS', fun
     $m13 = substr($sql, (int) strpos($sql, '--  13. Nouveaux tomes'));
     vrai($m13 !== '', 'la migration 13 existe');
     foreach (["TABLE_NAME = 'serie' AND COLUMN_NAME = 'dernier_tome'", "TABLE_NAME = 'serie' AND COLUMN_NAME = 'verifie_le'",
-              "TABLE_NAME = 'serie' AND COLUMN_NAME = 'nouveau_tome'", "TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'notif_tomes'"] as $colonne) {
+              "TABLE_NAME = 'serie' AND COLUMN_NAME = 'nouveau_tome'"] as $colonne) {
         contient($colonne, $m13, 'elle interroge information_schema pour ' . $colonne);
     }
     contient("'DO 0'", $m13, 'et ne fait rien si la colonne est là');
@@ -421,16 +432,4 @@ test('livre.sql : migration 13, rejouable et sans ADD COLUMN IF NOT EXISTS', fun
     foreach (['`dernier_tome`', '`verifie_le`', '`nouveau_tome`'] as $colonne) {
         contient($colonne, $creation, 'CREATE TABLE serie : ' . $colonne);
     }
-    contient('`notif_tomes`  TINYINT(1)   NOT NULL DEFAULT 1', $sql, 'CREATE TABLE utilisateur : notif_tomes, activé par défaut');
-});
-
-test('utilisateur_actuel() lit notif_tomes, et la page Paramètres la propose', function () {
-    contient('notif_tomes', source('includes/fonctions.php'), 'la colonne est lue à chaque requête');
-    $p = source('parametres.php');
-    contient('id="notif-tomes"', $p, 'l\'interrupteur');
-    $carte = (int) strpos($p, 'id="notifications"');
-    contient('<?php if (!$bloque): ?>', substr($p, max(0, $carte - 80), 80), 'la carte est cachée à un compte bloqué');
-    $js = source('js/settings.js');
-    contient('"compte.notifications"', $js, 'il enregistre par l\'API');
-    contient('$notif.checked = r.actives;', $js, 'et reprend la valeur retenue par le serveur');
 });

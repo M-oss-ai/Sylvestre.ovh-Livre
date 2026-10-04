@@ -69,8 +69,8 @@ curl -H "X-Cron-Token: VOTRE_CRON_TOKEN" https://votredomaine.fr/purger.php
 
 Elle supprime les jetons expirés, les compteurs de tentatives périmés,
 les images orphelines, et rejoue les e-mails qui n'étaient pas partis.
-Elle revérifie aussi chez MangaDex les séries « à jour » et prévient
-des nouveaux tomes (voir « Fin de série et nouveaux tomes »).
+Elle revérifie aussi chez MangaDex les séries « à jour » et envoie les
+notifications push des nouveaux tomes (voir « Fin de série et nouveaux tomes »).
 
 Elle envoie un **rapport d'activité** à `ADMIN_EMAIL` : nombre de
 comptes et de séries, nouveautés de la période, tentatives de connexion
@@ -182,6 +182,8 @@ saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 | `COUVERTURE_QUOTA` · `COUVERTURE_FENETRE` | Recherches autorisées par compte et par tranche |
 | `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
+| `VAPID_PUBLIC` · `VAPID_PRIVATE` | Clés des notifications push, à générer une fois (`php outils/vapid.php`). Vides : pas de notifications. **La privée est un secret** |
+| `PUSH_MAX_APPAREILS` · `PUSH_TTL` · `PUSH_TIMEOUT` | Appareils par compte (10, de 1 à 50), durée de garde d'un message non remis (86 400 s, de 60 à 2 419 200), délai d'un envoi (5 s, de 1 à 20) |
 | `NOUVEAUTE_HEURES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : heures minimales entre deux vérifications d'une même série (1, de 1 à 168), séries vérifiées au plus par arrivée sur la page (6, de 1 à 20) et par passage du cron (40, de 1 à 500) |
 | `LEGAL_*` | Mentions légales |
 | `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
@@ -583,7 +585,7 @@ de publication de la série :
 | La série est… | Au dernier tome |
 |---|---|
 | `completed` ou `cancelled` | passe **« Terminée »** et prend la couverture du dernier tome |
-| `ongoing` ou `hiatus` | reste **« En cours »** ; la carte dit **« Tome N à venir »** au lieu de « à emprunter » |
+| `ongoing` ou `hiatus` | reste **« En cours »** ; la carte dit **« Tome N pas encore paru »** au lieu de « à emprunter » |
 
 Le dernier tome est le plus haut de deux sources : la dernière couverture, et le
 « dernier volume » que MangaDex déclare pour une série finie. Si des tomes
@@ -593,17 +595,19 @@ deviné.
 
 **Un tome de plus.** Une série « à jour » est revérifiée : à chaque **arrivée sur
 la bibliothèque** (en arrière-plan, après l'affichage de la page — MangaDex ne
-la retarde jamais) et à chaque **passage du cron**. Si MangaDex illustre un tome
-de plus que le tome lu :
+la retarde jamais) et à chaque **passage du cron**. Seules sont concernées les
+séries dont le tome lu est le **dernier connu** : si vous en êtes au tome 1 et que
+le tome 5 sort, rien ne vous est dit — il vous en reste quatre à lire avant. Si
+MangaDex illustre un tome de plus que celui où vous êtes arrivé au bout :
 
 - la série prend la couverture du nouveau tome et **remonte en tête** (sa date de
   modification passe à maintenant) ;
 - un **bandeau** l'annonce sur la bibliothèque : « Un nouveau tome est disponible
   pour la série « X » (tome N). » ; « OK » le vide, et avancer d'un tome efface
   l'annonce de cette série ;
-- le cron envoie **un seul e-mail par compte**, quel que soit le nombre de séries,
-  à son adresse **confirmée**, sauf si la personne l'a désactivé dans
-  Paramètres › Notifications. Un compte bloqué n'est jamais vérifié.
+- le cron envoie **une notification push par compte**, quel que soit le nombre de
+  séries, sur chacun de ses appareils enregistrés (voir plus bas). **Aucun e-mail**
+  n'est envoyé pour les nouveaux tomes. Un compte bloqué n'est jamais vérifié.
 
 La première vérification d'une série ne fait qu'apprendre le nombre de tomes :
 elle n'annonce rien, sinon toutes les séries d'avant la fonction annonceraient
@@ -617,9 +621,53 @@ plus haut s'applique, et le relevé s'arrête plutôt que d'insister quand elle
 refuse un appel, quand MangaDex ne répond plus trois fois de suite, ou quand son
 temps est épuisé.
 
-Les notifications du navigateur (« push ») ne sont pas faites : elles demandent
-un service worker et un chiffrement de charge utile propres, bien plus lourds que
-ce que le site embarque aujourd'hui.
+### Notifications push
+
+Le navigateur prévient même **site fermé** : sur le téléphone ou l'ordinateur, une
+notification « Nouveau tome disponible — « Berserk » : tome 44 ». Une seule par
+passage et par compte, qui en remplace une précédente restée à l'écran ; un clic
+ouvre la bibliothèque. Elle part du **cron** : elle arrive donc au plus tard au
+passage suivant (`CRON_HEURES`), et un cron plus fréquent la rapproche.
+
+**Mise en place, une seule fois :**
+
+1. Sur un poste qui a PHP, générez les clés du site : `php outils/vapid.php`
+   (sous XAMPP : `C:/xampp/php/php.exe outils/vapid.php`).
+2. Recopiez `VAPID_PUBLIC` et `VAPID_PRIVATE` dans le `.env` **local et celui du
+   serveur**. La clé privée est un secret, comme `CRON_TOKEN`. Régénérer la paire
+   oblige chaque appareil à réactiver ses notifications.
+3. Rejouez `livre.sql` (migration 14 : la table `abonnement_push`).
+4. Chaque personne active les notifications **sur chaque appareil**, dans
+   Paramètres › Notifications : le navigateur demande l'autorisation, et un
+   bouton envoie une notification d'essai. Sans clés dans le `.env`, la carte
+   n'apparaît pas et rien ne part — le reste du site ne change pas.
+
+**Sur iPhone et iPad**, Safari n'accepte les notifications que d'un site **ajouté à
+l'écran d'accueil** et ouvert depuis son icône (Partager › Sur l'écran d'accueil) ;
+dans un onglet, la carte l'explique. C'est pour cela que le site porte un manifeste
+(`manifest.webmanifest`) et ses icônes (`img/`, refaites par `php outils/icones.php`).
+
+**Comment c'est fait** — sans aucune bibliothèque (`includes/push.php`) : le
+chiffrement du message (RFC 8291, `aes128gcm`) et l'identification du site (VAPID,
+RFC 8292) n'utilisent que `openssl` et `hash` de PHP. Le chiffrement est testé
+contre l'exemple de la RFC elle-même, octet pour octet. Le service worker
+(`sw.js`) ne fait qu'afficher les messages : aucun cache, aucune interception des
+requêtes.
+
+**Ce qui borne l'envoi :**
+
+- l'adresse d'un abonnement vient du **navigateur d'un utilisateur** et le serveur y
+  POSTe : seules les adresses des vrais services sont acceptées (https, port 443,
+  Google, Mozilla, Apple, Microsoft), sinon ce serait un moyen de faire appeler
+  n'importe quoi par le serveur ;
+- `PUSH_MAX_APPAREILS` appareils par compte (10), appliqué dans l'`INSERT` ;
+  `PUSH_TTL` (86 400 s : un message non remis est gardé un jour) et `PUSH_TIMEOUT` (5 s) ;
+- un navigateur n'appartient qu'à **un** compte à la fois : celui qui l'active en dernier
+  le reprend, pour que personne ne reçoive les notifications d'un autre sur un poste
+  partagé ;
+- un appareil que le service déclare périmé (404, 410) est effacé par le cron ;
+- « Retirer tous mes appareils » règle le cas d'un appareil perdu ;
+- un compte bloqué ne peut ni ajouter d'appareil ni envoyer d'essai (il peut en retirer).
 
 ### Contenu sensible
 
@@ -641,7 +689,7 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migration 13 : nouveaux tomes) |
+| `livre.sql` | Schéma complet, rejouable (migrations 13 et 14 : nouveaux tomes, appareils de notification) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
@@ -650,6 +698,8 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 | `includes/mailer.php` | SMTP, jetons |
 | `includes/carte.php` | Gabarit d'une carte — **le seul endroit** où ce HTML est écrit |
 | `includes/couvertures.php` · `includes/nouveautes.php` | Client MangaDex ; fin de série et nouveaux tomes (chargé aussi par `purger.php`) |
+| `includes/push.php` · `sw.js` · `js/push.js` · `manifest.webmanifest` · `img/` | Notifications push : chiffrement et envoi (chargé aussi par `purger.php`), service worker, logique du navigateur, application installable |
+| `outils/` (racine du dépôt) | `vapid.php` (clés des notifications) et `icones.php` : ne montent jamais sur le serveur |
 | `index.php` | La bibliothèque : grille, recherche, filtres, modales |
 | `api.php` | Actions AJAX + export JSON |
 | `inscription.php` · `connexion.php` · `deconnexion.php` | Comptes |

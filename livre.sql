@@ -81,10 +81,6 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   -- que l'utilisateur reactive le filtre, ce qui n'aurait aucun sens.
   `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
   `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1,
-  -- Prévenir par e-mail quand un nouveau tome paraît (voir
-  -- includes/nouveautes.php) : 1 = oui, par défaut. Le message ne part qu'à
-  -- une adresse confirmée, et jamais à un compte bloqué.
-  `notif_tomes`  TINYINT(1)   NOT NULL DEFAULT 1,
   -- Identifiant du compte Google relié (revendication « sub » d'OpenID
   -- Connect), NULL sinon. C'est lui, et non l'adresse, qui reconnaît le
   -- compte Google : une adresse peut changer, le « sub » jamais.
@@ -587,15 +583,16 @@ CREATE TABLE IF NOT EXISTS `reglage` (
 --                       qu'on ne le sait pas : la première vérification le
 --                       range sans rien annoncer. Une série dont le tome lu
 --                       atteint ce nombre est « à jour » : sa carte dit
---                       « Tome N à venir » au lieu de « à emprunter ».
+--                       « Tome N pas encore paru » au lieu de « à emprunter ».
 --      `serie.verifie_le` : la dernière interrogation de MangaDex pour cette
 --                       série, pour ne pas la refaire à chaque page (voir
 --                       NOUVEAUTE_HEURES). NULL = jamais.
 --      `serie.nouveau_tome` : le tome à emprunter dont l'arrivée n'a pas encore
 --                       été annoncée à l'écran. Le bandeau de la bibliothèque
 --                       le lit, et se vide d'un clic. 0 = rien à annoncer.
---      `utilisateur.notif_tomes` : 1 = prévenir par e-mail (le cron, jamais à
---                       une adresse non confirmée) ; se règle dans Paramètres.
+--      (Une première version de cette migration ajoutait aussi la colonne
+--      `utilisateur.notif_tomes`, pour un e-mail : abandonnée au profit de la
+--      notification push, voir la migration 14.)
 --
 --      Aucune donnée n'est touchée : chaque série garde son tome, son statut
 --      et son image. À exécuter AVANT d'envoyer le code (pages et cron lisent
@@ -621,9 +618,48 @@ SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `serie` ADD COLUMN `nouveau_tome` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `verifie_le`');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
 
-SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'notif_tomes');
-SET @sql := IF(@c > 0, 'DO 0',
-  'ALTER TABLE `utilisateur` ADD COLUMN `notif_tomes` TINYINT(1) NOT NULL DEFAULT 1 AFTER `filtre_sensible`');
-PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  14. Notifications push (voir includes/push.php).
+--
+--      Une ligne par APPAREIL (un navigateur) qui a accepté les notifications :
+--      un compte peut en avoir plusieurs (téléphone, ordinateur).
+--
+--      `endpoint`      : l'adresse chez le service de notification du
+--                        navigateur (Google, Mozilla, Apple, Microsoft), où le
+--                        serveur POSTe le message. Fixée par le navigateur,
+--                        vérifiée à l'enregistrement (https, service connu).
+--      `endpoint_hash` : son empreinte sha256. C'est elle qui se cherche et que
+--                        l'index UNIQUE protège : un navigateur n'appartient
+--                        qu'à UN compte à la fois (le dernier qui l'a activé).
+--      `p256dh`, `auth`: les deux clés PUBLIQUES du navigateur, de quoi
+--                        chiffrer le message pour lui seul. Rien ici ne permet
+--                        de lire ni d'envoyer à sa place.
+--      `envoye_le`     : le dernier message accepté par le service. NULL = jamais.
+--
+--      ON DELETE CASCADE : les appareils disparaissent avec le compte.
+--      Une adresse que le service déclare périmée (404, 410) est effacée par
+--      le cron au premier envoi raté.
+--
+--      Rien n'est supprimé : une base qui aurait joué la première version de la
+--      migration 13 garde sa colonne `utilisateur.notif_tomes`, inutilisée
+--      (on ne prévient plus par e-mail). Elle ne gêne rien ; la retirer est
+--      facultatif : ALTER TABLE `utilisateur` DROP COLUMN `notif_tomes`;
+--      Tout est rejouable.
+CREATE TABLE IF NOT EXISTS `abonnement_push` (
+  `id`             INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `utilisateur_id` INT UNSIGNED  NOT NULL,
+  `endpoint_hash`  CHAR(64)      NOT NULL,
+  `endpoint`       VARCHAR(1000) NOT NULL,
+  `p256dh`         VARCHAR(100)  NOT NULL,
+  `auth`           VARCHAR(40)   NOT NULL,
+  `cree_le`        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `envoye_le`      DATETIME      NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_abonnement_push_hash` (`endpoint_hash`),
+  KEY `idx_abonnement_push_utilisateur` (`utilisateur_id`),
+  CONSTRAINT `fk_abonnement_push_utilisateur`
+    FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

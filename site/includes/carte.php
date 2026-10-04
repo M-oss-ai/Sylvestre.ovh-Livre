@@ -26,7 +26,7 @@ const ETOILE_SVG = '<svg class="etoile" viewBox="0 0 24 24" aria-hidden="true" f
 /**
  * La série est-elle « à jour » : suivie chez MangaDex, en cours, et son tome lu
  * a atteint le dernier tome que MangaDex connaît ? Le tome suivant n'existe
- * pas encore : la carte dit « à venir » au lieu de « à emprunter ».
+ * pas encore : la carte dit « pas encore paru » au lieu de « à emprunter ».
  *
  * `dernier_tome` vaut 0 tant que MangaDex n'a pas été interrogé (série
  * d'avant la fonction, ou panne au moment de l'avancer) : on ne prétend alors
@@ -68,7 +68,7 @@ function carte_html(array $s, bool $lecture_seule = false): string
     $a_venir = serie_a_venir($s);
 
     $alt = $a_venir
-        ? "Couverture de {$titre} — dernier tome lu {$tome}, tome {$suivant} à venir"
+        ? "Couverture de {$titre} — dernier tome lu {$tome}, tome {$suivant} pas encore paru"
         : ($en_cours
             ? "Couverture du tome {$suivant} de {$titre}"
             : "Couverture de {$titre} — dernier tome lu {$tome}");
@@ -78,7 +78,7 @@ function carte_html(array $s, bool $lecture_seule = false): string
         : '<span class="no-cover" aria-hidden="true">📕</span>';
 
     $etiquette = $a_venir
-        ? '<div class="next-tag next-tag-avenir">Tome ' . $suivant . ' à venir</div>'
+        ? '<div class="next-tag next-tag-avenir">Tome ' . $suivant . ' pas encore paru</div>'
         : ($en_cours
             ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>'
             : '');

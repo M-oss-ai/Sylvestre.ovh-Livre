@@ -10,7 +10,7 @@
           - série finie (completed) ou abandonnée (cancelled) → elle passe en
             « Terminée » et garde la couverture du dernier tome ;
           - série en cours (ongoing) ou en pause (hiatus) → elle reste « En
-            cours », et sa carte dit « Tome N à venir ».
+            cours », et sa carte dit « Tome N pas encore paru ».
         Décidé au moment où l'on avance d'un tome : nouveautes_fin_de_serie().
 
      2. NOUVEAU TOME. Une série « à jour » est revérifiée — à l'arrivée sur la
@@ -73,10 +73,14 @@ function fin_de_serie(string $statut_mangadex, int $dernier_volume, int $dernier
  * Que faire d'une série « à jour », quand MangaDex illustre jusqu'au tome
  * $mangadex ? ($connu : ce qu'on en savait, 0 si on ne le savait pas encore.)
  *
- *   'nouveau'   : un tome de plus que la dernière fois, ET que celui qu'on a lu :
- *                 il y a quelque chose à emprunter — on l'annonce ;
+ *   'nouveau'   : un tome de plus que la dernière fois, ET que celui qu'on a lu,
+ *                 ET la personne était ARRIVÉE AU BOUT de ce qui existait
+ *                 ($tome_actuel >= $connu) : on l'annonce. Au tome 1 d'une série
+ *                 dont le tome 4 est le dernier, le tome 5 qui sort n'est pas une
+ *                 nouvelle — il reste trois tomes à lire avant ;
  *   'memoriser' : on apprend le nombre sans rien annoncer (première
- *                 vérification, ou tomes nouveaux mais déjà lus) ;
+ *                 vérification, tomes nouveaux mais déjà lus, ou personne qui
+ *                 n'est pas au bout) ;
  *   'inchange'  : rien à changer. MangaDex qui répond moins haut que ce qu'on
  *                 savait (une couverture retirée) ne fait jamais reculer
  *                 « dernier_tome » : on ne change pas la carte sur un recul.
@@ -96,7 +100,11 @@ function nouveaute_evaluer(int $tome_actuel, int $connu, int $mangadex): string
     if ($mangadex <= $connu) {
         return 'inchange';
     }
-    return $mangadex > $tome_actuel ? 'nouveau' : 'memoriser';
+    /* Les séries qu'on vérifie sont déjà celles dont le tome lu a atteint le
+       dernier connu (nouveautes_series_a_verifier) : la condition ci-dessous
+       est ce qui en fait une règle de la décision elle-même, qui tient même si
+       la personne a reculé entre la requête et l'appel. */
+    return ($mangadex > $tome_actuel && $tome_actuel >= $connu) ? 'nouveau' : 'memoriser';
 }
 
 /**
@@ -131,7 +139,7 @@ function fin_de_serie_message(string $titre, string $etat, int $suivant): string
  * (fin_de_serie()) et écrit.
  *
  *   'termine'  : statut « termine », couverture du dernier tome ;
- *   'a_venir'  : « dernier_tome » mémorisé, la carte dira « Tome N à venir » ;
+ *   'a_venir'  : « dernier_tome » mémorisé, la carte dira « Tome N pas encore paru » ;
  *   'en_route', 'inconnu' : rien n'est écrit ;
  *   'echec'    : MangaDex n'a pas répondu (ou la série a changé entre-temps).
  *

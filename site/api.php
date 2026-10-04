@@ -16,6 +16,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/carte.php';
 require_once __DIR__ . '/includes/couvertures.php';
 require_once __DIR__ . '/includes/nouveautes.php';   // fin de série, nouveaux tomes
+require_once __DIR__ . '/includes/push.php';         // les notifications push : appareils, envoi du test
 require_once __DIR__ . '/includes/google.php';   // les modifications en attente d'un compte Google
 require_once __DIR__ . '/includes/cle_acces.php';   // les clés d'accès (ajout, retrait)
 require_once __DIR__ . '/includes/admin.php';        // les actions `admin.*`
@@ -1114,7 +1115,7 @@ switch ($action) {
              - série finie ou abandonnée : elle passe « Terminée », avec la
                couverture du dernier tome ;
              - série qui continue : elle reste « En cours », et sa carte dit
-               « Tome N à venir ».
+               « Tome N pas encore paru ».
            Sinon (des tomes existent plus loin, MangaDex ne répond pas…) on
            retombe sur la réponse habituelle : l'image en place reste. */
         if ($url === '' && $auto && $statut_vu === 'cours' && mangadex_attente_suggeree() === 0) {
@@ -1154,7 +1155,7 @@ switch ($action) {
         /* Une couverture EXACTE existe pour ce tome (le mode automatique n'accepte
            pas de repli) : MangaDex connaît donc au moins jusque-là. Sans cela,
            un « dernier tome » resté plus bas que ce qu'on lit — des tomes parus
-           depuis la dernière vérification — ferait dire « à venir » d'un tome
+           depuis la dernière vérification — ferait dire « pas encore paru » d'un tome
            dont la couverture est affichée. */
         if ($auto && (int) $s['dernier_tome'] < $tome) {
             $pdo->prepare('UPDATE serie SET dernier_tome = ?, maj_le = maj_le WHERE id = ? AND utilisateur_id = ?')
@@ -1255,19 +1256,90 @@ switch ($action) {
         reponse_json(['ok' => true]);
     }
 
-    /* Recevoir un e-mail à chaque nouveau tome, ou non. Une préférence du
-       compte : sans effet sur la bibliothèque, donc libre pour un compte
-       bloqué comme le filtre des images sensibles. */
-    case 'compte.notifications': {
-        $actives = ((string) ($_POST['actives'] ?? '1')) === '1';
-        $pdo->prepare('UPDATE utilisateur SET notif_tomes = ? WHERE id = ?')
-            ->execute([$actives ? 1 : 0, $mon_id]);
+    /* ---------------- Notifications push ----------------
+       Un appareil = un navigateur qui a accepté les notifications (voir
+       includes/push.php). Le navigateur fait l'abonnement chez SON service de
+       notification et nous en remet l'adresse et deux clés PUBLIQUES.
+
+       L'adresse est vérifiée AVANT d'être rangée (push_endpoint_valide) : le
+       serveur y POSTera plus tard, et elle vient du navigateur d'un utilisateur.
+       Le compte est toujours celui de la session — jamais un champ du POST. */
+
+    /* Cet appareil reçoit-il les notifications de CE compte ? Une lecture : la
+       page des Paramètres s'en sert pour poser l'interrupteur. Elle ne
+       s'abonne jamais seule — sur un poste partagé, ce serait prendre l'appareil
+       de quelqu'un d'autre sans qu'on l'ait demandé. */
+    case 'push.etat': {
+        $endpoint = (string) ($_POST['endpoint'] ?? '');
         reponse_json([
-            'ok'      => true,
-            'actives' => $actives,
-            'message' => $actives
-                ? 'Vous recevrez un e-mail pour les nouveaux tomes.'
-                : 'Vous ne recevrez plus d\'e-mail pour les nouveaux tomes.',
+            'ok'        => true,
+            'abonne'    => $endpoint !== '' && push_appartient($pdo, $mon_id, $endpoint),
+            'appareils' => push_compter($pdo, $mon_id),
+        ]);
+    }
+
+    case 'push.abonner': {
+        if (!push_actif()) {
+            reponse_json(['ok' => false, 'erreur' => "Les notifications ne sont pas activées sur ce site."], 403);
+        }
+        $etat = push_enregistrer(
+            $pdo, $mon_id,
+            (string) ($_POST['endpoint'] ?? ''), (string) ($_POST['p256dh'] ?? ''), (string) ($_POST['auth'] ?? ''),
+            PUSH_MAX_APPAREILS
+        );
+        if ($etat === 'invalide') {
+            reponse_json(['ok' => false, 'erreur' =>
+                "Ce navigateur a donné un abonnement que le site ne peut pas utiliser."], 422);
+        }
+        if ($etat === 'plein') {
+            reponse_json(['ok' => false, 'erreur' => 'Vous avez atteint la limite de ' . PUSH_MAX_APPAREILS
+                . ' appareils. Retirez-en un avant d\'en ajouter.', 'appareils' => push_compter($pdo, $mon_id)], 422);
+        }
+        reponse_json(['ok' => true, 'appareils' => push_compter($pdo, $mon_id),
+            'message' => 'Notifications activées sur cet appareil.']);
+    }
+
+    /* Retire cet appareil — ou, avec « tous », tous ceux du compte (un appareil
+       perdu ne se retire pas depuis lui-même). Libre pour un compte bloqué :
+       arrêter d'être notifié est un droit. */
+    case 'push.desabonner': {
+        if (((string) ($_POST['tous'] ?? '')) === '1') {
+            $pdo->prepare('DELETE FROM abonnement_push WHERE utilisateur_id = ?')->execute([$mon_id]);
+        } else {
+            push_retirer($pdo, $mon_id, (string) ($_POST['endpoint'] ?? ''));
+        }
+        reponse_json(['ok' => true, 'appareils' => push_compter($pdo, $mon_id),
+            'message' => 'Notifications désactivées.']);
+    }
+
+    /* Envoie une notification d'essai à tous les appareils du compte : sans
+       elle, on ne saurait qu'à la sortie du prochain tome si tout fonctionne.
+       Un envoi toutes les 20 secondes au plus par session. */
+    case 'push.tester': {
+        if (!push_actif()) {
+            reponse_json(['ok' => false, 'erreur' => "Les notifications ne sont pas activées sur ce site."], 403);
+        }
+        $depuis = time() - (int) ($_SESSION['push_test_le'] ?? 0);
+        if ($depuis < 20) {
+            $attente = 20 - $depuis;
+            reponse_json(['ok' => false, 'attente' => $attente,
+                'erreur' => 'Un essai à la fois : réessayez dans ' . $attente . ' secondes.'], 429);
+        }
+        $_SESSION['push_test_le'] = time();
+        session_write_close();   // l'envoi attend les services de notification, parfois plusieurs secondes
+
+        if (push_compter($pdo, $mon_id) === 0) {
+            reponse_json(['ok' => false, 'erreur' => "Aucun appareil n'est enregistré : activez d'abord les notifications."], 422);
+        }
+        $bilan = push_envoyer_a_compte($pdo, $mon_id, push_message_test());
+        reponse_json([
+            'ok'        => true,
+            'envoyes'   => $bilan['envoyes'],
+            'echecs'    => $bilan['echecs'],
+            'appareils' => push_compter($pdo, $mon_id),
+            'message'   => $bilan['envoyes'] > 0
+                ? 'Notification envoyée : elle arrive dans un instant.'
+                : "Aucune notification n'est partie : le service du navigateur n'a pas répondu. Réessayez plus tard.",
         ]);
     }
 

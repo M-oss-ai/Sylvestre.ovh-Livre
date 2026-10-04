@@ -1,6 +1,6 @@
 <?php
 /* =====================================================================
-   carte_html() et serie_a_venir() — « Tome N à venir ».
+   carte_html() et serie_a_venir() — « Tome N pas encore paru ».
 
    Quand le tome lu est le dernier que MangaDex connaît d'une série qui
    continue, le tome suivant n'existe pas encore : la carte le dit au lieu
@@ -31,12 +31,12 @@ function serie_a_jour(array $modifications = []): array
 
 groupe('serie_a_venir() — quand le tome suivant n\'existe pas encore');
 
-test('en cours, liée, tome lu = dernier tome connu : à venir', function () {
+test('en cours, liée, tome lu = dernier tome connu : à jour', function () {
     vrai(serie_a_venir(serie_a_jour()), 'à jour');
     vrai(serie_a_venir(serie_a_jour(['tome_actuel' => 50])), 'tome lu au-delà du dernier connu : on n\'a rien de plus à lui proposer');
 });
 
-test('des tomes restent à lire : pas à venir', function () {
+test('des tomes restent à lire : pas à jour', function () {
     faux(serie_a_venir(serie_a_jour(['tome_actuel' => 42])), 'un tome de retard');
     faux(serie_a_venir(serie_a_jour(['tome_actuel' => 0])), 'série non commencée');
 });
@@ -49,7 +49,7 @@ test('dernier tome inconnu : on ne prétend rien', function () {
     faux(serie_a_venir($sans), 'colonne absente de la ligne (lignes d\'avant la migration, autres appelants)');
 });
 
-test('pas liée à MangaDex : jamais à venir', function () {
+test('pas liée à MangaDex : jamais « pas encore paru »', function () {
     faux(serie_a_venir(serie_a_jour(['mangadex_id' => ''])), 'lien vide');
     $sans = serie_a_jour();
     unset($sans['mangadex_id']);
@@ -65,24 +65,24 @@ test('seule une série « En cours » attend un tome', function () {
 
 groupe('carte_html() — l\'étiquette et la couverture');
 
-test('à jour : « Tome 44 à venir », et plus « à emprunter »', function () {
+test('à jour : « Tome 44 pas encore paru », et plus « à emprunter »', function () {
     $html = carte_html(serie_a_jour());
-    contient('Tome 44 à venir', $html, 'l\'étiquette dit « à venir »');
+    contient('Tome 44 pas encore paru', $html, 'l\'étiquette dit « pas encore paru »');
     contient('next-tag next-tag-avenir', $html, 'avec sa classe, pour le style en retrait');
     sans('à emprunter', $html, 'plus de « à emprunter »');
 });
 
 test('à jour : le texte alternatif de la couverture dit la même chose', function () {
     $html = carte_html(serie_a_jour());
-    contient('dernier tome lu 43, tome 44 à venir', $html, 'le lecteur d\'écran aussi');
+    contient('dernier tome lu 43, tome 44 pas encore paru', $html, 'le lecteur d\'écran aussi');
     sans('Couverture du tome 44', $html, 'la couverture n\'est pas celle du tome 44 : il n\'existe pas');
 });
 
 test('pas à jour : la carte est INCHANGÉE', function () {
     $normale = carte_html(serie_a_jour(['tome_actuel' => 42]));
     contient('Tome 43 à emprunter', $normale, 'toujours « à emprunter »');
-    contient('<div class="next-tag">', $normale, 'sans la classe « à venir »');
-    sans('à venir', $normale, 'aucune trace');
+    contient('<div class="next-tag">', $normale, 'sans la classe « à venir » (next-tag-avenir)');
+    sans('pas encore paru', $normale, 'aucune trace');
     contient('Couverture du tome 43 de Berserk', $normale, 'texte alternatif d\'origine');
 });
 
@@ -91,26 +91,26 @@ test('une ligne sans les colonnes des nouveaux tomes est rendue comme avant', fu
     $ancienne = ['id' => 7, 'titre' => 'Berserk', 'auteur' => '', 'tome_actuel' => 3, 'statut' => 'cours', 'couverture' => ''];
     $html = carte_html($ancienne);
     contient('Tome 4 à emprunter', $html, 'à emprunter');
-    sans('à venir', $html, 'sans à venir');
+    sans('pas encore paru', $html, 'sans « pas encore paru »');
 });
 
 test('terminée ou abandonnée : pas d\'étiquette, même avec un dernier tome connu', function () {
     foreach (['termine', 'abandon'] as $statut) {
         $html = carte_html(serie_a_jour(['statut' => $statut]));
         sans('next-tag', $html, $statut . ' : aucune étiquette');
-        sans('à venir', $html, $statut . ' : pas de « à venir »');
+        sans('pas encore paru', $html, $statut . ' : pas de « pas encore paru »');
     }
 });
 
-test('le titre reste échappé dans le texte alternatif « à venir »', function () {
+test('le titre reste échappé dans le texte alternatif de la couverture', function () {
     $html = carte_html(serie_a_jour(['titre' => '"><img src=x onerror=alert(1)>']));
     sans('<img src=x', $html, 'aucune balise injectée');
     contient('&lt;img src=x onerror=alert(1)&gt;', $html, 'le titre est transformé en entités');
 });
 
-test('en lecture seule (compte bloqué), l\'étiquette « à venir » se lit toujours', function () {
+test('en lecture seule (compte bloqué), l\'étiquette « pas encore paru » se lit toujours', function () {
     $html = carte_html(serie_a_jour(), true);
-    contient('Tome 44 à venir', $html, 'c\'est une information, pas une commande');
+    contient('Tome 44 pas encore paru', $html, 'c\'est une information, pas une commande');
     sans('<button', $html, 'et toujours aucun bouton');
 });
 

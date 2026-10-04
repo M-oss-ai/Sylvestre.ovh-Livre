@@ -590,7 +590,7 @@ function utilisateur_actuel(): ?array
 
     $req = $pdo->prepare(
         'SELECT id, identifiant, email, email_verifie, photo, forfait, admin, raison_blocage,
-                session_version, adulte_confirme, filtre_sensible, notif_tomes, cree_le, google_sub,
+                session_version, adulte_confirme, filtre_sensible, cree_le, google_sub,
                 (mot_de_passe = \'\') AS sans_mot_de_passe
            FROM utilisateur WHERE id = ?'
     );
@@ -958,6 +958,8 @@ const ACTIONS_BLOQUEES = [
     'couverture.rafraichir', // réécrit l'image d'une série
     'couverture.delier',     // rapatrie une image sur le disque du serveur
     'serie.nouveautes',      // interroge MangaDex pour les séries à jour, et réécrit leur image
+    'push.abonner',          // ajoute un appareil : il recevrait des notifications que le cron n'envoie plus à ce compte
+    'push.tester',           // fait appeler des services de notification par le serveur, à son profit
 ];
 
 /** Ce compte est-il en consultation seule ? `$utilisateur` : la ligne de la table, au moins `forfait`. */

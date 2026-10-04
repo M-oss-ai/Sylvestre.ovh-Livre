@@ -623,6 +623,32 @@ define('NOUVEAUTE_MAX_VISITE', min(20, max(1, (int) env('NOUVEAUTE_MAX_VISITE', 
 /* Séries vérifiées au plus par passage du cron, tous comptes confondus. */
 define('NOUVEAUTE_MAX_CRON', min(500, max(1, (int) env('NOUVEAUTE_MAX_CRON', '40'))));
 
+/* --- Notifications push (includes/push.php) ---------------------------
+   Les deux clés VAPID identifient le site auprès des services de
+   notification des navigateurs. À générer UNE fois, sur un poste qui a PHP
+   (php outils/vapid.php) et à recopier dans le .env. Vides, ou mal formées :
+   les notifications sont simplement absentes (la carte des Paramètres
+   disparaît, le cron n'envoie rien) — rien ne casse.
+
+   La clé PRIVÉE est un secret, comme CRON_TOKEN : elle seule permet d'envoyer
+   en se faisant passer pour le site. La changer invalide tous les appareils
+   déjà enregistrés (chacun est lié à la clé publique qu'il a vue). */
+define('VAPID_PUBLIC', trim(env('VAPID_PUBLIC', '')));
+define('VAPID_PRIVATE', trim(env('VAPID_PRIVATE', '')));
+
+/* Appareils (navigateurs) par compte. Un plafond : chaque appareil est un
+   envoi de plus à chaque passage du cron. */
+define('PUSH_MAX_APPAREILS', min(50, max(1, (int) env('PUSH_MAX_APPAREILS', '10'))));
+
+/* Combien de temps le service garde un message qu'il n'a pas pu remettre
+   (appareil éteint), en secondes. De 1 minute à 4 semaines, le maximum que
+   les services acceptent. */
+define('PUSH_TTL', min(2419200, max(60, (int) env('PUSH_TTL', '86400'))));
+
+/* Délai d'un envoi à un service de notification, en secondes : il immobilise
+   un processus PHP, comme SMTP_TIMEOUT. */
+define('PUSH_TIMEOUT', min(20, max(1, (int) env('PUSH_TIMEOUT', '5'))));
+
 /* Borne haute du numéro de tome (colonne INT UNSIGNED). */
 define('TOME_MAX', max(1, (int) env('TOME_MAX', '9999')));
 

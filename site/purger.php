@@ -24,6 +24,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/mailer.php';
 require_once __DIR__ . '/includes/nouveautes.php';   // MangaDex : jamais fonctions.php, voir plus haut
+require_once __DIR__ . '/includes/push.php';         // les notifications push (idem)
 
 /* Hors requête web ? Voir cron_en_ligne_de_commande() dans
    includes/fonctions.php : la règle y vit pour être testable. */
@@ -219,8 +220,9 @@ if (!$etat_lisible) {
    Les séries « à jour » sont revérifiées chez MangaDex : NOUVEAUTE_MAX_CRON
    au plus par passage, les plus anciennement vérifiées d'abord. Un tome de
    plus, c'est la couverture prise, la série remontée en tête, l'annonce
-   posée pour la prochaine visite — et UN e-mail par compte, s'il a une
-   adresse confirmée et ne l'a pas refusé dans ses Paramètres.
+   posée pour la prochaine visite — et UNE notification push par compte, sur
+   chacun de ses appareils enregistrés (includes/push.php). Jamais d'e-mail :
+   l'utilisateur n'en veut pas pour cela.
 
    Placé APRÈS le ménage et AVANT le rapport : un MangaDex muet ne doit pas
    empêcher les tables d'être purgées, et le rapport doit pouvoir compter ce
@@ -236,31 +238,36 @@ try {
         nouveautes_budget()
     );
 
-    $messages = 0;
-    $refuses  = 0;
-    $lecture  = $pdo->prepare(
-        'SELECT identifiant, email, email_verifie, notif_tomes, forfait FROM utilisateur WHERE id = ?'
-    );
-    foreach (nouveautes_par_compte($bilan['nouveaux']) as $utilisateur_id => $tomes) {
-        $lecture->execute([$utilisateur_id]);
-        $u = $lecture->fetch();
-        if (!$u || (int) $u['email_verifie'] !== 1 || (int) $u['notif_tomes'] !== 1 || $u['forfait'] === 'bloque') {
-            continue;   // la série est quand même à jour, et annoncée à la prochaine visite
-        }
-        if (avertir_nouveaux_tomes((string) $u['email'], (string) $u['identifiant'], $tomes)) {
-            $messages++;
-        } else {
-            $refuses++;
-            error_log('purger.php: avis de nouveaux tomes non envoye (compte ' . $utilisateur_id . ')');
+    /* Une notification par compte, quel que soit le nombre de séries. Jamais
+       à un compte bloqué (ses séries ne sont d'ailleurs pas vérifiées : la
+       garde ici n'est que la ceinture). Sans clés VAPID, rien ne part, et la
+       série reste annoncée par le bandeau à la prochaine visite. */
+    $push = ['envoyes' => 0, 'expires' => 0, 'echecs' => 0];
+    if (push_actif()) {
+        $lecture = $pdo->prepare('SELECT forfait FROM utilisateur WHERE id = ?');
+        foreach (nouveautes_par_compte($bilan['nouveaux']) as $utilisateur_id => $tomes) {
+            $lecture->execute([$utilisateur_id]);
+            if ($lecture->fetchColumn() === 'bloque') {
+                continue;
+            }
+            foreach (push_envoyer_a_compte($pdo, $utilisateur_id, push_message_nouveaux_tomes($tomes)) as $cle => $n) {
+                $push[$cle] += $n;
+            }
         }
     }
 
     /* Pas le mot « e-mail » dans cette ligne : le rapport écarte celles qui
        le contiennent (les compteurs d'e-mails ont leur propre rubrique). */
     $ligne = $bilan['verifiees'] . ' série(s) vérifiée(s) chez MangaDex, '
-           . count($bilan['nouveaux']) . ' nouveau(x) tome(s), ' . $messages . ' message(s) envoyé(s)';
-    if ($refuses > 0) {
-        $ligne .= ', ' . $refuses . ' échec(s) d\'envoi';
+           . count($bilan['nouveaux']) . ' nouveau(x) tome(s), ' . $push['envoyes'] . ' notification(s) envoyée(s)';
+    if ($push['expires'] > 0) {
+        $ligne .= ', ' . $push['expires'] . ' appareil(s) périmé(s) retiré(s)';
+    }
+    if ($push['echecs'] > 0) {
+        $ligne .= ', ' . $push['echecs'] . ' échec(s) d\'envoi';
+    }
+    if (!push_actif() && $bilan['nouveaux']) {
+        $ligne .= ' (notifications non configurées : VAPID_PUBLIC et VAPID_PRIVATE du .env)';
     }
     if ($bilan['interrompu'] !== '') {
         $ligne .= ' (interrompu : ' . ['file' => 'file d\'attente pleine', 'echecs' => 'MangaDex ne répond pas',
@@ -270,7 +277,7 @@ try {
 } catch (PDOException $e) {
     error_log('purger.php: nouveaux tomes - ' . $e->getMessage());
     $anomalies[] = 'nouveaux tomes ignorés : la base ne suit pas le code (colonnes absentes ?) — '
-                 . 'rejouez livre.sql (migration 13)';
+                 . 'rejouez livre.sql (migrations 13 et 14)';
 }
 
 /* ---------------------------------------------------------------------

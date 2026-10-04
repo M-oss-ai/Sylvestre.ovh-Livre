@@ -17,6 +17,7 @@ require_once __DIR__ . '/includes/fonctions.php';
 require_once __DIR__ . '/includes/google.php';     // « Continuer avec Google »
 require_once __DIR__ . '/includes/couvertures.php';   // le quota de recherche, annoncé dans « Forfait »
 require_once __DIR__ . '/includes/cle_acces.php';     // les clés d'accès, listées dans « Sécurité »
+require_once __DIR__ . '/includes/push.php';          // les notifications push : la carte « Notifications »
 
 $moi = exiger_connexion();
 
@@ -302,6 +303,9 @@ $tranche         = secondes_lisibles(COUVERTURE_FENETRE);
 $req = $pdo->prepare('SELECT COUNT(*) FROM serie WHERE utilisateur_id = ?');
 $req->execute([(int) $moi['id']]);
 $nb_series = (int) $req->fetchColumn();
+
+// Les appareils qui reçoivent les notifications de ce compte (la carte « Notifications »).
+$appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -312,6 +316,11 @@ $nb_series = (int) $req->fetchColumn();
 <meta name="description" content="Gérez votre profil, votre mot de passe et vos données.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<!-- L'application installable (écran d'accueil) : indispensable aux notifications sur
+     iPhone, qui n'en propose qu'à un site ajouté à l'écran d'accueil. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="img/icone-apple.png">
+<meta name="theme-color" content="#17130f">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"
@@ -681,28 +690,41 @@ $nb_series = (int) $req->fetchColumn();
   </section>
 
   <!-- ---------------- Notifications ----------------
-       Un e-mail quand un nouveau tome paraît (le cron le prépare, voir
-       includes/nouveautes.php). Sans objet pour un compte bloqué : la
-       consultation seule ne vérifie rien chez MangaDex, la carte n'a pas lieu
-       d'être. -->
-  <?php if (!$bloque): ?>
+       Une notification PUSH quand un nouveau tome paraît (le cron la prépare,
+       voir includes/nouveautes.php et includes/push.php). Un interrupteur PAR
+       APPAREIL : chaque navigateur s'abonne pour lui-même. Absente tant que les
+       clés VAPID ne sont pas dans le .env, et pour un compte bloqué (la
+       consultation seule ne vérifie rien chez MangaDex). L'interrupteur est
+       désactivé jusqu'à ce que js/settings.js sache ce que le navigateur
+       permet : sans JavaScript, il ne servirait à rien. -->
+  <?php if (!$bloque && push_actif()): ?>
   <section class="settings-card" id="notifications">
     <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔔</span> Notifications</h2>
 
-    <label class="bascule" for="notif-tomes">
-      <input type="checkbox" id="notif-tomes" class="bascule-case"
-             <?= (int) ($moi['notif_tomes'] ?? 1) === 1 ? 'checked' : '' ?>>
+    <label class="bascule" for="push-actif">
+      <input type="checkbox" id="push-actif" class="bascule-case" disabled
+             data-cle="<?= e(VAPID_PUBLIC) ?>" data-appareils="<?= (int) $appareils_push ?>">
       <span class="bascule-piste" aria-hidden="true"><span class="bascule-pastille"></span></span>
-      <span class="bascule-libelle">M'écrire quand un nouveau tome paraît</span>
+      <span class="bascule-libelle">Me prévenir sur cet appareil quand un nouveau tome paraît</span>
     </label>
 
+    <p id="push-statut" class="hint" aria-live="polite"></p>
+
     <p class="hint">
-      Quand le tome que vous avez lu est le dernier connu d'une série encore en cours, le site
-      surveille la parution du suivant. Dès qu'il paraît, la série prend sa nouvelle couverture
-      et un bandeau l'annonce sur votre bibliothèque. Ce réglage ajoute un e-mail, un seul par
-      passage, à votre adresse
-      <?= (int) ($moi['email_verifie'] ?? 0) === 1 ? 'confirmée' : '(à confirmer d\'abord : aucun message ne part tant qu\'elle ne l\'est pas)' ?>.
+      Quand le tome que vous avez lu est le dernier paru d'une série encore en cours, le site
+      surveille la parution du suivant. Dès qu'il paraît, la série prend sa nouvelle couverture,
+      un bandeau l'annonce sur votre bibliothèque, et cet appareil reçoit une notification — même
+      site fermé. Rien n'est annoncé pour une série dont il vous reste des tomes à lire.
     </p>
+
+    <p id="push-appareils" class="hint"><?= $appareils_push > 0
+        ? $appareils_push . ' appareil' . ($appareils_push > 1 ? 's enregistrés' : ' enregistré') . '.'
+        : 'Aucun appareil enregistré.' ?></p>
+
+    <div class="push-actions">
+      <button id="push-tester" type="button" class="btn btn-ghost small" disabled>Envoyer une notification d'essai</button>
+      <button id="push-tous" type="button" class="btn btn-ghost small danger-text<?= $appareils_push > 0 ? '' : ' hidden' ?>">Retirer tous mes appareils</button>
+    </div>
   </section>
   <?php endif; ?>
 
@@ -884,6 +906,7 @@ $nb_series = (int) $req->fetchColumn();
 <script src="<?= e(actif('js/commun.js')) ?>" defer></script>
 <script src="<?= e(actif('js/mdp.js')) ?>" defer></script>
 <script src="<?= e(actif('js/cle-acces.js')) ?>" defer></script>
+<script src="<?= e(actif('js/push.js')) ?>" defer></script>
 <script src="<?= e(actif('js/settings.js')) ?>" defer></script>
 </body>
 </html>

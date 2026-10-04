@@ -369,7 +369,8 @@ valeur et sa migration rejouable, le rapport du cron compte les comptes
 bloqués.
 
 **Couvert, nouveaux tomes** — `nouveautes_test.php`, `carte_a_venir_test.php`,
-`mailer_nouveautes_test.php`, et les planchers/plafonds de `NOUVEAUTE_*`
+`push_test.php`, `tests/js/cas/push_test.js`, `tests/js/cas/sw_test.js`, et les planchers/plafonds de
+`NOUVEAUTE_*` et `PUSH_*`
 (`config_planchers_test.php`, `cle_acces_plafonds_test.php`). Les décisions
 PURES de `includes/nouveautes.php` : `fin_de_serie` (terminée, à venir, en
 route, inconnu — le dernier volume DÉCLARÉ compte autant que la dernière
@@ -378,13 +379,29 @@ reculer), les messages, `nouveautes_par_compte`. La lecture des réponses de
 MangaDex, sur des réponses fabriquées : `mangadex_dernier_tome_depuis` (volumes
 décimaux, comparés comme des nombres, préférence de langue, plafond),
 `mangadex_statut_depuis`, `mangadex_id_valide`. `serie_a_venir` et l'étiquette
-« Tome N à venir » de `carte_html`, la carte INCHANGÉE dans tous les autres cas.
-L'e-mail `avis_nouveaux_tomes` (sujet sans titre, titres sur une ligne, rien de
-cliquable hors du site). Et, par lecture des sources, ce qu'un essai réel avait
+« Tome N pas encore paru » de `carte_html`, la carte INCHANGÉE dans tous les autres cas.
+Celui qui n'est pas au bout des tomes n'est jamais prévenu. Et, par lecture des sources, ce qu'un essai réel avait
 fait voir : chaque colonne que le relevé lit est dans sa requête, `maj_le =
 maj_le` pour tout ce qui n'est pas une modification, les écritures gardées
 contre un changement en cours d'appel, la session libérée avant d'attendre
 MangaDex, le cron sans `fonctions.php`, la migration 13 rejouable.
+
+**Couvert, notifications push** — `push_test.php`, `tests/js/cas/push_test.js`,
+`tests/js/cas/sw_test.js`. Le chiffrement contre l'exemple de la RFC 8291
+(octet pour octet), un aller-retour avec un déchiffrement écrit à part, un message
+modifié ou lu avec une autre clé refusé ; la signature VAPID relue avec la clé publique ;
+la garde contre le SSRF (`push_endpoint_valide` : une trentaine d'adresses refusées, dont
+les métadonnées d'un hébergeur et les noms qui ressemblent à un service) ; les clés d'un
+abonnement ; les messages ; `outils/vapid.php` (la paire est cohérente). Côté navigateur : le
+diagnostic (iPhone hors de l'écran d'accueil, autorisation refusée…), les conversions de clés, et
+le service worker lui-même, joué avec de faux évènements. Par lecture des sources : la clé privée
+n'est écrite nulle part, un seul `subscribe()` dans `activerPush()`, le plafond dans l'`INSERT`.
+
+**Non couvert, notifications push** — un vrai service de notification et un vrai navigateur
+qui reçoit un vrai message ; `push_enregistrer`, `push_retirer`, `push_envoyer_a_compte`,
+qui écrivent en base (vérifiés avec une base jetable et un faux service) ; le branchement de
+`settings.js` (service worker, autorisation, abonnement), qui se vérifie à la main — le
+navigateur intégré ne sait enregistrer aucun service worker.
 
 **Non couvert, faute de réseau** — `mangadex_get`, `mangadex_dernier_tome`,
 `mangadex_statut_serie`, `chercher_couvertures` et le téléchargement fait par

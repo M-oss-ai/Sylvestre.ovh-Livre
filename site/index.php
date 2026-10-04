@@ -55,6 +55,11 @@ $flash = flash_prendre();
 <meta name="description" content="Gérez votre collection de mangas : séries, tomes, statuts de lecture.">
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<!-- L'application installable (écran d'accueil) : indispensable aux notifications sur
+     iPhone, qui n'en propose qu'à un site ajouté à l'écran d'accueil. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="img/icone-apple.png">
+<meta name="theme-color" content="#17130f">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body data-csrf="<?= e($csrf) ?>" data-image-max="<?= IMAGE_TAILLE_MAX ?>"

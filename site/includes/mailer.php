@@ -879,47 +879,6 @@ function avis_compte_supprime_par_admin(string $identifiant): array
         . "Si vous pensez qu'il s'agit d'une erreur, écrivez à l'administrateur : " . ADMIN_EMAIL];
 }
 
-/**
- * Un ou plusieurs nouveaux tomes sont disponibles pour ce compte : UN seul
- * message, quel que soit le nombre de séries. Envoyé par le cron
- * (purger.php), à l'adresse confirmée du compte, s'il n'a pas désactivé ces
- * messages dans ses Paramètres.
- *
- * $tomes : une entrée par série, ['titre' => …, 'tome' => le tome à emprunter].
- * Le sujet ne porte AUCUN titre : c'est une donnée du compte, et un en-tête
- * n'a pas à en dépendre. Les titres sont du texte dans le corps (corps_html ne
- * fait des liens que des adresses du site), ramenés sur une seule ligne.
- *
- * @return array{0: string, 1: string} le sujet et le corps
- */
-function avis_nouveaux_tomes(string $identifiant, array $tomes): array
-{
-    $n      = count($tomes);
-    $sujet  = $n === 1 ? 'Un nouveau tome est disponible' : $n . ' nouveaux tomes sont disponibles';
-    $lignes = '';
-    foreach ($tomes as $t) {
-        $titre   = trim((string) preg_replace('/\s+/u', ' ', (string) ($t['titre'] ?? '')));
-        $lignes .= '- « ' . $titre . ' » : tome ' . (int) ($t['tome'] ?? 0) . "\n";
-    }
-
-    return [$sujet, "Bonjour {$identifiant},\n\n"
-        . ($n === 1
-            ? "Un nouveau tome est disponible pour une série de votre bibliothèque :\n"
-            : "De nouveaux tomes sont disponibles pour des séries de votre bibliothèque :\n")
-        . $lignes . "\n"
-        . ($n === 1 ? "Sa couverture est déjà en place :\n" : "Leurs couvertures sont déjà en place :\n")
-        . url_publique('index.php') . "\n\n"
-        . "Vous ne voulez plus recevoir ces messages ? Désactivez-les dans vos Paramètres :\n"
-        . url_publique('parametres.php#notifications')];
-}
-
-/** Prévient le titulaire que de nouveaux tomes sont disponibles. true si le message est parti. */
-function avertir_nouveaux_tomes(string $email, string $identifiant, array $tomes): bool
-{
-    [$sujet, $corps] = avis_nouveaux_tomes($identifiant, $tomes);
-    return envoyer_email($email, $sujet, $corps);
-}
-
 /** Prévient le titulaire que son forfait change. true si le message est parti. */
 function avertir_forfait_change(string $email, string $identifiant, string $nouveau, string $ancien, string $raison = ''): bool
 {

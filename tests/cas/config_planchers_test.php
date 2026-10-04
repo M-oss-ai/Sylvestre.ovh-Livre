@@ -46,6 +46,9 @@ putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait
 putenv('NOUVEAUTE_HEURES=0');             // 0 h : MangaDex interrogé à chaque page, pour chaque série
 putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 série : la fonction deviendrait muette sans le dire
 putenv('NOUVEAUTE_MAX_CRON=-5');
+putenv('PUSH_MAX_APPAREILS=0');           // 0 appareil : la fonction deviendrait muette sans le dire
+putenv('PUSH_TTL=0');                     // un message non remis serait jeté à l'instant
+putenv('PUSH_TIMEOUT=0');                 // un envoi qui échoue avant d'avoir commencé
 putenv('APP_URL=https://exemple.test/bibliotheque/');   // avec un / final
 
 require __DIR__ . '/../lanceur.php';
@@ -185,6 +188,22 @@ test('NOUVEAUTE_HEURES ne descend jamais sous 1 heure', function () {
 test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON ne descendent jamais sous 1', function () {
     egale(1, NOUVEAUTE_MAX_VISITE, 'le .env demandait 0');
     egale(1, NOUVEAUTE_MAX_CRON, 'le .env demandait -5');
+});
+
+groupe('Notifications push');
+
+test('PUSH_MAX_APPAREILS ne descend jamais sous 1', function () {
+    egale(1, PUSH_MAX_APPAREILS, 'le .env demandait 0 : plus personne ne pourrait activer ses notifications');
+});
+
+test('PUSH_TTL ne descend jamais sous une minute, PUSH_TIMEOUT sous une seconde', function () {
+    egale(60, PUSH_TTL, 'le .env demandait 0');
+    egale(1, PUSH_TIMEOUT, 'le .env demandait 0');
+});
+
+test('sans clés VAPID dans le .env, les notifications sont absentes — et c\'est tout', function () {
+    egale('', VAPID_PUBLIC, 'aucune clé publique par défaut');
+    egale('', VAPID_PRIVATE, 'aucune clé privée par défaut');
 });
 
 groupe('Administration');

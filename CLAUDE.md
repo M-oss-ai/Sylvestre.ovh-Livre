@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (971 tests : 835 PHP en 55 fichiers, 136 JavaScript)
+php tests/lancer.php              # toute la suite (1050 tests : 883 PHP en 55 fichiers, 167 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -94,6 +94,7 @@ l'amorce, tandis que `CHEMIN_PROJET` est la racine du dépôt.
 | `includes/reglages.php` | Les réglages modifiables depuis l'administration : la liste FERMÉE (`REGLAGES`, avec bornes, unités, défauts), la validation d'une saisie, le filtrage de ce que porte la table `reglage`. Chargé par `config.php` avant toute constante, donc **aucune dépendance** (ni constante, ni `env()`) |
 | `includes/admin.php` | La page d'administration : la liste des comptes (`admin_utilisateurs`), les décisions pures (ce qui est permis, la forme du motif d'un blocage, les dates, les chiffres), et les écritures (`admin_changer_forfait`, `admin_changer_droits`, `admin_supprimer_compte`). Inclus par `admin.php` et `api.php`, jamais par `fonctions.php` |
 | `includes/couvertures.php` | Client MangaDex. Inclus par `api.php`, et par `index.php` / `parametres.php` pour **annoncer** le quota de recherche — jamais par `fonctions.php` : un test qui s'en sert doit le demander explicitement |
+| `includes/push.php` | Notifications push (voir « Règles tacites ») : chiffrement RFC 8291, jeton VAPID, adresses acceptées, appareils d'un compte, envoi. Inclus par `api.php`, `parametres.php` et `purger.php` : aucun `require`, config.php suffit |
 | `includes/nouveautes.php` | Fin de série et nouveaux tomes (voir « Règles tacites »). Les décisions sont pures (`fin_de_serie()`, `nouveaute_evaluer()`, les messages), le reste lit MangaDex et écrit en base. Inclus par `api.php`, `index.php` **et `purger.php`** : il ne charge donc que `couvertures.php`, jamais `fonctions.php` |
 
 ### Les points d'entrée
@@ -125,7 +126,9 @@ pendant la saisie), `js/delai.js` (comptes à rebours des
 attentes), `js/double-appui.js` (un clic posé sur le document, qui ne fait rien :
 chargé par TOUTES les pages, voir « Règles tacites »), `js/admin.js` (la page
 d'administration : recherche, tri, fenêtres de confirmation ; sa logique pure est
-`window.Admin`, testée). `css/style.css` pour tout le style.
+`window.Admin`, testée), `js/push.js` (notifications : conversions de clés, diagnostic iPhone / autorisation,
+phrases d'erreur ; `window.Push`, testée ; chargé AVANT `settings.js`), et `sw.js` à la racine de `site/`
+(le service worker : il n'affiche que les notifications). `css/style.css` pour tout le style.
 
 `app.js` commence par `window.Bibliotheque` : sa logique pure (carte
 voisine au clavier, suivi du défilement, textes des quotas), testée par
@@ -165,15 +168,16 @@ couvertures une seule fois, en PHP, et elle est testée.
 **Les libellés de `STATUTS` restent courts** (≤ 12 caractères, testé) :
 ils s'affichent dans la pastille posée sur la couverture.
 
-**`purger.php` ne charge que `config.php`, `mailer.php` et `nouveautes.php`.**
+**`purger.php` ne charge que `config.php`, `mailer.php`, `nouveautes.php` et `push.php`.**
 Jamais `fonctions.php`, qui enverrait des en-têtes HTTP et démarrerait une
 session — ce qu'une tâche planifiée n'a pas à faire. Toute fonction dont
 le cron a besoin va donc dans `config.php`. `mailer.php` compris : il
 compose le rapport que le cron envoie, et ne peut appeler ni `e()` ni
 rien d'autre de `fonctions.php` (d'où son propre `htmlspecialchars`).
 `nouveautes.php` (relevé des nouveaux tomes) et ce qu'il charge
-(`couvertures.php`, `images.php`) obéissent à la même règle ;
-`tests/cas/nouveautes_test.php` le vérifie.
+(`couvertures.php`, `images.php`), comme `push.php` (notifications : aucun `require`, ni session,
+ni en-tête HTTP), obéissent à la même règle ; `tests/cas/nouveautes_test.php` et
+`tests/cas/push_test.php` le vérifient.
 
 **Dans un e-mail, seules les adresses du site deviennent des liens.**
 `corps_html()` ne fait un lien que de ce qui commence par `APP_URL` ;
@@ -489,7 +493,8 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   de publication, puis `fin_de_serie()` décide. `completed` / `cancelled` : statut
   `termine` (jamais `abandon`, demande de l'utilisateur) et couverture du dernier
   tome. `ongoing` / `hiatus` : la série reste « En cours », `dernier_tome` est
-  mémorisé, et `serie_a_venir()` (carte.php) fait dire « Tome N à venir ». Des tomes
+  mémorisé, et `serie_a_venir()` (carte.php) fait dire « Tome N pas encore paru » (« à venir » prêtait
+  à confusion : demande de l'utilisateur). Des tomes
   plus loin (`en_route`) ou une réponse sans sens (`inconnu`) : rien ne change — la
   couverture du tome suivant manque souvent AU MILIEU d'une série, ce n'est pas la fin.
   **Le dernier tome est le plus haut entre la dernière couverture et `lastVolume`**
@@ -531,13 +536,18 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   nouvelle série serait jugée « à jour » sur le nombre de tomes de l'autre.
 - **Un compte bloqué ne sollicite pas MangaDex** : `serie.nouveautes` est dans
   `ACTIONS_BLOQUEES`, le cron ignore ses séries, `index.php` ne demande pas le relevé.
-  `serie.nouveautes_vues` et `compte.notifications` sont libres (état d'affichage et
-  préférence).
-- **Un e-mail par compte et par passage** (`avis_nouveaux_tomes()`, mailer.php),
-  seulement à une adresse CONFIRMÉE et si `utilisateur.notif_tomes = 1` (Paramètres ›
-  Notifications, activé par défaut). Le sujet ne porte AUCUN titre (donnée du compte,
-  pas d'en-tête qui en dépende). Pas de « push » navigateur : il demande un service
-  worker et un chiffrement de charge utile propres — non fait.
+  `serie.nouveautes_vues` est libre (état d'affichage).
+- **On n'annonce que si la personne est arrivée AU BOUT des tomes** (demande de
+  l'utilisateur) : au tome 1 d'une série dont le tome 4 est le dernier, le tome 5 qui sort
+  ne dit rien. C'est la sélection des séries à vérifier (`tome_actuel >= dernier_tome`) ET
+  la décision elle-même (`nouveaute_evaluer()` : `$tome_actuel >= $connu`), qui tient même
+  si la personne a reculé entre la requête et l'appel.
+- **Jamais d'e-mail pour les nouveaux tomes** (demande de l'utilisateur) : seulement le
+  bandeau et la notification push. Les autres e-mails du site n'ont pas changé.
+  `mailer.php` est identique à son état d'avant cette fonctionnalité.
+- **La notification push** — `includes/push.php`, `sw.js`, `js/push.js`, voir la règle
+  suivante. Le cron envoie UNE notification par compte et par passage, à tous ses
+  appareils (`push_envoyer_a_compte()`), jamais à un compte bloqué.
 - **Réglages** : `NOUVEAUTE_HEURES` (1 à 168), `NOUVEAUTE_MAX_VISITE` (1 à 20),
   `NOUVEAUTE_MAX_CRON` (1 à 500), dans le `.env`, planchers et plafonds testés. Ils ne sont
   PAS dans `REGLAGES` (admin.php) : ils protègent le débit de MangaDex.
@@ -547,6 +557,56 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   (`304ceac3-8cdb-4fe7-acf7-2b6ff7a60613`, finie en 34 volumes). Pour provoquer un
   « tome nouveau » : régler `dernier_tome` et `tome_actuel` UN TOME SOUS le dernier
   réel, et `verifie_le = NULL`.
+
+**Les notifications push** (demande de l'utilisateur ; `includes/push.php`, `sw.js`,
+`js/push.js`). Du Web Push écrit à la main avec `openssl` et `hash`, sans bibliothèque :
+chiffrement RFC 8291 (`aes128gcm`), identification VAPID (RFC 8292, jeton ES256).
+- **Le chiffrement est prouvé contre l'exemple de la RFC 8291 (annexe A)**, octet pour
+  octet (`tests/cas/push_test.php`). Ne le « simplifier » qu'en gardant ce test vert : un
+  service de notification refuse en bloc un message mal chiffré, sans dire pourquoi.
+- **Les clés VAPID sont dans le `.env`** (`VAPID_PUBLIC`, `VAPID_PRIVATE`), à générer UNE fois
+  par `php outils/vapid.php` (hors de `site/`, jamais envoyé). La privée est un secret, comme
+  `CRON_TOKEN` : elle n'est écrite dans aucune page, aucune réponse d'API, aucun journal
+  (testé). Absentes ou mal formées (`push_actif()`) : la carte des Paramètres disparaît, le
+  cron n'envoie rien, rien d'autre ne change. Régénérer la paire invalide les appareils.
+- **L'adresse d'un abonnement vient du navigateur d'un utilisateur, et le serveur y POSTe** :
+  `push_endpoint_valide()` n'accepte que https, port 443, et les hôtes des vrais services
+  (`PUSH_HOTES_EXACTS`, `PUSH_HOTES_SUFFIXES`) — sinon c'est un SSRF. Vérifiée à
+  l'enregistrement ET à l'envoi ; aucune redirection suivie. Un nouveau service apparaît :
+  l'ajouter à ces deux listes, avec son test.
+- **Un appareil = une ligne de `abonnement_push`, et un navigateur n'appartient qu'à UN compte** :
+  index UNIQUE sur l'empreinte de l'adresse, le dernier compte qui l'active le reprend (poste
+  partagé). Le plafond `PUSH_MAX_APPAREILS` s'applique dans l'`INSERT`, comme celui des séries.
+  Le compte est celui de la SESSION, jamais un champ du POST. Un appareil que le service
+  déclare périmé (404, 410) est effacé par le cron.
+- **La page ne s'abonne JAMAIS seule** : l'état de l'interrupteur vient du serveur (`push.etat`),
+  et `pushManager.subscribe()` n'est appelé que dans `activerPush()`, lui-même appelé par le
+  geste de la personne. `Notification.requestPermission()` vient AVANT tout `await` sans rapport
+  (Safari refuse sinon). Un abonnement qui garde l'ancienne clé du site (`Push.memeCle`) est
+  refait : le service refuserait tous les messages.
+- **iPhone / iPad** : Safari ne propose les notifications qu'à un site AJOUTÉ à l'écran d'accueil
+  et ouvert depuis son icône. D'où `manifest.webmanifest`, les icônes (`site/img/`, refaites par
+  `php outils/icones.php`) et la phrase de `Push.diagnostic()` quand `PushManager` manque sur iOS
+  hors de l'écran d'accueil. **Non vérifié sur un iPhone.**
+- **`sw.js` est à la racine de `site/`**, pas dans `js/` : la portée d'un service worker est son
+  dossier. Pas d'empreinte dans son adresse (`actif()`), servi sans cache (`.htaccess`) ; il ne
+  met rien en cache et n'intercepte rien. Il montre TOUJOURS une notification (les navigateurs
+  l'exigent, `userVisibleOnly`) et n'ouvre que des adresses du site.
+- **Actions** : `push.abonner` et `push.tester` sont dans `ACTIONS_BLOQUEES` ; `push.etat` et
+  `push.desabonner` sont libres (une lecture, et arrêter d'être notifié). Le test envoie à tous
+  les appareils du compte, un essai toutes les 20 s par session, session libérée avant l'envoi.
+- **Pour essayer sans vrai service** : un faux service local (`php -S` qui note le corps reçu) et
+  `push_envoyer($abo, $message, false)` — le 3e argument saute la vérification d'hôte, JAMAIS
+  en production. Le navigateur intégré ne sait enregistrer AUCUN service worker (même un script
+  quelconque du site échoue, « unknown error when fetching the script ») : l'interrupteur se
+  teste en lui posant de faux `Notification` / `navigator.serviceWorker` avant le chargement de
+  la page, et `sw.js` dans le banc JS avec de faux évènements `push` et `notificationclick`.
+- **Sous Windows (XAMPP), OpenSSL ne trouve pas son `openssl.cnf`** et refuse de générer une clé
+  (« CONF_load : no such file ») : `push_options_cle()` le cherche à côté de PHP. Sans effet sous
+  Linux. Les lignes de commande qui génèrent des clés doivent passer par elle.
+- **Non vérifié en vrai** : un service de notification réel (Google, Mozilla, Apple, Microsoft) et
+  un vrai navigateur qui reçoit un vrai message. Seuls l'exemple de la RFC, un abonné qui déchiffre
+  de son côté, un faux service et un navigateur simulé l'ont été.
 
 **Le forfait « bloqué » est la consultation seule** (demande de l'utilisateur).
 `utilisateur.forfait` vaut `'bloque'` (à poser À LA MAIN en base, comme
@@ -734,9 +794,12 @@ publiques des clés d'accès — jamais une clé privée) : `utilisateur`, `seri
 dernier rapport du cron), `reglage` (une ligne par réglage changé depuis `admin.php`,
 migration 12 : le `.env` reste la valeur de départ). Migration 13 (nouveaux tomes) :
 `serie.dernier_tome`, `serie.verifie_le`, `serie.nouveau_tome`,
-`utilisateur.notif_tomes` — lues par les pages (`utilisateur_actuel()`, `index.php`) et par
-le cron : **rejouer `livre.sql` AVANT d'envoyer le code**. Le cron, lui, n'en plante pas
-si elles manquent : il le dit en anomalie. `utilisateur.forfait` : `standard`, `illimite` ou
+lues par `index.php` et par le cron : **rejouer `livre.sql` AVANT d'envoyer le code**. Le cron,
+lui, n'en plante pas si elles manquent : il le dit en anomalie. (Une première version de la
+migration 13 ajoutait aussi `utilisateur.notif_tomes`, pour un e-mail abandonné : la colonne
+peut exister, inutilisée, dans une base qui l'a jouée. Rien ne la lit, rien ne la supprime —
+« sans perdre de données ».) Migration 14 : la table `abonnement_push` (un appareil de
+notification par ligne, `ON DELETE CASCADE`). `utilisateur.forfait` : `standard`, `illimite` ou
 `bloque` (consultation seule, voir « Règles tacites »). `utilisateur.admin`
 (administrateur, indépendant du forfait), `raison_blocage` et `bloque_le` (le motif
 et la date d'un blocage) : migration 11. **`utilisateur_actuel()` les lit à chaque

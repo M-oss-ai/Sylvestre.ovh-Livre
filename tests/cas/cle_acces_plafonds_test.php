@@ -17,6 +17,9 @@ putenv('RAPPORT_HEURES=99999');
 putenv('NOUVEAUTE_HEURES=99999');      // une série jamais revérifiée n'annoncerait plus jamais rien
 putenv('NOUVEAUTE_MAX_VISITE=99999');  // une arrivée sur la page ne lance pas des centaines d'appels
 putenv('NOUVEAUTE_MAX_CRON=99999');    // ni un passage du cron : il tient dans le temps que PHP lui laisse
+putenv('PUSH_MAX_APPAREILS=99999');    // un compte n'inscrit pas des milliers d'appareils : autant d'envois à chaque passage
+putenv('PUSH_TTL=99999999');           // les services refusent au-delà de quatre semaines
+putenv('PUSH_TIMEOUT=99999');          // un service muet ne retient pas un processus PHP une heure
 
 require __DIR__ . '/../lanceur.php';
 
@@ -25,6 +28,16 @@ groupe('Nouveaux tomes — plafonds');
 test('NOUVEAUTE_HEURES est plafonné à une semaine', function () {
     egale(168, NOUVEAUTE_HEURES, 'le .env demandait 99999 heures');
 });
+
+groupe('Notifications push — plafonds');
+
+test('PUSH_MAX_APPAREILS est plafonné à 50, PUSH_TTL à quatre semaines, PUSH_TIMEOUT à 20 secondes', function () {
+    egale(50, PUSH_MAX_APPAREILS, 'le .env demandait 99999');
+    egale(2419200, PUSH_TTL, 'quatre semaines : le maximum que les services acceptent');
+    egale(20, PUSH_TIMEOUT, 'le .env demandait 99999 secondes');
+});
+
+groupe('Nouveaux tomes — plafonds (suite)');
 
 test('NOUVEAUTE_MAX_VISITE est plafonné à 20, NOUVEAUTE_MAX_CRON à 500', function () {
     egale(20, NOUVEAUTE_MAX_VISITE, 'le .env demandait 99999');
