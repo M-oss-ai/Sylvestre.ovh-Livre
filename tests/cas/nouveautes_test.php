@@ -417,7 +417,7 @@ test('purger.php : le cron charge nouveautes.php, jamais fonctions.php', functio
 test('purger.php : un schéma pas migré devient une anomalie bruyante, pas un plantage', function () {
     $cron = source('purger.php');
     contient('catch (PDOException $e)', $cron, 'l\'erreur est attrapée');
-    contient('migrations 13 à 15', $cron, 'et dit quoi faire');
+    contient('migrations 13 à 16', $cron, 'et dit quoi faire');
 });
 
 test('purger.php : la ligne du bilan ne contient pas « e-mail » (le rapport les écarte)', function () {
@@ -466,7 +466,7 @@ groupe('Le statut « En attente »');
 test('arrivée au bout d\'une série qui continue : le statut est posé, gardé, et relu', function () {
     $src = source('includes/nouveautes.php');
     $fin = corps_de($src, 'nouveautes_fin_de_serie');
-    contient("SET statut = 'attente', dernier_tome = ?, verifie_le = NOW()", $fin, 'le statut « attente » est écrit');
+    contient("SET statut = 'attente', dernier_tome = ?, verifie_le = NOW(), publication = ?", $fin, 'le statut « attente » est écrit, avec l\'état de publication');
     contient("AND tome_actuel = ? AND statut = 'cours'", $fin, 'seulement sur une série « En cours » qui n\'a pas bougé pendant l\'appel');
     contient('nouveautes_statut_ecrit($pdo', $fin, 'et relu : hors mode strict, une valeur absente de l\'ENUM devient « » sans erreur');
     contient('catch (PDOException $e)', $fin, 'en mode strict, la base refuse : on le dit au journal au lieu de planter');
@@ -505,12 +505,74 @@ test('un changement de statut est rendu à l\'écran, sans rien annoncer', funct
     contient('majCompteurs(r.compte);', substr($js, (int) strpos($js, 'async function verifierNouveautes')), 'et met les compteurs à jour');
 });
 
-test('revenir d\'un tome sur une série « En attente » la remet « En cours », seulement si le tome existe', function () {
+test('revenir d\'un tome sur une série « En attente » ou « Terminée » la remet « En cours »', function () {
     $api = source('api.php');
-    $bloc = substr($api, (int) strpos($api, "case 'serie.reculer': {"), 1500);
-    contient("\$statut = (\$s['statut'] === 'attente' && (int) \$s['dernier_tome'] > \$tome) ? 'cours' : \$s['statut'];", $bloc,
-        'repasse « En cours » quand MangaDex a dit que le tome quitté existe');
+    $bloc = substr($api, (int) strpos($api, "case 'serie.reculer': {"), 1900);
+    contient("statut_apres_recul((string) \$s['statut'], (int) \$s['dernier_tome'], (int) \$s['tome_actuel'])", $bloc,
+        'la décision est celle de la fonction pure, avec le tome QUITTÉ');
     contient('SET tome_actuel = ?, statut = ?', $bloc, 'et l\'écrit');
+    contient('repassée « En cours »', $bloc, 'le message le dit');
+    contient('dernier_tome, nouveau_tome, publication', source('api.php'), 'ma_serie() lit dernier_tome : sans lui, jamais de retour « En cours »');
+});
+
+groupe('statut_apres_recul() — quitter le dernier tome connu reprend la lecture');
+
+test('« En attente » et « Terminée » : en quitter le dernier tome connu → « En cours »', function () {
+    egale('cours', statut_apres_recul('attente', 43, 43), 'En attente, tome 43 sur 43 → retour au 42');
+    egale('cours', statut_apres_recul('termine', 34, 34), 'Terminée, tome 34 sur 34 → retour au 33 (demande de l\'utilisateur)');
+});
+
+test('un statut choisi à la main, sans rien de connu, ne bouge pas', function () {
+    egale('attente', statut_apres_recul('attente', 0, 20), 'En attente à la main, dernier tome inconnu');
+    egale('termine', statut_apres_recul('termine', 0, 20), 'Terminée à la main, dernier tome inconnu');
+});
+
+test('ni au milieu des tomes, ni au-delà : seul le dernier tome connu compte', function () {
+    egale('attente', statut_apres_recul('attente', 43, 20), 'En attente à la main au tome 20 sur 43 (on attend l\'édition française)');
+    egale('termine', statut_apres_recul('termine', 34, 20), 'Terminée à la main au tome 20 sur 34 (on a lâché)');
+    egale('attente', statut_apres_recul('attente', 43, 44), 'au tome 44, pas encore paru : reculer au 43 ne reprend rien, on y est');
+});
+
+test('les autres statuts ne changent jamais', function () {
+    foreach (['cours', 'envie', 'abandon', '', 'inconnu'] as $statut) {
+        egale($statut, statut_apres_recul($statut, 43, 43), var_export($statut, true));
+    }
+});
+
+groupe('publication_connue() — ce qu\'on range en base');
+
+test('les quatre mots de MangaDex, et rien d\'autre', function () {
+    foreach (['ongoing', 'completed', 'hiatus', 'cancelled'] as $mot) {
+        egale($mot, publication_connue($mot), $mot);
+    }
+    foreach (['', 'Ongoing', 'abandonned', '<script>', 'completed ', 'hiatus;DROP'] as $autre) {
+        egale('', publication_connue($autre), var_export($autre, true) . ' : refusé');
+    }
+});
+
+test('l\'état de publication est rangé avec « Terminée » et « En attente », et appris une fois par le relevé', function () {
+    $src = source('includes/nouveautes.php');
+    $fin = corps_de($src, 'nouveautes_fin_de_serie');
+    contient('$publication = publication_connue($infos[\'statut\']);', $fin, 'lu dans la réponse de MangaDex, contrôlé');
+    contient("verifie_le = NOW(), publication = ?,\n", $fin, '« Terminée » le range');
+    $releve = corps_de($src, 'nouveautes_verifier_serie');
+    contient("=== 'attente' && (string) (\$s['publication'] ?? '') === ''", $releve, 'une série « En attente » qui ne sait pas pourquoi l\'apprend…');
+    contient("SET publication = ?, maj_le = maj_le", $releve, '… sans que ce soit une modification de la série…');
+    contient("AND statut = 'attente'", substr($releve, (int) strpos($releve, 'SET publication = ?')), '… et sans toucher à une série qui a changé de statut pendant l\'appel');
+    contient('s.publication', corps_de($src, 'nouveautes_series_a_verifier'), 'la requête du relevé la sélectionne');
+});
+
+test('livre.sql : migration 16, rejouable, une colonne texte contrôlée par le code', function () {
+    $sql = source('livre.sql');
+    contient("`publication`    VARCHAR(12)  NOT NULL DEFAULT ''", $sql, 'le schéma neuf');
+    $m16 = substr($sql, (int) strpos($sql, '--  16. État de publication'));
+    vrai($m16 !== '', 'la migration 16 existe');
+    contient("TABLE_NAME = 'serie' AND COLUMN_NAME = 'publication'", $m16, 'elle interroge information_schema');
+    contient("'DO 0'", $m16, 'et ne fait rien si la colonne est là');
+    contient("ADD COLUMN `publication` VARCHAR(12) NOT NULL DEFAULT '''' AFTER `nouveau_tome`", $m16, 'sans toucher aux séries');
+    sans('ADD COLUMN IF NOT EXISTS', substr($m16, (int) strpos($m16, 'SET @c')), 'jamais cette extension MariaDB');
+    sans('UPDATE', substr($m16, (int) strpos($m16, 'SET @c')), 'aucune donnée n\'est touchée');
+    sans('ENUM', substr($m16, (int) strpos($m16, 'SET @c')), 'pas d\'ENUM : hors mode strict, une valeur absente y serait rangée « » sans un mot');
 });
 
 test('livre.sql : migration 15, rejouable, l\'ENUM porte « attente » en fin de liste', function () {

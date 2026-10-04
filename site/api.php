@@ -168,7 +168,7 @@ function ma_serie(PDO $pdo, int $mon_id, int $id): array
 {
     $req = $pdo->prepare(
         'SELECT id, titre, auteur, tome_actuel, statut, couverture, mangadex_id, favori,
-                dernier_tome, nouveau_tome
+                dernier_tome, nouveau_tome, publication
            FROM serie WHERE id = ? AND utilisateur_id = ?'
     );
     $req->execute([$id, $mon_id]);
@@ -378,22 +378,24 @@ switch ($action) {
         $s  = ma_serie($pdo, $mon_id, $id);
 
         $tome = max(0, (int) $s['tome_actuel'] - 1);
-        /* Revenir d'un tome sur une série « En attente » : celui qu'on vient de
-           quitter existe bel et bien, il y a de nouveau quelque chose à
-           emprunter — elle n'attend plus, et repasse « En cours ». Seulement si
-           MangaDex a dit que ce tome existe (`dernier_tome`) : une série mise
-           « En attente » à la main, sans rien de connu, reste comme choisie. */
-        $statut = ($s['statut'] === 'attente' && (int) $s['dernier_tome'] > $tome) ? 'cours' : $s['statut'];
+        /* Revenir d'un tome en QUITTANT le dernier tome connu d'une série « En
+           attente » ou « Terminée » : il y a de nouveau quelque chose à lire — la
+           série repasse « En cours » (statut_apres_recul()). Seulement si MangaDex
+           a dit que ce tome existe (`dernier_tome`) : un statut mis à la main,
+           sans rien de connu, reste comme choisi. */
+        $statut = statut_apres_recul((string) $s['statut'], (int) $s['dernier_tome'], (int) $s['tome_actuel']);
         $req = $pdo->prepare('UPDATE serie SET tome_actuel = ?, statut = ? WHERE id = ? AND utilisateur_id = ?');
         $req->execute([$tome, $statut, $id, $mon_id]);
 
+        $repasse = $statut !== $s['statut'];
         $s['tome_actuel'] = $tome;
         $s['statut']      = $statut;
         reponse_json([
             'ok'      => true,
             'carte'   => carte_html($s),
             'compte'  => compter_series($pdo, $mon_id),
-            'message' => '« ' . $s['titre'] . ' » → retour au tome ' . $tome . ' ↩️',
+            'message' => '« ' . $s['titre'] . ' » → retour au tome ' . $tome . ' ↩️'
+                . ($repasse ? ' (repassée « En cours »)' : ''),
         ]);
     }
 
@@ -1121,8 +1123,8 @@ switch ($action) {
            la fin de ce que MangaDex connaît ? (includes/nouveautes.php)
              - série finie ou abandonnée : elle passe « Terminée », avec la
                couverture du dernier tome ;
-             - série qui continue : elle reste « En cours », et sa carte dit
-               « Tome N pas encore paru ».
+             - série qui continue : elle passe « En attente », et sa carte dit
+               « Tome N en attente » (ou « En pause au tome N »).
            Sinon (des tomes existent plus loin, MangaDex ne répond pas…) on
            retombe sur la réponse habituelle : l'image en place reste. */
         if ($url === '' && $auto && $statut_vu === 'cours' && mangadex_attente_suggeree() === 0) {
@@ -1162,7 +1164,7 @@ switch ($action) {
         /* Une couverture EXACTE existe pour ce tome (le mode automatique n'accepte
            pas de repli) : MangaDex connaît donc au moins jusque-là. Sans cela,
            un « dernier tome » resté plus bas que ce qu'on lit — des tomes parus
-           depuis la dernière vérification — ferait dire « pas encore paru » d'un tome
+           depuis la dernière vérification — ferait dire « en attente » d'un tome
            dont la couverture est affichée. */
         if ($auto && (int) $s['dernier_tome'] < $tome) {
             $pdo->prepare('UPDATE serie SET dernier_tome = ?, maj_le = maj_le WHERE id = ? AND utilisateur_id = ?')

@@ -40,6 +40,48 @@ function serie_a_venir(array $s): bool
 }
 
 /**
+ * Ce que la carte d'une série arrivée au bout des tomes dit à la place de
+ * « Tome N à emprunter » — ou '' quand elle n'a rien de plus à dire.
+ *
+ * Selon l'état de publication que MangaDex donne à la série (serie.publication,
+ * rangé quand on arrive au dernier tome : includes/nouveautes.php) :
+ *
+ *   « En attente », la série continue  → « Tome N en attente » (N : celui qui
+ *                                        n'est pas encore paru)
+ *   « En attente », la série est en pause → « En pause au tome X »
+ *   « Terminée », la série est finie   → « Se termine au tome X »
+ *   « Terminée », la série est arrêtée → « Arrêtée au tome X »
+ *
+ * X est le dernier tome connu (serie.dernier_tome). Une série « En attente »
+ * dont on ne sait pas pourquoi (choisie à la main, ou avant que l'état soit
+ * rangé) dit « Tome N en attente » : c'est vrai dans tous les cas. Une série
+ * « Terminée » sans état connu ne dit rien — on ne devine pas si elle est
+ * finie ou abandonnée. Aucune autre ne dit rien.
+ */
+function serie_fin_etiquette(array $s): string
+{
+    $statut      = (string) ($s['statut'] ?? '');
+    $tome        = max(0, (int) ($s['tome_actuel'] ?? 0));
+    $dernier     = max(0, (int) ($s['dernier_tome'] ?? 0));
+    $publication = (string) ($s['publication'] ?? '');
+
+    if ($statut === 'attente') {
+        return ($publication === 'hiatus' && $dernier > 0)
+            ? 'En pause au tome ' . $dernier
+            : 'Tome ' . ($tome + 1) . ' en attente';
+    }
+    if ($statut === 'termine' && $dernier > 0) {
+        if ($publication === 'completed') {
+            return 'Se termine au tome ' . $dernier;
+        }
+        if ($publication === 'cancelled') {
+            return 'Arrêtée au tome ' . $dernier;
+        }
+    }
+    return '';
+}
+
+/**
  * `$lecture_seule` : le compte est bloqué (compte_bloque()). La carte garde
  * tout ce qui se lit — couverture, titre, progression — et perd ce qui
  * agit : la couverture n'ouvre plus la fiche, les quatre boutons s'en vont.
@@ -61,12 +103,14 @@ function carte_html(array $s, bool $lecture_seule = false): string
     $titre      = (string) $s['titre'];
     $auteur     = (string) ($s['auteur'] ?? '');
 
-    /* En attente : le tome suivant n'est pas paru. La couverture montre alors
+    /* Arrivée au bout des tomes (« En attente », « Terminée » dont on sait si
+       elle est finie ou arrêtée) : la carte le dit en toutes lettres à la place de
+       « Tome N à emprunter » (serie_fin_etiquette()). La couverture montre alors
        le dernier tome paru, et non « le tome à emprunter ». */
-    $a_venir = serie_a_venir($s);
+    $fin_texte = serie_fin_etiquette($s);
 
-    $alt = $a_venir
-        ? "Couverture de {$titre} — dernier tome lu {$tome}, tome {$suivant} pas encore paru"
+    $alt = $fin_texte !== ''
+        ? "Couverture de {$titre} — dernier tome lu {$tome} ({$fin_texte})"
         : ($en_cours
             ? "Couverture du tome {$suivant} de {$titre}"
             : "Couverture de {$titre} — dernier tome lu {$tome}");
@@ -75,8 +119,8 @@ function carte_html(array $s, bool $lecture_seule = false): string
         ? '<img class="card-cover-img" src="' . e($couverture) . '" alt="' . e($alt) . '" loading="lazy">'
         : '<span class="no-cover" aria-hidden="true">📕</span>';
 
-    $etiquette = $a_venir
-        ? '<div class="next-tag next-tag-avenir">Tome ' . $suivant . ' pas encore paru</div>'
+    $etiquette = $fin_texte !== ''
+        ? '<div class="next-tag next-tag-avenir">' . e($fin_texte) . '</div>'
         : ($en_cours
             ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>'
             : '');

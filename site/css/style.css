@@ -615,8 +615,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
-/* « Tome N pas encore paru » : le tome suivant n'est pas paru. Même place que « à
-   emprunter », mais en retrait — ce n'est pas encore quelque chose à faire. */
+/* « Tome N en attente », « En pause au tome N », « Se termine au tome N »,
+   « Arrêtée au tome N » (serie_fin_etiquette()) : la série est au bout des tomes
+   parus. Même place que « à emprunter », mais en retrait — rien à faire pour le
+   moment. */
 .next-tag-avenir {
   color: var(--text-dim);
   font-weight: 600;

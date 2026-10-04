@@ -379,8 +379,11 @@ couverture), `nouveaute_evaluer` (annoncer, apprendre sans annoncer, ne jamais
 reculer), les messages, `nouveautes_par_compte`. La lecture des réponses de
 MangaDex, sur des réponses fabriquées : `mangadex_dernier_tome_depuis` (volumes
 décimaux, comparés comme des nombres, préférence de langue, plafond),
-`mangadex_statut_depuis`, `mangadex_id_valide`. `serie_a_venir` (le statut « En attente », et rien d'autre), l'étiquette
-« Tome N pas encore paru » de `carte_html`, le compteur du filtre, la couleur, la migration 15, la
+`mangadex_statut_depuis`, `mangadex_id_valide`. `serie_a_venir` (le statut « En attente », et rien d'autre),
+`serie_fin_etiquette` (« Tome N en attente », « En pause au tome N », « Se termine au tome N »,
+« Arrêtée au tome N », et rien quand on ne sait pas), `statut_apres_recul` (« ← » depuis « En attente » ou
+« Terminée » : « En cours » seulement en quittant le dernier tome connu), `publication_connue`,
+la mention dans `carte_html`, le compteur du filtre, la couleur, les migrations 15 et 16, la
 carte INCHANGÉE dans tous les autres cas.
 Celui qui n'est pas au bout des tomes n'est jamais prévenu. Et, par lecture des sources, ce qu'un essai réel avait
 fait voir : chaque colonne que le relevé lit est dans sa requête, `maj_le =

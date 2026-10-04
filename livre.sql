@@ -175,6 +175,11 @@ CREATE TABLE IF NOT EXISTS `serie` (
   `dernier_tome`   INT UNSIGNED NOT NULL DEFAULT 0,
   `verifie_le`     DATETIME     NULL DEFAULT NULL,
   `nouveau_tome`   INT UNSIGNED NOT NULL DEFAULT 0,
+  -- Etat de publication que MangaDex donne a la serie (migration 16) :
+  -- ongoing, completed, hiatus, cancelled, ou vide (pas encore su). Range
+  -- quand on arrive au dernier tome ; la carte en tire « Se termine au tome N »,
+  -- « Arretee au tome N », « En pause au tome N » ou « Tome N en attente ».
+  `publication`    VARCHAR(12)  NOT NULL DEFAULT '',
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -586,7 +591,7 @@ CREATE TABLE IF NOT EXISTS `reglage` (
 --                       qu'on ne le sait pas : la première vérification le
 --                       range sans rien annoncer. Une série dont le tome lu
 --                       atteint ce nombre est « à jour » : sa carte dit
---                       « Tome N pas encore paru » au lieu de « à emprunter ».
+--                       « Tome N en attente » au lieu de « à emprunter ».
 --      `serie.verifie_le` : la dernière interrogation de MangaDex pour cette
 --                       série, pour ne pas la refaire à chaque page (voir
 --                       NOUVEAUTE_MINUTES). NULL = jamais.
@@ -693,4 +698,30 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
               AND COLUMN_TYPE LIKE '%''attente''%');
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `serie` MODIFY COLUMN `statut` ENUM(''cours'',''envie'',''termine'',''abandon'',''attente'') NOT NULL DEFAULT ''cours''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  16. État de publication d'une série (`serie.publication`).
+--
+--      L'état que MangaDex donne à la série — ongoing (en cours), completed
+--      (finie), hiatus (en pause), cancelled (arrêtée) — est rangé quand on
+--      arrive au dernier tome connu (voir includes/nouveautes.php). La carte en
+--      tire sa mention : « Se termine au tome N », « Arrêtée au tome N »,
+--      « En pause au tome N » ou « Tome N en attente ».
+--
+--      Une colonne texte plutôt qu'un ENUM : la valeur est contrôlée par le code
+--      (quatre mots, ou vide), et un ENUM rangerait '' sans un mot hors mode
+--      strict (voir la migration 15).
+--
+--      Aucune donnée n'est touchée : chaque série garde son tome, son statut et
+--      son image. Les séries déjà « En attente » apprennent leur état au prochain
+--      relevé (une seule fois) ; celles déjà « Terminée » n'ont pas de mention
+--      tant qu'on ne le sait pas. ⚠️ À exécuter AVANT d'envoyer le code : pages et
+--      cron lisent cette colonne.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'publication');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `publication` VARCHAR(12) NOT NULL DEFAULT '''' AFTER `nouveau_tome`');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

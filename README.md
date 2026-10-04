@@ -584,15 +584,23 @@ de publication de la série :
 
 | La série est… | Au dernier tome |
 |---|---|
-| `completed` ou `cancelled` | passe **« Terminée »** et prend la couverture du dernier tome |
-| `ongoing` ou `hiatus` | passe **« En attente »** ; la carte dit **« Tome N pas encore paru »** au lieu de « à emprunter » |
+| `completed` | passe **« Terminée »**, prend la couverture du dernier tome ; la carte dit **« Se termine au tome N »** |
+| `cancelled` | passe **« Terminée »**, prend la couverture du dernier tome ; la carte dit **« Arrêtée au tome N »** |
+| `ongoing` | passe **« En attente »** ; la carte dit **« Tome N en attente »** (N : le tome pas encore paru) au lieu de « à emprunter » |
+| `hiatus` | passe **« En attente »** ; la carte dit **« En pause au tome N »** |
 
 **« En attente » est un vrai statut**, avec son filtre, son compteur et sa couleur. Il se pose
 tout seul (au dernier tome d'une série qui continue, ou au relevé pour les séries qui étaient
 déjà au bout avant cette fonction), se lève tout seul — la série repasse « En cours » quand un
-tome de plus sort, ou quand on revient d'un tome (« ← ») alors que MangaDex connaît le tome
-quitté — et se choisit aussi à la main dans la fiche. Une série « Terminée » ou « Abandonnée »
-n'est jamais revérifiée.
+tome de plus sort — et se choisit aussi à la main dans la fiche.
+
+**« ← » depuis « En attente » ou « Terminée »** : quitter le dernier tome connu remet la série
+« En cours ». Un statut choisi à la main au milieu des tomes (on attend l'édition française, on a
+lâché) ne bouge pas. Une série « Terminée » ou « Abandonnée » n'est jamais revérifiée.
+
+L'état de publication que MangaDex donne à la série est rangé dans `serie.publication`
+(migration 16) : c'est lui qui fait choisir la mention de la carte. Une série « Terminée » dont
+on ne le connaît pas (posée avant la migration) ne dit rien plutôt que de deviner.
 
 Le dernier tome est le plus haut de deux sources : la dernière couverture, et le
 « dernier volume » que MangaDex déclare pour une série finie. Si des tomes
@@ -697,7 +705,7 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migrations 13 à 15 : nouveaux tomes, appareils de notification, statut « En attente ») |
+| `livre.sql` | Schéma complet, rejouable (migrations 13 à 16 : nouveaux tomes, appareils de notification, statut « En attente », état de publication) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
