@@ -277,7 +277,7 @@ try {
 } catch (PDOException $e) {
     error_log('purger.php: nouveaux tomes - ' . $e->getMessage());
     $anomalies[] = 'nouveaux tomes ignorés : la base ne suit pas le code (colonnes absentes ?) — '
-                 . 'rejouez livre.sql (migrations 13 et 14)';
+                 . 'rejouez livre.sql (migrations 13 à 15)';
 }
 
 /* ---------------------------------------------------------------------

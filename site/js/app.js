@@ -1652,7 +1652,13 @@ window.Bibliotheque = (() => {
           $grid.prepend(carte);
         }
       });
-      if (trouvees.length) appliquerVue();   // statut et favori n'ont pas bougé : les compteurs non plus
+      /* Une série qui change de statut (« En attente », « Terminée ») : sa
+         carte est refaite, sans rien annoncer — la pastille le dit. Elle garde
+         sa place : seul un tome NOUVEAU remonte une série en tête. */
+      (r.changements || []).forEach((c) => poserCarte(c.carte, c.id));
+      // Un tome nouveau fait repasser « En cours » une série qui attendait : les compteurs des filtres suivent.
+      majCompteurs(r.compte);
+      if (trouvees.length || (r.changements || []).length) appliquerVue();
       annoncerNouveautes(trouvees.map((n) => n.message));
     } catch (e) {
       /* Silence : voir plus haut. */

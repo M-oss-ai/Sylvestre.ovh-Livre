@@ -569,6 +569,10 @@ function type_image(string $couverture): string
 
 const STATUTS = [
     'cours'   => 'En cours',
+    /* « En attente » : arrivé au dernier tome paru d'une série qui continue.
+       Posé tout seul (includes/nouveautes.php), et levé tout seul quand un
+       tome de plus sort ; la fiche permet aussi de le choisir à la main. */
+    'attente' => 'En attente',
     'envie'   => 'Envie',
     'termine' => 'Terminée',
     'abandon' => 'Abandonnée',

@@ -9,14 +9,18 @@
         il n'y a plus de « tome à emprunter » :
           - série finie (completed) ou abandonnée (cancelled) → elle passe en
             « Terminée » et garde la couverture du dernier tome ;
-          - série en cours (ongoing) ou en pause (hiatus) → elle reste « En
-            cours », et sa carte dit « Tome N pas encore paru ».
-        Décidé au moment où l'on avance d'un tome : nouveautes_fin_de_serie().
+          - série en cours (ongoing) ou en pause (hiatus) → elle passe « En
+            attente » (statut `attente`), et sa carte dit « Tome N pas encore
+            paru ».
+        Décidé au moment où l'on avance d'un tome : nouveautes_fin_de_serie(),
+        et aussi à la revérification d'une série « En cours » déjà au bout
+        (celles d'avant cette fonction).
 
      2. NOUVEAU TOME. Une série « à jour » est revérifiée — à l'arrivée sur la
         bibliothèque et à chaque passage du cron. Si MangaDex illustre
-        désormais un tome de plus, la série prend sa couverture, remonte en
-        tête (maj_le), et un message l'annonce : nouveautes_verifier().
+        désormais un tome de plus, la série prend sa couverture, REPASSE « En
+        cours » si elle était « En attente », remonte en tête (maj_le), et un
+        message l'annonce : nouveautes_verifier().
 
    Ce fichier est chargé par api.php, index.php ET purger.php. Le cron ne
    charge ni fonctions.php (en-têtes HTTP, session) ni rien de ce qui en
@@ -125,7 +129,7 @@ function fin_de_serie_message(string $titre, string $etat, int $suivant): string
     if ($etat === 'termine') {
         return '« ' . $titre . ' » : dernier tome atteint, la série passe en « Terminée » 🏁';
     }
-    return '« ' . $titre . ' » : vous êtes à jour, le tome ' . $suivant . " n'est pas encore paru 📅";
+    return '« ' . $titre . ' » : vous êtes à jour, le tome ' . $suivant . " n'est pas encore paru — la série passe « En attente » ⏳";
 }
 
 /* ---------------------------------------------------------------------
@@ -139,11 +143,15 @@ function fin_de_serie_message(string $titre, string $etat, int $suivant): string
  * (fin_de_serie()) et écrit.
  *
  *   'termine'  : statut « termine », couverture du dernier tome ;
- *   'a_venir'  : « dernier_tome » mémorisé, la carte dira « Tome N pas encore paru » ;
+ *   'a_venir'  : statut « attente », « dernier_tome » mémorisé : la carte dira
+ *                « Tome N pas encore paru » ;
  *   'en_route', 'inconnu' : rien n'est écrit ;
  *   'echec'    : MangaDex n'a pas répondu (ou la série a changé entre-temps).
  *
  * Retourne ['etat' => …, 'tome' => le dernier tome connu].
+ *
+ * $dernier : ce que mangadex_dernier_tome() vient de rendre, si l'appelant l'a
+ * déjà (le relevé) : un appel de moins.
  *
  * $utilisateur_id est passé À PART et non lu dans $s : la ligne que rend
  * ma_serie() (api.php) ne le porte pas, et une clé absente donnait 0 — un
@@ -157,13 +165,13 @@ function fin_de_serie_message(string $titre, string $etat, int $suivant): string
  * reculer, avancer ou éditer la fiche. Une série qui a bougé n'est pas
  * écrasée, et l'état rendu est alors « echec ».
  */
-function nouveautes_fin_de_serie(PDO $pdo, int $utilisateur_id, array $s): array
+function nouveautes_fin_de_serie(PDO $pdo, int $utilisateur_id, array $s, ?array $dernier = null): array
 {
     $lien = (string) $s['mangadex_id'];
     $tome = (int) $s['tome_actuel'];
 
-    $dernier = mangadex_dernier_tome($lien);
-    $infos   = $dernier === null ? null : mangadex_statut_serie($lien);
+    $dernier ??= mangadex_dernier_tome($lien);
+    $infos     = $dernier === null ? null : mangadex_statut_serie($lien);
     if ($dernier === null || $infos === null) {
         return ['etat' => 'echec', 'tome' => 0];
     }
@@ -187,19 +195,48 @@ function nouveautes_fin_de_serie(PDO $pdo, int $utilisateur_id, array $s): array
     }
 
     if ($etat === 'a_venir') {
-        /* « maj_le = maj_le » : la série n'a pas changé pour son propriétaire
-           (la colonne se met à jour seule à tout UPDATE, et trierait la
-           bibliothèque sur un simple relevé). */
-        $req = $pdo->prepare(
-            "UPDATE serie
-                SET dernier_tome = ?, verifie_le = NOW(), maj_le = maj_le
-              WHERE id = ? AND utilisateur_id = ? AND tome_actuel = ? AND statut = 'cours'"
-        );
-        $req->execute([$dernier['tome'], (int) $s['id'], $utilisateur_id, $tome]);
-        return $fin;
+        /* Un changement de statut EST une modification : maj_le suit. */
+        try {
+            $req = $pdo->prepare(
+                "UPDATE serie
+                    SET statut = 'attente', dernier_tome = ?, verifie_le = NOW()
+                  WHERE id = ? AND utilisateur_id = ? AND tome_actuel = ? AND statut = 'cours'"
+            );
+            $req->execute([$dernier['tome'], (int) $s['id'], $utilisateur_id, $tome]);
+        } catch (PDOException $e) {
+            // Mode strict, valeur absente de l'ENUM : la migration 15 n'a pas été jouée.
+            error_log('nouveautes: statut « attente » refusé par la base (migration 15 ?) - ' . $e->getMessage());
+            return ['etat' => 'echec', 'tome' => 0];
+        }
+        if ($req->rowCount() !== 1) {
+            return ['etat' => 'echec', 'tome' => 0];   // la série a bougé pendant l'appel
+        }
+        return nouveautes_statut_ecrit($pdo, (int) $s['id'], 'attente') ? $fin : ['etat' => 'echec', 'tome' => 0];
     }
 
     return $fin;
+}
+
+/**
+ * Relit ce que la base a rangé dans `statut` et rétablit « En cours » si ce
+ * n'est pas ce qu'on a écrit.
+ *
+ * Hors mode strict (c'est le cas de bien des mutualisés), une valeur absente de
+ * l'ENUM ne fait AUCUNE erreur : MySQL range '' à la place. Si la migration 15
+ * n'a pas été jouée avant l'envoi du code, une série passerait ainsi à un
+ * statut vide, sans un mot — et sortirait de tous les filtres. On le voit ici,
+ * on le défait, on le dit au journal.
+ */
+function nouveautes_statut_ecrit(PDO $pdo, int $id, string $attendu): bool
+{
+    $req = $pdo->prepare('SELECT statut FROM serie WHERE id = ?');
+    $req->execute([$id]);
+    if ($req->fetchColumn() === $attendu) {
+        return true;
+    }
+    error_log('nouveautes: le statut « ' . $attendu . ' » n\'a pas été rangé (série ' . $id . ') : la migration 15 de livre.sql n\'est pas jouée ?');
+    $pdo->prepare("UPDATE serie SET statut = 'cours' WHERE id = ?")->execute([$id]);
+    return false;
 }
 
 /* ---------------------------------------------------------------------
@@ -212,11 +249,10 @@ function nouveautes_fin_de_serie(PDO $pdo, int $utilisateur_id, array $s): array
  * site (le cron). $limite : combien, au plus.
  *
  * Une série est candidate quand elle est :
- *   - « En cours » et liée à MangaDex ;
- *   - à jour — son tome lu a atteint le dernier connu (serie_a_venir() dans
- *     carte.php, côté affichage) — ou jamais vérifiée (dernier_tome = 0) :
- *     la première vérification ne fait qu'apprendre le nombre de tomes, sans
- *     rien annoncer (nouveaute_evaluer()) ;
+ *   - « En cours » ou « En attente », et liée à MangaDex ;
+ *   - à jour — son tome lu a atteint le dernier connu — ou jamais vérifiée
+ *     (dernier_tome = 0) : la première vérification ne fait qu'apprendre le
+ *     nombre de tomes, sans rien annoncer (nouveaute_evaluer()) ;
  *   - pas vérifiée depuis NOUVEAUTE_HEURES.
  * Jamais celles d'un compte bloqué : la consultation seule ne sollicite pas
  * MangaDex (voir ACTIONS_BLOQUEES).
@@ -225,10 +261,10 @@ function nouveautes_fin_de_serie(PDO $pdo, int $utilisateur_id, array $s): array
  */
 function nouveautes_series_a_verifier(PDO $pdo, ?int $utilisateur_id, int $limite): array
 {
-    $sql = "SELECT s.id, s.utilisateur_id, s.titre, s.tome_actuel, s.mangadex_id, s.dernier_tome, s.couverture
+    $sql = "SELECT s.id, s.utilisateur_id, s.titre, s.statut, s.tome_actuel, s.mangadex_id, s.dernier_tome, s.couverture
               FROM serie s
               JOIN utilisateur u ON u.id = s.utilisateur_id
-             WHERE s.statut = 'cours'
+             WHERE s.statut IN ('cours', 'attente')
                AND s.mangadex_id <> ''
                AND (s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome)
                AND (s.verifie_le IS NULL OR s.verifie_le < NOW() - INTERVAL " . (int) NOUVEAUTE_HEURES . " HOUR)
@@ -255,8 +291,14 @@ function nouveautes_noter_verification(PDO $pdo, int $id, int $utilisateur_id): 
  *
  * Retourne ['etat' => …] :
  *   'nouveau'    : un tome de plus à emprunter — la couverture est prise, la
- *                  date de modification passe à maintenant, le message est à
- *                  annoncer (nouveau_tome). Porte aussi 'tome' ;
+ *                  série repasse « En cours » si elle attendait, la date de
+ *                  modification passe à maintenant, le message est à annoncer
+ *                  (nouveau_tome). Porte aussi 'tome' ;
+ *   'statut'     : une série « En cours » qui est AU BOUT de ce que MangaDex
+ *                  connaît change de statut — « En attente » (elle continue) ou
+ *                  « Terminée » (elle est finie ou abandonnée). Porte aussi
+ *                  'statut'. Les séries d'avant cette fonction se classent
+ *                  ainsi ; rien à annoncer, la pastille de la carte le dit ;
  *   'memorise'   : le nombre de tomes est appris, rien à annoncer ;
  *   'inchange'   : rien de neuf ;
  *   'echec'      : MangaDex n'a pas répondu pour cette série. Elle est notée
@@ -303,15 +345,33 @@ function nouveautes_verifier_serie(PDO $pdo, array $s): array
             $couverture = (string) $s['couverture'];
         }
 
+        /* « statut = 'cours' » : une série qui attendait ce tome n'attend plus.
+           Gardée par le statut lu (« statut = ? ») comme par le tome : si la
+           personne a changé de statut pendant l'appel, on n'y touche pas. */
         $req = $pdo->prepare(
-            'UPDATE serie
-                SET dernier_tome = ?, couverture = ?, nouveau_tome = ?, verifie_le = NOW(), maj_le = NOW()
-              WHERE id = ? AND utilisateur_id = ? AND mangadex_id = ? AND tome_actuel = ? AND dernier_tome = ?'
+            "UPDATE serie
+                SET dernier_tome = ?, couverture = ?, nouveau_tome = ?, statut = 'cours', verifie_le = NOW(), maj_le = NOW()
+              WHERE id = ? AND utilisateur_id = ? AND mangadex_id = ? AND tome_actuel = ? AND dernier_tome = ? AND statut = ?"
         );
-        $req->execute([$dernier['tome'], $couverture, $suivant, $id, $uid, $lien, $tome, $connu]);
+        $req->execute([$dernier['tome'], $couverture, $suivant, $id, $uid, $lien, $tome, $connu, (string) ($s['statut'] ?? 'cours')]);
         return $req->rowCount() === 1
             ? ['etat' => 'nouveau', 'tome' => $suivant]
             : ['etat' => 'inchange'];
+    }
+
+    /* Une série « En cours » arrivée au bout de ce que MangaDex connaît : « En
+       attente » ou « Terminée » selon l'état de publication. Celles qui y étaient
+       déjà avant cette fonction ne passeraient jamais par un « → ». Un MangaDex
+       qui ne répond pas à cette seconde question ne bloque rien : la série reste
+       « En cours » et on réessaie au relevé suivant. */
+    if ((string) ($s['statut'] ?? '') === 'cours' && $dernier['tome'] >= 1 && $tome >= max($connu, $dernier['tome'])) {
+        $fin = nouveautes_fin_de_serie($pdo, $uid, $s, $dernier);
+        if ($fin['etat'] === 'termine') {
+            return ['etat' => 'statut', 'statut' => 'termine'];
+        }
+        if ($fin['etat'] === 'a_venir') {
+            return ['etat' => 'statut', 'statut' => 'attente'];
+        }
     }
 
     if ($verdict === 'memoriser') {
@@ -340,12 +400,15 @@ const NOUVEAUTE_ECHECS_DE_SUITE = 3;
  * Retourne :
  *   'verifiees'  : le nombre de séries réellement traitées ;
  *   'nouveaux'   : les tomes nouveaux, [['id', 'utilisateur_id', 'titre', 'tome']] ;
+ *   'statuts'    : les séries qui ont CHANGÉ DE STATUT (« En attente »,
+ *                  « Terminée »), [['id', 'utilisateur_id', 'titre', 'statut']] —
+ *                  à rafraîchir à l'écran, rien à annoncer ;
  *   'interrompu' : '' si tout est passé, sinon 'file', 'echecs' ou 'temps'.
  */
 function nouveautes_verifier(PDO $pdo, array $series, float $budget_secondes): array
 {
     $debut  = microtime(true);
-    $bilan  = ['verifiees' => 0, 'nouveaux' => [], 'interrompu' => ''];
+    $bilan  = ['verifiees' => 0, 'nouveaux' => [], 'statuts' => [], 'interrompu' => ''];
     $echecs = 0;
 
     foreach ($series as $s) {
@@ -376,6 +439,13 @@ function nouveautes_verifier(PDO $pdo, array $series, float $budget_secondes): a
                 'utilisateur_id' => (int) $s['utilisateur_id'],
                 'titre'          => (string) $s['titre'],
                 'tome'           => (int) $r['tome'],
+            ];
+        } elseif ($r['etat'] === 'statut') {
+            $bilan['statuts'][] = [
+                'id'             => (int) $s['id'],
+                'utilisateur_id' => (int) $s['utilisateur_id'],
+                'titre'          => (string) $s['titre'],
+                'statut'         => (string) $r['statut'],
             ];
         }
     }

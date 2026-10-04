@@ -15,6 +15,8 @@
 
   --cours: #6fb3c9;
   --cours-bg: rgba(111, 179, 201, 0.15);
+  --attente: #e6a756;
+  --attente-bg: rgba(230, 167, 86, 0.15);
   --envie: #b993d6;
   --envie-bg: rgba(185, 147, 214, 0.15);
   --termine: #8fc98f;
@@ -275,6 +277,7 @@ code {
 }
 
 .filter-btn.status-cours.active { border-color: var(--cours); background: var(--cours-bg); color: var(--cours); }
+.filter-btn.status-attente.active { border-color: var(--attente); background: var(--attente-bg); color: var(--attente); }
 .filter-btn.status-envie.active { border-color: var(--envie); background: var(--envie-bg); color: var(--envie); }
 .filter-btn.status-termine.active { border-color: var(--termine); background: var(--termine-bg); color: var(--termine); }
 .filter-btn.status-abandon.active { border-color: var(--abandon); background: var(--abandon-bg); color: var(--abandon); }
@@ -399,6 +402,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 }
 
 .card.status-cours { border-top-color: var(--cours); }
+.card.status-attente { border-top-color: var(--attente); }
 .card.status-envie { border-top-color: var(--envie); }
 .card.status-termine { border-top-color: var(--termine); }
 .card.status-abandon { border-top-color: var(--abandon); }
@@ -580,6 +584,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 }
 
 .status-cours .badge { color: var(--cours); }
+.status-attente .badge { color: var(--attente); }
 .status-envie .badge { color: var(--envie); }
 .status-termine .badge { color: var(--termine); }
 .status-abandon .badge { color: var(--abandon); }
@@ -1719,6 +1724,7 @@ html.verification-session body { visibility: hidden; }
   }
 
   .card.status-cours { border-left-color: var(--cours); }
+  .card.status-attente { border-left-color: var(--attente); }
   .card.status-envie { border-left-color: var(--envie); }
   .card.status-termine { border-left-color: var(--termine); }
   .card.status-abandon { border-left-color: var(--abandon); }

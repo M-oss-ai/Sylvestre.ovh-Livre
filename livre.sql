@@ -149,7 +149,10 @@ CREATE TABLE IF NOT EXISTS `serie` (
   `titre`          VARCHAR(190) NOT NULL,
   `auteur`         VARCHAR(190) NOT NULL DEFAULT '',
   `tome_actuel`    INT UNSIGNED NOT NULL DEFAULT 0,
-  `statut`         ENUM('cours','envie','termine','abandon') NOT NULL DEFAULT 'cours',
+  -- « attente » : arrivé au dernier tome paru d'une série qui continue (voir la
+  -- migration 15). Ajouté EN FIN de liste : l'ordre d'affichage est celui de
+  -- STATUTS (includes/fonctions.php), pas celui de l'ENUM.
+  `statut`         ENUM('cours','envie','termine','abandon','attente') NOT NULL DEFAULT 'cours',
   `couverture`     VARCHAR(500) NOT NULL DEFAULT '',
   -- Serie correspondante chez MangaDex, une fois que l'utilisateur
   -- l'a designee. Tant qu'elle est renseignee, la couverture suit
@@ -663,3 +666,31 @@ CREATE TABLE IF NOT EXISTS `abonnement_push` (
     FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ---------------------------------------------------------------------
+--  15. Statut « En attente » (valeur `attente` de serie.statut).
+--
+--      Une série arrivée au dernier tome paru d'une série qui continue (en
+--      cours de publication, ou en pause chez MangaDex) passe d'elle-même en
+--      « En attente », et repasse « En cours » dès qu'un tome de plus sort
+--      (voir includes/nouveautes.php). On peut aussi le choisir à la main.
+--
+--      Une valeur de plus dans la liste : aucune donnée n'est touchée, chaque
+--      série garde son statut actuel. La valeur est ajoutée EN FIN de liste, ce
+--      qui ne réécrit rien.
+--
+--      ⚠️ À exécuter AVANT d'envoyer le code (même piège que la migration 10) :
+--      hors mode strict, une valeur absente de l'ENUM ne fait aucune erreur,
+--      MySQL range '' à la place — et la série perdrait son statut sans un mot.
+--      Le code relit d'ailleurs ce qu'il vient d'écrire et le dit au journal.
+--
+--      MODIFY réécrit la liste entière des valeurs : on ne l'exécute que si
+--      la nouvelle manque, sur le même modèle que les migrations 6 et 10.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'statut'
+              AND COLUMN_TYPE LIKE '%''attente''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` MODIFY COLUMN `statut` ENUM(''cours'',''envie'',''termine'',''abandon'',''attente'') NOT NULL DEFAULT ''cours''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

@@ -93,10 +93,11 @@ test('le drapeau Secure suit la présence de HTTPS', function () {
     }
 });
 
-groupe('STATUTS — les quatre états d une série');
+groupe('STATUTS — les états d une série');
 
-test('les quatre statuts sont définis', function () {
-    egale(['cours', 'envie', 'termine', 'abandon'], array_keys(STATUTS), 'les clés attendues');
+test('les cinq statuts sont définis, « En attente » juste après « En cours »', function () {
+    egale(['cours', 'attente', 'envie', 'termine', 'abandon'], array_keys(STATUTS), 'les clés attendues, dans l ordre des filtres');
+    egale('En attente', STATUTS['attente'], 'le libellé');
 });
 
 test('chaque statut a un libellé lisible', function () {
@@ -109,7 +110,7 @@ test('les libellés restent assez courts pour la pastille', function () {
     /* Ils s affichent dans la pastille posée sur la couverture, large
        d une poignée de caractères. « À commencer / envie » y tenait sur
        trois lignes et recouvrait l image. Le plus long aujourd hui,
-       « Abandonnée », fait dix caractères : douze laisse de la marge
+       « Abandonnée » et « En attente » font dix caractères : douze laisse de la marge
        sans rouvrir la porte à une phrase entière. */
     foreach (STATUTS as $cle => $libelle) {
         vrai(mb_strlen($libelle, 'UTF-8') <= 12,

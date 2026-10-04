@@ -378,10 +378,17 @@ switch ($action) {
         $s  = ma_serie($pdo, $mon_id, $id);
 
         $tome = max(0, (int) $s['tome_actuel'] - 1);
-        $req = $pdo->prepare('UPDATE serie SET tome_actuel = ? WHERE id = ? AND utilisateur_id = ?');
-        $req->execute([$tome, $id, $mon_id]);
+        /* Revenir d'un tome sur une série « En attente » : celui qu'on vient de
+           quitter existe bel et bien, il y a de nouveau quelque chose à
+           emprunter — elle n'attend plus, et repasse « En cours ». Seulement si
+           MangaDex a dit que ce tome existe (`dernier_tome`) : une série mise
+           « En attente » à la main, sans rien de connu, reste comme choisie. */
+        $statut = ($s['statut'] === 'attente' && (int) $s['dernier_tome'] > $tome) ? 'cours' : $s['statut'];
+        $req = $pdo->prepare('UPDATE serie SET tome_actuel = ?, statut = ? WHERE id = ? AND utilisateur_id = ?');
+        $req->execute([$tome, $statut, $id, $mon_id]);
 
         $s['tome_actuel'] = $tome;
+        $s['statut']      = $statut;
         reponse_json([
             'ok'      => true,
             'carte'   => carte_html($s),
@@ -1244,7 +1251,20 @@ switch ($action) {
                 'carte'   => carte_html($s),
             ];
         }
-        reponse_json(['ok' => true, 'verifiees' => $bilan['verifiees'], 'nouveaux' => $nouveaux]);
+        /* Les séries qui ont changé de statut (« En attente », « Terminée ») :
+           leur carte est à refaire, mais il n'y a rien à annoncer — la pastille
+           le dit. Les compteurs des filtres suivent. */
+        $changements = [];
+        foreach ($bilan['statuts'] as $c) {
+            $changements[] = ['id' => $c['id'], 'carte' => carte_html(ma_serie($pdo, $mon_id, $c['id']))];
+        }
+        reponse_json([
+            'ok'          => true,
+            'verifiees'   => $bilan['verifiees'],
+            'nouveaux'    => $nouveaux,
+            'changements' => $changements,
+            'compte'      => compter_series($pdo, $mon_id),
+        ]);
     }
 
     /* Le bandeau des nouveaux tomes se vide : ce qui était à annoncer l'a été.

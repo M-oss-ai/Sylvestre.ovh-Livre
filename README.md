@@ -284,7 +284,7 @@ Les filtres **se cumulent** et **survivent au rechargement** :
 
 | Filtre | Valeurs |
 |---|---|
-| Statut | En cours · Envie · Terminée · Abandonnée |
+| Statut | En cours · En attente · Envie · Terminée · Abandonnée |
 | Favoris | oui / non |
 | Type d'image | Pas d'image · MangaDex · Importée · Lien |
 
@@ -482,7 +482,7 @@ plus empruntée plus loin que le tome qu'on en a.
 
 | Statut | Tome cherché | Pourquoi |
 |---|---|---|
-| **En cours** · **Envie** | `tome_actuel + 1` | le prochain à emprunter |
+| **En cours** · **En attente** · **Envie** | `tome_actuel + 1` | le prochain à emprunter (pour « En attente », il n'est pas encore paru) |
 | **Terminée** · **Abandonnée** | `tome_actuel` | le tome réel, celui qu'on possède |
 
 Le tome cherché ne descend jamais sous 1 : une série terminée dont le
@@ -585,7 +585,14 @@ de publication de la série :
 | La série est… | Au dernier tome |
 |---|---|
 | `completed` ou `cancelled` | passe **« Terminée »** et prend la couverture du dernier tome |
-| `ongoing` ou `hiatus` | reste **« En cours »** ; la carte dit **« Tome N pas encore paru »** au lieu de « à emprunter » |
+| `ongoing` ou `hiatus` | passe **« En attente »** ; la carte dit **« Tome N pas encore paru »** au lieu de « à emprunter » |
+
+**« En attente » est un vrai statut**, avec son filtre, son compteur et sa couleur. Il se pose
+tout seul (au dernier tome d'une série qui continue, ou au relevé pour les séries qui étaient
+déjà au bout avant cette fonction), se lève tout seul — la série repasse « En cours » quand un
+tome de plus sort, ou quand on revient d'un tome (« ← ») alors que MangaDex connaît le tome
+quitté — et se choisit aussi à la main dans la fiche. Une série « Terminée » ou « Abandonnée »
+n'est jamais revérifiée.
 
 Le dernier tome est le plus haut de deux sources : la dernière couverture, et le
 « dernier volume » que MangaDex déclare pour une série finie. Si des tomes
@@ -689,7 +696,7 @@ Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
 
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migrations 13 et 14 : nouveaux tomes, appareils de notification) |
+| `livre.sql` | Schéma complet, rejouable (migrations 13 à 15 : nouveaux tomes, appareils de notification, statut « En attente ») |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |

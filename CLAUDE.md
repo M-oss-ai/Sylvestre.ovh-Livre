@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1050 tests : 883 PHP en 55 fichiers, 167 JavaScript)
+php tests/lancer.php              # toute la suite (1061 tests : 894 PHP en 55 fichiers, 167 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -492,9 +492,9 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
   `nouveautes_fin_de_serie()` demande à MangaDex le plus haut tome illustré et l'état
   de publication, puis `fin_de_serie()` décide. `completed` / `cancelled` : statut
   `termine` (jamais `abandon`, demande de l'utilisateur) et couverture du dernier
-  tome. `ongoing` / `hiatus` : la série reste « En cours », `dernier_tome` est
-  mémorisé, et `serie_a_venir()` (carte.php) fait dire « Tome N pas encore paru » (« à venir » prêtait
-  à confusion : demande de l'utilisateur). Des tomes
+  tome. `ongoing` / `hiatus` : la série passe **« En attente »** (statut `attente`, demande de
+  l'utilisateur), `dernier_tome` est mémorisé, et `serie_a_venir()` (carte.php — qui ne lit QUE le
+  statut) fait dire « Tome N pas encore paru » (« à venir » prêtait à confusion). Des tomes
   plus loin (`en_route`) ou une réponse sans sens (`inconnu`) : rien ne change — la
   couverture du tome suivant manque souvent AU MILIEU d'une série, ce n'est pas la fin.
   **Le dernier tome est le plus haut entre la dernière couverture et `lastVolume`**
@@ -537,6 +537,17 @@ MangaDex (l'état de publication), pas les statuts du site (`STATUTS`).
 - **Un compte bloqué ne sollicite pas MangaDex** : `serie.nouveautes` est dans
   `ACTIONS_BLOQUEES`, le cron ignore ses séries, `index.php` ne demande pas le relevé.
   `serie.nouveautes_vues` est libre (état d'affichage).
+- **Le statut « En attente »** (`STATUTS`, migration 15 : valeur `attente` AJOUTÉE EN FIN de l'`ENUM`).
+  Posé par `nouveautes_fin_de_serie()` (au « → », ou au relevé pour une série « En cours » déjà au
+  bout avant cette fonction : `nouveautes_verifier_serie()` rend alors l'état `statut`, la page
+  refait la carte sans rien annoncer). Levé par un tome nouveau (`statut = 'cours'`, gardé par le
+  statut lu) et par « ← » quand `dernier_tome` dit que le tome quitté existe (`serie.reculer`) ;
+  jamais pour une série mise « En attente » à la main sans rien de connu. Une série « Terminée » ou
+  « Abandonnée » n'est jamais revérifiée. Les compteurs (`compter_lignes()`) se déduisent de
+  `STATUTS` : un statut de plus n'oublie pas de liste. **La migration 15 se joue AVANT le code** :
+  hors mode strict, MySQL range `''` si la valeur manque à l'ENUM, sans erreur — d'où
+  `nouveautes_statut_ecrit()`, qui relit ce qu'on vient d'écrire, rétablit « En cours » et le dit au
+  journal (en mode strict, la base refuse : l'état rendu est `echec`, rien ne plante).
 - **On n'annonce que si la personne est arrivée AU BOUT des tomes** (demande de
   l'utilisateur) : au tome 1 d'une série dont le tome 4 est le dernier, le tome 5 qui sort
   ne dit rien. C'est la sélection des séries à vérifier (`tome_actuel >= dernier_tome`) ET
@@ -799,7 +810,8 @@ lui, n'en plante pas si elles manquent : il le dit en anomalie. (Une première v
 migration 13 ajoutait aussi `utilisateur.notif_tomes`, pour un e-mail abandonné : la colonne
 peut exister, inutilisée, dans une base qui l'a jouée. Rien ne la lit, rien ne la supprime —
 « sans perdre de données ».) Migration 14 : la table `abonnement_push` (un appareil de
-notification par ligne, `ON DELETE CASCADE`). `utilisateur.forfait` : `standard`, `illimite` ou
+notification par ligne, `ON DELETE CASCADE`). Migration 15 : la valeur `attente` de
+`serie.statut` (voir « Règles tacites » : à jouer AVANT le code). `utilisateur.forfait` : `standard`, `illimite` ou
 `bloque` (consultation seule, voir « Règles tacites »). `utilisateur.admin`
 (administrateur, indépendant du forfait), `raison_blocage` et `bloque_le` (le motif
 et la date d'un blocage) : migration 11. **`utilisateur_actuel()` les lit à chaque

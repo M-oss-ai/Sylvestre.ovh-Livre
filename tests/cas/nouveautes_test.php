@@ -149,6 +149,7 @@ test('fin_de_serie_message() dit ce qui s\'est passé', function () {
     $venir = fin_de_serie_message('Berserk', 'a_venir', 44);
     contient('tome 44', $venir, 'nomme le tome qui n\'est pas paru');
     contient('pas encore paru', $venir, 'et dit pourquoi');
+    contient('En attente', $venir, 'et dit que la série passe « En attente »');
     sans('Terminée', $venir, 'une série qui continue n\'est pas dite terminée');
 });
 
@@ -316,10 +317,10 @@ test('un relevé ne modifie pas la série : maj_le = maj_le', function () {
     /* La colonne se met à jour seule à tout UPDATE, et la bibliothèque est
        triée dessus : noter une vérification ne doit pas faire remonter la série. */
     $src = source('includes/nouveautes.php');
-    foreach (['nouveautes_noter_verification', 'nouveautes_fin_de_serie'] as $fonction) {
-        contient('maj_le = maj_le', corps_de($src, $fonction), $fonction . '() laisse la date de modification');
-    }
+    contient('maj_le = maj_le', corps_de($src, 'nouveautes_noter_verification'), 'noter une vérification laisse la date de modification');
     contient('maj_le = maj_le', corps_de($src, 'nouveautes_verifier_serie'), 'le relevé aussi (tome appris sans annonce)');
+    /* Un CHANGEMENT DE STATUT, lui, est une vraie modification : la colonne suit toute seule. */
+    sans('maj_le = maj_le', corps_de($src, 'nouveautes_fin_de_serie'), 'passer « En attente » ou « Terminée » modifie la série');
     contient('maj_le = NOW()', corps_de($src, 'nouveautes_verifier_serie'), 'et un tome NOUVEAU met la série en tête');
     $api = source('api.php');
     contient('SET nouveau_tome = 0, maj_le = maj_le WHERE utilisateur_id', $api, 'lire une annonce ne modifie pas la série');
@@ -335,7 +336,10 @@ test('les écritures du relevé sont gardées contre un changement en cours d\'a
 
 test('les séries à vérifier : en cours, liées, à jour, pas vues depuis NOUVEAUTE_HEURES, jamais d\'un compte bloqué', function () {
     $q = corps_de(source('includes/nouveautes.php'), 'nouveautes_series_a_verifier');
-    contient("s.statut = 'cours'", $q, 'seule une série en cours attend un tome');
+    contient("s.statut IN ('cours', 'attente')", $q, 'une série en cours, ou déjà en attente, attend un tome — jamais une série terminée ou abandonnée');
+    sans("'termine'", $q, 'terminée : jamais revérifiée');
+    sans("'abandon'", $q, 'abandonnée : jamais revérifiée');
+    contient('s.statut,', $q, 'le statut est sélectionné : la décision en a besoin');
     contient("s.mangadex_id <> ''", $q, 'liée à MangaDex');
     contient('s.dernier_tome = 0 OR s.tome_actuel >= s.dernier_tome', $q, 'à jour, ou jamais vérifiée');
     contient('NOUVEAUTE_HEURES', $q, 'pas plus d\'une fois par NOUVEAUTE_HEURES');
@@ -390,7 +394,7 @@ test('purger.php : le cron charge nouveautes.php, jamais fonctions.php', functio
 test('purger.php : un schéma pas migré devient une anomalie bruyante, pas un plantage', function () {
     $cron = source('purger.php');
     contient('catch (PDOException $e)', $cron, 'l\'erreur est attrapée');
-    contient('migrations 13 et 14', $cron, 'et dit quoi faire');
+    contient('migrations 13 à 15', $cron, 'et dit quoi faire');
 });
 
 test('purger.php : la ligne du bilan ne contient pas « e-mail » (le rapport les écarte)', function () {
@@ -432,4 +436,70 @@ test('livre.sql : migration 13, rejouable et sans ADD COLUMN IF NOT EXISTS', fun
     foreach (['`dernier_tome`', '`verifie_le`', '`nouveau_tome`'] as $colonne) {
         contient($colonne, $creation, 'CREATE TABLE serie : ' . $colonne);
     }
+});
+
+groupe('Le statut « En attente »');
+
+test('arrivée au bout d\'une série qui continue : le statut est posé, gardé, et relu', function () {
+    $src = source('includes/nouveautes.php');
+    $fin = corps_de($src, 'nouveautes_fin_de_serie');
+    contient("SET statut = 'attente', dernier_tome = ?, verifie_le = NOW()", $fin, 'le statut « attente » est écrit');
+    contient("AND tome_actuel = ? AND statut = 'cours'", $fin, 'seulement sur une série « En cours » qui n\'a pas bougé pendant l\'appel');
+    contient('nouveautes_statut_ecrit($pdo', $fin, 'et relu : hors mode strict, une valeur absente de l\'ENUM devient « » sans erreur');
+    contient('catch (PDOException $e)', $fin, 'en mode strict, la base refuse : on le dit au journal au lieu de planter');
+    $relu = corps_de($src, 'nouveautes_statut_ecrit');
+    contient('SELECT statut FROM serie', $relu, 'la relecture');
+    contient("SET statut = 'cours'", $relu, 'une série qui perdrait son statut est rétablie « En cours »');
+    contient('migration 15', $relu, 'et le journal dit quoi faire');
+});
+
+test('un tome nouveau fait repasser « En cours » une série qui attendait', function () {
+    $nouveau = corps_de(source('includes/nouveautes.php'), 'nouveautes_verifier_serie');
+    contient("statut = 'cours', verifie_le = NOW(), maj_le = NOW()", $nouveau, 'le statut revient, la série remonte en tête');
+    contient('AND dernier_tome = ? AND statut = ?', $nouveau, 'gardé par le statut lu : un statut changé pendant l\'appel n\'est pas écrasé');
+});
+
+test('le relevé range les séries déjà au bout : « En cours » seulement, et quand MangaDex ne dit rien, rien ne change', function () {
+    $c = corps_de(source('includes/nouveautes.php'), 'nouveautes_verifier_serie');
+    contient("(string) (\$s['statut'] ?? '') === 'cours'", $c, 'seule une série « En cours » est reclassée');
+    contient('$tome >= max($connu, $dernier[\'tome\'])', $c, 'et seulement si le tome lu est le dernier connu');
+    contient('nouveautes_fin_de_serie($pdo, $uid, $s, $dernier)', $c, 'avec les couvertures déjà lues : un appel de moins');
+    contient("'etat' => 'statut', 'statut' => 'termine'", $c, 'finie ou abandonnée : « Terminée »');
+    contient("'etat' => 'statut', 'statut' => 'attente'", $c, 'qui continue : « En attente »');
+    $apres = substr($c, (int) strpos($c, "'etat' => 'statut', 'statut' => 'attente'"));
+    contient("nouveautes_noter_verification(\$pdo, \$id, \$uid);\n    return ['etat' => 'inchange'];", $apres,
+        'sans réponse exploitable : la série reste telle quelle et se retrouve au relevé suivant');
+});
+
+test('un changement de statut est rendu à l\'écran, sans rien annoncer', function () {
+    $api = source('api.php');
+    $bloc = substr($api, (int) strpos($api, "case 'serie.nouveautes': {"), 2600);
+    contient("foreach (\$bilan['statuts'] as \$c)", $bloc, 'les séries reclassées');
+    contient("'changements' => \$changements", $bloc, 'leur carte est renvoyée');
+    contient("'compte'      => compter_series(\$pdo, \$mon_id)", $bloc, 'avec les compteurs des filtres');
+    $js = source('js/app.js');
+    contient('(r.changements || []).forEach((c) => poserCarte(c.carte, c.id));', $js, 'le navigateur refait ces cartes');
+    contient('majCompteurs(r.compte);', substr($js, (int) strpos($js, 'async function verifierNouveautes')), 'et met les compteurs à jour');
+});
+
+test('revenir d\'un tome sur une série « En attente » la remet « En cours », seulement si le tome existe', function () {
+    $api = source('api.php');
+    $bloc = substr($api, (int) strpos($api, "case 'serie.reculer': {"), 1500);
+    contient("\$statut = (\$s['statut'] === 'attente' && (int) \$s['dernier_tome'] > \$tome) ? 'cours' : \$s['statut'];", $bloc,
+        'repasse « En cours » quand MangaDex a dit que le tome quitté existe');
+    contient('SET tome_actuel = ?, statut = ?', $bloc, 'et l\'écrit');
+});
+
+test('livre.sql : migration 15, rejouable, l\'ENUM porte « attente » en fin de liste', function () {
+    $sql = source('livre.sql');
+    contient("`statut`         ENUM('cours','envie','termine','abandon','attente') NOT NULL DEFAULT 'cours'", $sql, 'le schéma neuf');
+    $m15 = substr($sql, (int) strpos($sql, '--  15. Statut'));
+    vrai($m15 !== '', 'la migration 15 existe');
+    contient("COLUMN_NAME = 'statut'", $m15, 'elle interroge information_schema');
+    contient("LIKE '%''attente''%'", $m15, 'elle ne s\'exécute que si la valeur manque');
+    contient("MODIFY COLUMN `statut` ENUM(''cours'',''envie'',''termine'',''abandon'',''attente'') NOT NULL DEFAULT ''cours''", $m15,
+        'MODIFY garde le défaut et AJOUTE en fin de liste : aucune série ne change de statut');
+    sans('ADD COLUMN IF NOT EXISTS', substr($m15, (int) strpos($m15, 'SET @c')), 'jamais cette extension MariaDB');
+    sans('UPDATE', substr($m15, (int) strpos($m15, 'SET @c')), 'aucune donnée n\'est touchée');
+    vrai(strpos($sql, "COLUMN_NAME = 'statut'") > strpos($sql, 'CREATE TABLE IF NOT EXISTS `serie`'), 'après la création de la table');
 });

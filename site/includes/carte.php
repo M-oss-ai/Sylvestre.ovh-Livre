@@ -24,21 +24,19 @@ const ETOILE_SVG = '<svg class="etoile" viewBox="0 0 24 24" aria-hidden="true" f
     . 'l5.46 4.73L5.82 21z"/></svg>';
 
 /**
- * La série est-elle « à jour » : suivie chez MangaDex, en cours, et son tome lu
- * a atteint le dernier tome que MangaDex connaît ? Le tome suivant n'existe
- * pas encore : la carte dit « pas encore paru » au lieu de « à emprunter ».
+ * La série est-elle « En attente » : arrivée au dernier tome paru d'une série
+ * qui continue ? Le tome suivant n'existe pas encore : la carte dit « pas
+ * encore paru » au lieu de « à emprunter ».
  *
- * `dernier_tome` vaut 0 tant que MangaDex n'a pas été interrogé (série
- * d'avant la fonction, ou panne au moment de l'avancer) : on ne prétend alors
- * rien, la carte garde son libellé habituel. Voir includes/nouveautes.php.
+ * C'est le STATUT qui le dit, et rien d'autre : posé tout seul quand on arrive
+ * au bout (includes/nouveautes.php), levé tout seul quand un tome de plus sort,
+ * et que la personne peut aussi choisir à la main dans la fiche. Une série
+ * « En cours » dont on ne sait pas encore qu'elle est au bout garde son
+ * libellé habituel : on ne prétend rien qu'on ne sache.
  */
 function serie_a_venir(array $s): bool
 {
-    $dernier = (int) ($s['dernier_tome'] ?? 0);
-    return ($s['statut'] ?? '') === 'cours'
-        && (string) ($s['mangadex_id'] ?? '') !== ''
-        && $dernier > 0
-        && (int) ($s['tome_actuel'] ?? 0) >= $dernier;
+    return ($s['statut'] ?? '') === 'attente';
 }
 
 /**
@@ -63,8 +61,8 @@ function carte_html(array $s, bool $lecture_seule = false): string
     $titre      = (string) $s['titre'];
     $auteur     = (string) ($s['auteur'] ?? '');
 
-    /* À jour : le tome suivant n'est pas paru. La couverture montre alors le
-       dernier tome paru, et non « le tome à emprunter ». */
+    /* En attente : le tome suivant n'est pas paru. La couverture montre alors
+       le dernier tome paru, et non « le tome à emprunter ». */
     $a_venir = serie_a_venir($s);
 
     $alt = $a_venir
@@ -169,7 +167,8 @@ function compter_series(PDO $pdo, int $utilisateur_id): array
 /** Le comptage de compter_series(), sur des lignes déjà lues (testable sans base). */
 function compter_lignes(array $lignes): array
 {
-    $c = ['all' => 0, 'cours' => 0, 'envie' => 0, 'termine' => 0, 'abandon' => 0, 'favori' => 0];
+    // Un compteur par statut de STATUTS : en ajouter un ne demande pas de penser à cette liste.
+    $c = ['all' => 0] + array_fill_keys(array_keys(STATUTS), 0) + ['favori' => 0];
     foreach (IMAGES_TYPES as $cle => $libelle) {
         $c['image-' . $cle] = 0;
     }
