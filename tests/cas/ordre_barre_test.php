@@ -112,30 +112,38 @@ test('style.css : la barre se décale de --decalage, sans transition', function 
     sans('.escamotee', $css, 'l\'ancienne classe tout-ou-rien est partie');
 });
 
-groupe('Téléphone : la saisie cache la barre');
+groupe('Téléphone : la saisie cache la barre, sans aucun défilement forcé');
 
-test('js/app.js : toucher le champ cache la barre, seulement sur écran tactile', function () use ($js) {
+test('js/app.js : toucher le champ pose html.saisie, seulement sur écran tactile', function () use ($js) {
     contient('const ecranTactile = window.matchMedia("(pointer: coarse)");', $js, 'même condition que les autres gestes tactiles du site');
-    $bloc = bloc_ordre_barre($js, '$search.addEventListener("focus"', 1300);
-    contient('if (!ecranTactile.matches) return;', $bloc, 'rien ne change sur ordinateur');
-    contient('racine.classList.add("saisie");', $bloc, 'de quoi défiler d\'au moins la hauteur de la barre');
-    contient('B.positionSaisie(window.scrollY, hauteurBarre())', $bloc, 'où défiler : la fonction pure, testée');
-    contient('window.scrollTo({ top: s.cible, behavior: "instant" })', $bloc, 'd\'un bond : html défile en douceur (style.css), et la liste monte en même temps');
-    contient('poserDecalage(r.decalage);', $bloc, 'la barre remontée');
+    $bloc = bloc_ordre_barre($js, '$search.addEventListener("focus"', 200);
+    contient('if (ecranTactile.matches) racine.classList.add("saisie");', $bloc, 'rien ne change sur ordinateur');
+    sans('scrollTo', $bloc, 'AUCUN défilement forcé : un vrai téléphone fait défiler la page de son côté au focus, et les deux se battaient (barre cachée mais champ non choisi, ou champ choisi mais barre revenue)');
+    sans('scrollBy', $bloc, 'idem');
+    sans('positionSaisie', $js, 'l\'ancienne fonction qui défilait la page est partie');
 });
 
-test('js/app.js : fermer le clavier ne ramène PAS la barre — seule la remontée le fait', function () use ($js) {
-    $bloc = bloc_ordre_barre($js, '$search.addEventListener("blur"', 650);
-    contient('racine.classList.remove("saisie")', $bloc, 'la place réservée par la saisie est rendue');
-    contient('suivreDefilement();', $bloc, 'la page a pu raccourcir (peu de résultats) : la position de la barre est relue, elle n\'est jamais plus remontée que la page');
-    sans('poserDecalage', $bloc, 'mais la barre n\'est pas ramenée d\'office : elle revient au fil du défilement, en remontant');
+test('js/app.js : pendant la saisie la barre n\'est plus suivie : rien ne peut la ramener', function () use ($js) {
+    $bloc = bloc_ordre_barre($js, 'function suivreDefilement()', 400);
+    contient('if (racine.classList.contains("saisie")) return;', $bloc, 'le défilement du navigateur ne la fait plus revenir');
 });
 
-test('style.css : de quoi défiler d\'au moins la hauteur de la barre pendant la saisie', function () use ($css) {
-    contient('html.saisie main.bibliotheque { min-height: calc(100vh + var(--hauteur-filtres, 0px) + 8px); }', $css,
-        'sans cela, une recherche à deux résultats laisserait la place de la barre vide au-dessus d\'eux');
+test('js/app.js : quitter le champ ramène la barre, sans que les séries bougent', function () use ($js) {
+    $bloc = bloc_ordre_barre($js, '$search.addEventListener("blur"', 1700);
+    contient('racine.classList.add("retour-saisie");', $bloc, 'le temps du retour, pas d\'ancrage du défilement : Chrome compense seul, Safari non, on ne compense qu\'une fois');
+    contient('setTimeout(() => racine.classList.remove("retour-saisie"), 150);', $bloc, 'puis il revient');
+    contient('racine.classList.remove("saisie");', $bloc, 'la barre revient dans la page');
+    contient('B.compensationRetour(window.scrollY, $barreFiltres.offsetHeight, marge)', $bloc, 'de combien défiler : la fonction pure, testée');
+    contient('window.scrollBy({ top: delta, behavior: "instant" })', $bloc, 'sa place revient et pousse les séries : on défile d\'autant (d\'un bond : html défile en douceur)');
+    contient('suivi = null;', $bloc, 'elle repart d\'un relevé neuf, entière');
+    contient('suivreDefilement();', $bloc, 'et suit le défilement dès maintenant');
 });
 
+test('style.css : pendant la saisie, la barre sort de la mise en page', function () use ($css) {
+    contient('html.saisie .barre-filtres { display: none; }', $css, 'plus de place prise : les séries montent d\'elles-mêmes');
+    sans('min-height: calc(100vh', $css, 'plus de place réservée pour défiler : il n\'y a plus de défilement');
+    contient('html.retour-saisie { overflow-anchor: none; }', $css, 'au retour, c\'est nous qui compensons la hauteur, pas le navigateur');
+});
 test('le geste qui ferme le clavier existe toujours (commun.js) : c\'est lui qui fait revenir les filtres au défilement', function () {
     $commun = source_ordre_barre('js/commun.js');
     contient('touchmove', $commun, 'un glissement hors du champ le quitte');

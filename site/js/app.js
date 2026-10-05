@@ -79,16 +79,15 @@ window.Bibliotheque = (() => {
   }
 
   /**
-   * Un champ de recherche touché sur un téléphone : la barre se cache, et la liste monte à sa place
-   * (demande de l'utilisateur : le clavier prend la moitié de l'écran, les filtres n'ont rien à y
-   * faire). La barre n'est qu'une couche collée : cachée, la place qu'elle occupe dans la page reste
-   * vide tant que la page n'a pas défilé d'au moins sa hauteur. Rend { decalage, cible } : la
-   * barre toute remontée, et le défilement à poser (jamais moins que maintenant : on ne redescend
-   * pas qui avait déjà défilé plus loin).
+   * La barre revient quand on quitte le champ de recherche (sur téléphone, pendant la saisie elle
+   * sort de la mise en page : voir « Téléphone » plus bas) : sa place revient avec elle, et pousse
+   * les séries vers le bas d'autant. Tout en haut de la page, c'est la mise en page normale. Plus
+   * bas, on défile de la même hauteur pour que ce qu'on regardait ne bouge pas — la barre, collée,
+   * passe alors par-dessus. Rend de combien défiler (0 : rien).
    */
-  function positionSaisie(y, hauteur) {
-    const h = Math.max(0, Number(hauteur) || 0);
-    return { decalage: h, cible: Math.max(Number(y) || 0, h) };
+  function compensationRetour(y, hauteurBarre, marge) {
+    if (!(Number(y) > 0)) return 0;
+    return Math.max(0, Number(hauteurBarre) || 0) + Math.max(0, Number(marge) || 0);
   }
 
   /**
@@ -460,7 +459,7 @@ window.Bibliotheque = (() => {
   }
 
   return {
-    voisine, positionBarre, positionSaisie, annonceQuota, texteQuotaRecherche, pagesSeries,
+    voisine, positionBarre, compensationRetour, annonceQuota, texteQuotaRecherche, pagesSeries,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
     panneauApres, panneauMemorise, aucunFiltre, bordsDefilement, placerBulle,
     TRIS, CRITERES, triValide, critereTri, sensTri, triInverse, triApres, etatBoutonTri, comparerTri, comparerVue, empreinteVue, statistiques,
@@ -1427,6 +1426,8 @@ window.Bibliotheque = (() => {
 
   function suivreDefilement() {
     suiviPrevu = false;
+    // Pendant la saisie sur téléphone la barre n'est plus dans la page : rien à suivre.
+    if (racine.classList.contains("saisie")) return;
     const r = B.positionBarre(suivi, mesureBarre());
     suivi = r.etat;
     // Tout en haut, la barre est à sa place : ni fond, ni décalage.
@@ -1449,33 +1450,38 @@ window.Bibliotheque = (() => {
 
   /* ---------------- Téléphone : taper une recherche cache la barre ----------------
      Le clavier prend la moitié de l'écran : les filtres n'ont rien à y faire, ce sont les séries
-     qu'on veut voir (demande de l'utilisateur). Toucher le champ remonte donc la barre, et la
-     liste monte à sa place (Bibliotheque.positionSaisie). Faire défiler la page ferme le clavier
-     (commun.js) et, en REMONTANT, ramène la barre au fil du doigt, comme n'importe quand : la
-     fermer autrement (« OK », un toucher à côté) ne la ramène pas, seule la remontée le fait
-     (sauf une page devenue trop courte pour défiler : plus rien à cacher, la barre revient).
-     Que sur un écran tactile : au clavier d'un ordinateur, rien ne change. */
+     qu'on veut voir (demande de l'utilisateur). Toucher le champ pose `html.saisie`, et style.css
+     sort alors la barre de la mise en page : elle ne prend plus de place, les séries montent
+     d'elles-mêmes. Quitter le champ la ramène. Faire défiler la page ferme le clavier (commun.js),
+     donc « quand on monte, ça fait partir le clavier et ça affiche les filtres ».
+     Que sur un écran tactile : au clavier d'un ordinateur, rien ne change.
+
+     AUCUN défilement forcé, exprès. Une première version défilait la page de la hauteur de la barre
+     pour la cacher ; sur un vrai téléphone, le navigateur fait lui-même défiler la page quand un champ
+     prend le focus, et les deux se battaient : au premier toucher la barre disparaissait mais le champ
+     n'était pas choisi, au second il l'était mais la barre revenait (elle suivait le défilement du
+     navigateur comme celui du doigt). Une barre retirée de la page ne dépend plus d'aucun défilement. */
 
   const ecranTactile = window.matchMedia("(pointer: coarse)");
 
   $search.addEventListener("focus", () => {
-    if (!ecranTactile.matches) return;
-    /* De quoi défiler d'au moins la hauteur de la barre, même quand la recherche ne laisse que
-       deux séries : sans cela la place de la barre resterait vide au-dessus d'elles (style.css). */
-    racine.classList.add("saisie");
-    const s = B.positionSaisie(window.scrollY, hauteurBarre());
-    if (s.cible > window.scrollY) window.scrollTo({ top: s.cible, behavior: "instant" });
-    const m = mesureBarre();
-    const r = B.positionBarre({ y: m.y, decalage: s.decalage, gabarit: m.gabarit }, m);
-    suivi = r.etat;
-    $barreFiltres.classList.toggle("collee", r.collee);
-    poserDecalage(r.decalage);
+    if (ecranTactile.matches) racine.classList.add("saisie");
   });
   $search.addEventListener("blur", () => {
+    if (!racine.classList.contains("saisie")) return;
+    /* Pas d'ancrage du défilement le temps du retour (style.css) : Chrome compense de lui-même la hauteur
+       qui revient, Safari non — on compenserait deux fois dans l'un, jamais dans l'autre. Sans ancrage,
+       c'est nous, une seule fois, partout. */
+    racine.classList.add("retour-saisie");
     racine.classList.remove("saisie");
-    /* Sans cette place en plus, une page raccourcie par la recherche ramène le défilement en haut :
-       la barre, cachée, laisserait un trou. Elle n'est jamais plus remontée que la page (positionBarre),
-       donc elle se montre alors d'elle-même — on ne la ramène pas autrement, seule la remontée le fait. */
+    /* La place de la barre revient et pousse les séries vers le bas : on défile d'autant, sauf tout en
+       haut de la page, pour que ce qu'on regardait ne bouge pas (Bibliotheque.compensationRetour). */
+    const marge = parseFloat(getComputedStyle($barreFiltres).marginBottom) || 0;
+    const delta = B.compensationRetour(window.scrollY, $barreFiltres.offsetHeight, marge);
+    if (delta > 0) window.scrollBy({ top: delta, behavior: "instant" });
+    setTimeout(() => racine.classList.remove("retour-saisie"), 150);
+    // La barre revient entière : on repart d'un relevé neuf, elle suivra le défilement d'ici.
+    suivi = null;
     suivreDefilement();
   });
 

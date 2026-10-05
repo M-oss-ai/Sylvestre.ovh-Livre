@@ -319,10 +319,14 @@ main.bibliotheque { padding-top: 0; }
   clip-path: inset(0 -100vmax -1px);
 }
 
-/* Un champ de recherche touché sur téléphone cache la barre (js/app.js, « la saisie »). Cachée,
-   elle laisse sa place vide dans la page tant que celle-ci n'a pas défilé d'au moins sa hauteur :
-   on s'assure que ce défilement est possible, même quand la recherche ne laisse que deux séries. */
-html.saisie main.bibliotheque { min-height: calc(100vh + var(--hauteur-filtres, 0px) + 8px); }
+/* Un champ de recherche touché sur téléphone cache la barre (js/app.js, « Téléphone »). Elle sort de la
+   mise en page : plus de place prise, les séries montent — sans le moindre défilement forcé, que le
+   navigateur d'un vrai téléphone contrariait en faisant défiler la page de son côté. */
+html.saisie .barre-filtres { display: none; }
+
+/* Le retour de la barre (js/app.js) compense lui-même la hauteur qui revient : Chrome le ferait déjà, Safari
+   non, et les deux ensemble défileraient deux fois. Le temps d'un instant, pas d'ancrage du défilement. */
+html.retour-saisie { overflow-anchor: none; }
 
 /* Le total de la bibliothèque (« 42 séries · 318 tomes lus »), sous les filtres. Ce n'est pas un
    filtre : la ligne ne se colle pas, elle défile avec la page. */

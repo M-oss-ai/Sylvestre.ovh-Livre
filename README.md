@@ -343,9 +343,9 @@ devant. Une série créée se met en tête.
 défiler la page : en descendant beaucoup puis en remontant un peu, vous ne voyez d'abord que « Trier par », les filtres
 reviennent en remontant davantage. Arrêtée en route, elle reste à moitié visible.
 
-**Sur téléphone, taper dans la recherche cache la barre**, pour que les séries tiennent au-dessus du clavier. Faire
-défiler la page vers le haut ferme le clavier et ramène la barre au fil du doigt ; fermer le clavier autrement ne la
-ramène pas.
+**Sur téléphone, taper dans la recherche cache la barre**, pour que les séries tiennent au-dessus du clavier. Elle
+revient dès que vous quittez le champ ; faire défiler la page ferme le clavier, donc la barre revient quand vous
+remontez.
 ### Une série qu'on modifie ne disparaît pas sous vos yeux
 
 Retirer une série des favoris pendant que le filtre « Favoris » est

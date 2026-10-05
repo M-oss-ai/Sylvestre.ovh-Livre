@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1286 tests : 1032 PHP en 60 fichiers, 254 JavaScript)
+php tests/lancer.php              # toute la suite (1285 tests : 1033 PHP en 60 fichiers, 252 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -523,23 +523,32 @@ filtres » ; avant, c'était tout ou rien : après 10 px dans un sens, elle disp
 
 **Sur téléphone, taper dans la recherche cache la barre** (demande de l'utilisateur : « on ne doit pas voir les
 filtres, ils doivent être remontés pour voir les séries ; quand on monte ça fait partir le clavier virtuel et ça affiche
-les filtres »). Écran tactile seulement (`(pointer: coarse)`, comme les autres gestes tactiles) : sur ordinateur, rien.
-- **Toucher le champ** (`focus`) : `html.saisie`, puis `Bibliotheque.positionSaisie()` (pure, testée) — la barre toute
-  remontée, et la page défile d'au moins sa hauteur, pour que la liste monte à la place de la barre (la barre n'est
-  qu'une couche collée : cachée, sa place resterait vide). `html.saisie main.bibliotheque { min-height }` garantit que ce
-  défilement est possible même quand la recherche ne laisse que deux séries.
-- **Quitter le champ** (`blur`) : la classe est retirée et la position relue (`suivreDefilement()`). **La barre ne revient
-  PAS d'office** (choix de l'utilisateur) : fermer le clavier par « OK » ou un toucher à côté la laisse cachée. Faire
-  défiler la page vers le haut la ramène, au fil du doigt, et ferme déjà le clavier (`js/commun.js`, `touchmove`) ; vers le
-  bas, le clavier se ferme et elle reste cachée. Seule exception : une page devenue trop courte pour défiler (peu de
-  résultats) — plus rien à cacher, la barre revient.
-- **Vérifié dans le navigateur** (375 px, vrais clics, sauf que la molette seule fait défiler) : un tap dans le champ
-  descend la page de 106 px, la première série passe de 257 à 151 px du haut ; avec un seul résultat, la page reste
-  défilable et la barre cachée ; fermeture sur page courte : la barre revient ; sur page longue : elle reste cachée, une
-  molette vers le haut la ramène ; ordinateur : rien ne bouge. **Non vérifié : un vrai clavier virtuel** (iOS, Android) —
-  le navigateur intégré n'en a pas, et un `focus()` par script ne déclenche rien tant que la page n'a pas le focus
-  système (`document.hasFocus()` faux) : il faut un vrai clic. Safari sur iPhone décale aussi la zone visible quand le
-  clavier s'ouvre, ce qui peut déplacer les éléments collés : à regarder sur un vrai téléphone.
+les filtres » ; redemandée après un essai sur son téléphone, voir plus bas). Écran tactile seulement
+(`(pointer: coarse)`, comme les autres gestes tactiles) : sur ordinateur, rien.
+- **Toucher le champ** (`focus`) pose `html.saisie`, et `style.css` met `display: none` à `.barre-filtres` : la barre
+  **sort de la mise en page**, les séries montent d'elles-mêmes. **Quitter le champ** (`blur`) la ramène. Faire défiler la
+  page ferme le clavier (`js/commun.js`, `touchmove`) : les filtres reviennent donc « quand on monte ». Pendant la saisie,
+  `suivreDefilement()` ne fait rien.
+- **AUCUN défilement forcé, exprès — la première version est à ne pas refaire.** Elle défilait la page de la hauteur de la
+  barre (`positionSaisie()`, retiré) pour la cacher derrière la barre du haut. Sur le vrai téléphone de l'utilisateur : tout
+  en haut, le premier toucher cachait la barre mais ne choisissait pas le champ, le second choisissait le champ mais la barre
+  revenait ; au milieu de la page, un toucher choisissait le champ ET ramenait la barre. Cause probable (non mesurée) : un
+  vrai téléphone fait défiler la page tout seul quand un champ prend le focus, et la barre, qui suit le défilement,
+  remontait avec lui. Une barre retirée de la page ne dépend plus d'aucun défilement : ce que le navigateur fait de son côté
+  ne la ramène pas.
+- **Au retour** (`blur`), la place de la barre revient et pousse les séries vers le bas : `Bibliotheque.compensationRetour()`
+  (pure, testée) dit de combien défiler pour que ce qu'on regardait ne bouge pas (0 tout en haut de la page). Chrome
+  compense déjà tout seul (« scroll anchoring »), Safari non : `html.retour-saisie { overflow-anchor: none }` coupe
+  l'ancrage 150 ms, pour que la compensation soit la même partout (sinon elle est doublée dans Chrome — mesuré : 516 au lieu
+  de 408 — et seule dans Safari). La barre repart d'un relevé neuf (`suivi = null`) : entière, puis elle suit le défilement.
+- **La barre revient dès qu'on quitte le champ**, de n'importe quelle façon (« OK », un toucher à côté, un défilement vers le
+  bas comme vers le haut). Une première version la gardait cachée jusqu'à la remontée ; elle dépendait du défilement.
+- **Vérifié dans le navigateur** (375 px, vrais taps) : tout en haut, UN tap choisit le champ, la barre sort, la première
+  série passe de 257 à 149 px ; un navigateur qui défile de son côté (simulé : 0 → 90 → 0, puis 392 → 0 → 300) ne la ramène
+  pas ; au milieu de la page, un tap : champ choisi, barre sortie ; à la fermeture, la barre revient et la série reste à la
+  même place (défilement 300 → 408, une seule fois) ; ordinateur : rien. **Non vérifié : un vrai téléphone, un vrai clavier
+  virtuel** (iOS, Android) — le navigateur intégré n'en a pas, et un `focus()` par script ne déclenche rien tant que la page
+  n'a pas le focus système (`document.hasFocus()` faux) : il faut un vrai clic.
 
 **L'ordre ne se recalcule qu'au changement de vue** (demande de l'utilisateur : « l'ordre des séries doit se mettre à
 jour uniquement quand on change le tri ; si je modifie le tome je ne veux pas qu'il disparaisse »). Ce que font les

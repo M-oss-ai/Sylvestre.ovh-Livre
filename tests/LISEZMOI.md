@@ -449,10 +449,10 @@ la vraie molette seulement : voir CLAUDE.md.
 SOURCES : le rangement gardé par l'empreinte de la vue (`vueChangee`) et par rien d'autre, plus d'`ordreBouscule`, le rang
 noté une seule fois ; `poserCarte(…, remonte)` (rang de tête d'une série modifiée, ancien rang quand le serveur n'a rien
 modifié) ; le relevé des nouveaux tomes qui ne déplace une série que sous « Plus récent » sans recherche ; la barre posée en
-`--decalage` par CSSOM, sans transition, plus de `.escamotee` ; la saisie tactile (focus : `html.saisie` et
-`positionSaisie()`, blur : position relue, barre non ramenée d'office). La logique pure est dans `bibliotheque_test.js` :
+`--decalage` par CSSOM, sans transition, plus de `.escamotee` ; la saisie tactile (focus : `html.saisie`, **aucun défilement forcé** — il se battait avec celui d'un vrai
+téléphone ; blur : barre ramenée, ancrage du défilement coupé le temps de la compensation). La logique pure est dans `bibliotheque_test.js` :
 `positionBarre` (rebonds, hauteur qui change, rétrécissement, jamais plus remontée que la page, « Trier par » visible avant
-les filtres), `positionSaisie`, `comparerVue` (une série modifiée passe devant sous « Plus récent », prend la place de son
+les filtres), `compensationRetour`, `comparerVue` (une série modifiée passe devant sous « Plus récent », prend la place de son
 nouveau tome sous « Tome » au rangement suivant), `empreinteVue` (même vue, même empreinte). Le branchement (vrai défilement
 à la molette, vrai tap sur le champ, fermeture du clavier) s'est vérifié à la main dans le navigateur à 375 px ; **le clavier
 virtuel réel et un iPhone, non**.
@@ -506,7 +506,7 @@ se trouve le gros de la logique de sécurité.
 effacée dès qu'on le corrige), `Lib.urlImageAcceptee`, `Lib.dureeToast`,
 `Bibliotheque.voisine` (les flèches dans la grille),
 `Bibliotheque.positionBarre` (la barre qui suit le défilement au pixel près, jamais plus remontée que la page, rebonds et
-recalages du navigateur compris), `positionSaisie` (la saisie sur téléphone), `comparerVue` et `empreinteVue` (l'ordre ne
+recalages du navigateur compris), `compensationRetour` (le retour de la barre après la saisie sur téléphone), `comparerVue` et `empreinteVue` (l'ordre ne
 se recalcule qu'au changement de vue), `Bibliotheque.annonceQuota`
 et `texteQuotaRecherche`, `Bibliotheque.ficheModifiee` et `signatureCouverture` (Échap ne jette plus une fiche modifiée), `Bibliotheque.toucheSuppression` (Suppr sur la carte sélectionnée, pas un raccourci) et `champDeSaisie` (dans la fiche, les champs où la touche efface du texte au lieu de supprimer la série), `Bibliotheque.panneauApres`, `panneauMemorise` et `aucunFiltre` (le groupe de filtres déplié, un seul à la fois, sa mémoire d'avant comprise, et le moment où « Toutes » s'allume), `Bibliotheque.bordsDefilement` (de quel côté une rangée de filtres a de la suite, pour le fondu ; le `ResizeObserver` et le `mask-image` qui l'appliquent se vérifient à la main), `Lib.piegerFocus` (l'œil du mot de passe n'est pas un arrêt), `Lib.cleFiltres` et `oublierFiltres` (les filtres par compte), `Parametres.texteSuppressionCompte`, `ReglesMdp.manques` et `brancher` (les règles du mot de passe non respectées, et quand les dire — mêmes messages que `valider_mot_de_passe`).
 

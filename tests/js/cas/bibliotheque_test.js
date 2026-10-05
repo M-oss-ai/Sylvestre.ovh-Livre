@@ -186,36 +186,25 @@ test("sans hauteur connue, rien ne remonte", () => {
   }
 });
 
-groupe("Bibliotheque.positionSaisie() — taper une recherche cache la barre");
+groupe("Bibliotheque.compensationRetour() — quitter le champ de recherche rend sa place à la barre");
 
-test("tout en haut : la barre toute remontée, et la page défile de sa hauteur", () => {
-  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie(0, HAUTEUR), "y = 0");
+test("tout en haut de la page : rien à compenser, c'est la mise en page normale", () => {
+  egale(0, B.compensationRetour(0, 104, 4), "y = 0");
+  egale(0, B.compensationRetour(-30, 104, 4), "le rebond élastique sous zéro n'est pas un défilement");
 });
 
-test("un peu défilé : on complète jusqu à la hauteur de la barre", () => {
-  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie(40, HAUTEUR), "y = 40 : la place de la barre n est pas encore sortie");
+test("plus bas : on défile de la hauteur de la barre et de sa marge, pour que les séries ne bougent pas", () => {
+  egale(108, B.compensationRetour(300, 104, 4), "104 + 4");
+  egale(108, B.compensationRetour(1, 104, 4), "dès le premier pixel");
+  egale(104, B.compensationRetour(300, 104, 0), "sans marge");
 });
 
-test("déjà plus loin que sa hauteur : on ne redescend pas", () => {
-  egale({ decalage: HAUTEUR, cible: 900 }, B.positionSaisie(900, HAUTEUR), "la page reste où elle est");
-  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie(HAUTEUR, HAUTEUR), "pile à sa hauteur");
-});
-
-test("une valeur illisible ne donne jamais NaN", () => {
-  egale({ decalage: 0, cible: 0 }, B.positionSaisie(undefined, undefined), "rien de connu");
-  egale({ decalage: 0, cible: 50 }, B.positionSaisie(50, "abc"), "hauteur illisible : rien à cacher");
-  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie("x", HAUTEUR), "position illisible : 0");
-});
-
-test("la barre cachée par la saisie reste cachée au défilement suivant, puis revient en remontant", () => {
-  // Le même enchaînement que js/app.js : positionSaisie, puis des relevés.
-  const s = B.positionSaisie(0, HAUTEUR);
-  let r = B.positionBarre({ y: s.cible, decalage: s.decalage, gabarit: GABARIT }, { y: s.cible, max: 20000, gabarit: GABARIT, hauteur: HAUTEUR });
-  egale(HAUTEUR, r.decalage, "cachée une fois la page défilée");
-  r = B.positionBarre(r.etat, { y: s.cible + 80, max: 20000, gabarit: GABARIT, hauteur: HAUTEUR });
-  egale(HAUTEUR, r.decalage, "en descendant : toujours cachée");
-  r = B.positionBarre(r.etat, { y: s.cible + 80 - 30, max: 20000, gabarit: GABARIT, hauteur: HAUTEUR });
-  egale(HAUTEUR - 30, r.decalage, "en remontant : elle revient au fil du doigt");
+test("une valeur illisible ne donne jamais NaN, ni une compensation négative", () => {
+  egale(0, B.compensationRetour(undefined, 104, 4), "position absente");
+  egale(0, B.compensationRetour("abc", 104, 4), "position illisible");
+  egale(4, B.compensationRetour(300, undefined, 4), "hauteur absente : la marge seule");
+  egale(0, B.compensationRetour(300, -50, -4), "des hauteurs négatives ne font pas défiler vers le haut");
+  egale(108, B.compensationRetour("300", "104", "4"), "des nombres lus d'un attribut (texte)");
 });
 
 groupe("Bibliotheque.annonceQuota() — la limite de 150 séries");
