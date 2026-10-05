@@ -49,39 +49,46 @@ window.Bibliotheque = (() => {
   }
 
   /**
-   * Un relevé du défilement, pour les filtres qui se cachent quand on
-   * descend et reviennent quand on remonte.
+   * Où est la barre des filtres, quand elle suit le défilement ? (demande de l'utilisateur : elle
+   * descend et remonte à la même vitesse que la page — descendre beaucoup puis remonter un peu ne
+   * laisse voir que « Trier par », pas les filtres.)
    *
-   * `etat` est ce qu'a laissé le relevé précédent (null au premier) ;
-   * `mesure` : { y, max, gabarit } — la position, sa borne, et la somme
-   * des hauteurs qui peuvent décaler la page. Rend le nouvel état, si les
-   * filtres sont collés, et l'action : "montrer", "cacher" ou null.
+   * `etat` est ce qu'a laissé le relevé précédent (null au premier) ; `mesure` : { y, max, gabarit,
+   * hauteur } — la position, sa borne, la somme des hauteurs qui peuvent décaler la page, et la
+   * hauteur de la barre (filet compris). Rend le nouvel état, `decalage` — de combien de pixels la
+   * barre est remontée derrière la barre du haut : 0 = entière, `hauteur` = cachée — et si elle est
+   * collée (tout en haut de la page, elle est dans la page : ni fond, ni décalage).
+   *
+   * La barre avance de la distance parcourue, ni plus ni moins, dans les deux sens, et reste où l'on
+   * s'arrête : à moitié montrée, elle le reste. Jamais plus remontée que la page ne l'est
+   * (`decalage <= y`) : plus bas, on verrait un trou entre elle et les séries.
    */
-  function suiviDefilement(etat, mesure, seuil) {
+  function positionBarre(etat, mesure) {
     /* Bornée : le rebond élastique d'iOS, en haut comme en bas de page,
        ferait croire à un changement de sens. */
     const y = Math.min(Math.max(mesure.y, 0), Math.max(0, mesure.max));
-    /* Une hauteur a changé depuis le relevé précédent (un groupe de
-       filtres déplié, liste filtrée, cartes dessinées pour la première fois en
-       remontant) : le navigateur a pu décaler le défilement d'autant,
-       pour garder sous les yeux ce qu'on regardait. Ce décalage n'est pas
-       un geste — pris pour une descente, il cachait les filtres qu'on
-       venait de déplier. On repart simplement de la position actuelle. */
+    const hauteur = Math.max(0, Number(mesure.hauteur) || 0);
+    /* Une hauteur a changé depuis le relevé précédent (un groupe de filtres déplié, liste filtrée,
+       cartes dessinées pour la première fois en remontant) : le navigateur a pu décaler le
+       défilement d'autant, pour garder sous les yeux ce qu'on regardait. Ce décalage n'est pas un
+       geste : la barre ne bouge pas avec lui. On repart simplement de la position actuelle. */
     const delta = etat && etat.gabarit === mesure.gabarit ? y - etat.y : 0;
-    let parcouru = etat ? etat.parcouru : 0; // dans le sens actuel : > 0 en descendant
-    let action = null;
+    let decalage = (etat ? etat.decalage : 0) + delta;
+    decalage = Math.min(Math.max(decalage, 0), hauteur, y);
+    return { etat: { y, decalage, gabarit: mesure.gabarit }, decalage, collee: y > 0 };
+  }
 
-    if (y <= 0) {
-      // Tout en haut, les filtres sont à leur place.
-      parcouru = 0;
-      action = "montrer";
-    } else if (delta !== 0) {
-      if ((delta > 0) !== (parcouru > 0)) parcouru = 0;
-      parcouru += delta;
-      if (parcouru > seuil) action = "cacher";
-      else if (parcouru < -seuil) action = "montrer";
-    }
-    return { etat: { y, parcouru, gabarit: mesure.gabarit }, collee: y > 0, action };
+  /**
+   * Un champ de recherche touché sur un téléphone : la barre se cache, et la liste monte à sa place
+   * (demande de l'utilisateur : le clavier prend la moitié de l'écran, les filtres n'ont rien à y
+   * faire). La barre n'est qu'une couche collée : cachée, la place qu'elle occupe dans la page reste
+   * vide tant que la page n'a pas défilé d'au moins sa hauteur. Rend { decalage, cible } : la
+   * barre toute remontée, et le défilement à poser (jamais moins que maintenant : on ne redescend
+   * pas qui avait déjà défilé plus loin).
+   */
+  function positionSaisie(y, hauteur) {
+    const h = Math.max(0, Number(hauteur) || 0);
+    return { decalage: h, cible: Math.max(Number(y) || 0, h) };
   }
 
   /**
@@ -417,6 +424,25 @@ window.Bibliotheque = (() => {
   }
 
   /**
+   * Compare deux séries pour l'affichage entier, `a` et `b` : { pertinence, tome, restants, ordre } —
+   * la pertinence pour la recherche (0 sans recherche), puis le tri choisi, puis le rang d'origine,
+   * qui départage les ex aequo : le résultat ne change pas d'un affichage à l'autre.
+   */
+  function comparerVue(tri, a, b) {
+    return (a.pertinence - b.pertinence) || comparerTri(tri, a, b) || (a.ordre - b.ordre);
+  }
+
+  /**
+   * Ce qui fait « une autre vue » : les filtres de statut et d'image, les favoris, la recherche et
+   * le tri. La grille ne se range qu'à ce moment-là (demande de l'utilisateur : « l'ordre des séries
+   * doit se mettre à jour uniquement quand on change le tri » — ou un filtre, ou la recherche) ; une
+   * série qu'on modifie reste où elle est. Ouvrir un groupe de filtres n'y change rien. Rend un
+   * texte : deux vues égales ont la même empreinte, quel que soit l'ordre où on a posé les filtres.
+   */
+  function empreinteVue(statuts, images, favoris, q, tri) {
+    return JSON.stringify([[...statuts].sort(), [...images].sort(), !!favoris, q, tri]);
+  }
+  /**
    * Le total de la bibliothèque (demande de l'utilisateur : « voir le nombre de mes séries, le
    * nombre de livres que j'ai lu au total »). `tomes` : le tome lu de chaque série. Retourne
    * { series, tomes, texte } ; le texte est celui de statistiques_series() (includes/carte.php),
@@ -434,10 +460,10 @@ window.Bibliotheque = (() => {
   }
 
   return {
-    voisine, suiviDefilement, annonceQuota, texteQuotaRecherche, pagesSeries,
+    voisine, positionBarre, positionSaisie, annonceQuota, texteQuotaRecherche, pagesSeries,
     signatureCouverture, ficheModifiee, toucheSuppression, champDeSaisie,
     panneauApres, panneauMemorise, aucunFiltre, bordsDefilement, placerBulle,
-    TRIS, CRITERES, triValide, critereTri, sensTri, triInverse, triApres, etatBoutonTri, comparerTri, statistiques,
+    TRIS, CRITERES, triValide, critereTri, sensTri, triInverse, triApres, etatBoutonTri, comparerTri, comparerVue, empreinteVue, statistiques,
   };
 })();
 
@@ -478,11 +504,10 @@ window.Bibliotheque = (() => {
   const $ligneOutils = document.getElementById("ligne-outils");
   const $stats = document.getElementById("stats-bibliotheque");
   let recherche = "";
-  // La grille est-elle actuellement rangée par pertinence plutôt que
-  // dans l'ordre du serveur ? Voir appliquerVue().
-  let ordreBouscule = false;
-  /* Rang d'origine des séries créées depuis le chargement. Négatif et
-     décroissant : elles se placent en tête, la plus récente devant. */
+  /* Le rang d'origine de chaque série (`_ordre`) : son index dans l'ordre du serveur au chargement
+     (le plus récemment modifié d'abord), ou, pour une série créée ou modifiée depuis, un rang
+     négatif et décroissant qui la place en tête, la plus récente devant. La grille ne se range
+     qu'au changement de vue (voir appliquerVue()) : entre-temps, ce rang ne déplace rien. */
   let ordreNouveau = -1;
   /* Les pages de la bibliothèque (SERIES_PAGES_MAX séries chacune, posé par
      index.php) : combien sont affichées, et pour quelle vue. Changer de filtre ou
@@ -490,7 +515,7 @@ window.Bibliotheque = (() => {
      modifiée, supprimée) garde le nombre de pages affichées. 0 = pas de découpage. */
   const SERIES_PAR_PAGE = parseInt(document.body.dataset.seriesParPage || "0", 10) || 0;
   let pagesAffichees = 1;
-  let signatureVue = "";
+  let signatureVue = ""; // l'empreinte de la vue qu'on a rangée en dernier (Bibliotheque.empreinteVue)
   const $plusSeries = document.getElementById("plus-series");
   const $btnPlus = document.getElementById("btn-plus-series");
   const $plusInfo = document.getElementById("plus-info");
@@ -561,13 +586,14 @@ window.Bibliotheque = (() => {
     const prep = L.prepareRecherche(recherche);
     let visibles = 0;
 
-    /* Tant qu'aucune recherche n'a bousculé la grille, l'ordre du DOM EST
-       l'ordre d'origine (le plus récemment modifié d'abord, trié par le
-       serveur). On le note au passage : c'est lui qu'on restituera, et
-       c'est aussi ce qui donne sa place à une carte ajoutée entre-temps. */
-    if (!ordreBouscule) {
-      toutes.forEach((c, i) => { c._ordre = i; });
-    }
+    /* Au premier affichage, l'ordre du DOM EST l'ordre d'origine (le plus récemment modifié
+       d'abord, trié par le serveur) : on en note le rang. Une carte posée depuis en a déjà un
+       (poserCarte()). */
+    toutes.forEach((c, i) => { if (c._ordre === undefined) c._ordre = i; });
+
+    /* Une autre vue ? Alors, et alors seulement, la grille se range (plus bas). */
+    const signature = B.empreinteVue(filtresStatut, filtresImage, favorisSeuls, prep.q, tri);
+    const vueChangee = signature !== signatureVue;
 
     toutes.forEach((c) => {
       if (c._recherche === undefined) indexer(c);
@@ -587,33 +613,31 @@ window.Bibliotheque = (() => {
       if (visible) visibles++;
     });
 
-    /* Deux choses bousculent l'ordre du serveur : une recherche (par pertinence) et le tri
-       choisi (tomes restants, tome lu). Les deux se combinent : la pertinence passe d'abord,
-       le tri départage les séries qui répondent aussi bien, et l'ordre d'origine départage les
-       ex aequo — la série modifiée en dernier reste devant. */
-    if (prep.q || tri !== "recentes") {
-      toutes
-        .filter((c) => !c.classList.contains("hidden"))
-        .map((c) => [prep.q ? pertinence(c, prep.q) : 0, donneesTri(c), c._ordre, c])
-        .sort((a, b) => a[0] - b[0] || B.comparerTri(tri, a[1], b[1]) || a[2] - b[2])
-        .forEach(([, , , c]) => $grid.appendChild(c));
-      ordreBouscule = true;
-    } else if (ordreBouscule) {
-      // Recherche effacée et tri par défaut : la grille retrouve exactement l'ordre du serveur.
-      toutes
-        .slice()
-        .sort((a, b) => a._ordre - b._ordre)
-        .forEach((c) => $grid.appendChild(c));
-      ordreBouscule = false;
+    /* L'ordre : la PERTINENCE d'abord (recherche), puis le tri choisi, puis le rang d'origine, qui
+       départage les ex aequo (Bibliotheque.comparerVue). Calculé quand la VUE change — un filtre,
+       la recherche, le tri — et non à chaque appel : une série qu'on vient de modifier (→, ←, la
+       fiche, l'étoile) garde sa place, même si son nouveau tome devrait la mener ailleurs, au lieu
+       de disparaître sous les yeux (demande de l'utilisateur). Elle prend sa vraie place au
+       prochain changement de vue, ou au rechargement de la page. */
+    if (vueChangee) {
+      const rangees = toutes
+        .map((c) => ({
+          ...donneesTri(c),
+          pertinence: prep.q && !c.classList.contains("hidden") ? pertinence(c, prep.q) : 0,
+          carte: c,
+        }))
+        .sort((a, b) => B.comparerVue(tri, a, b))
+        .map((x) => x.carte);
+      // Rien à déplacer quand l'ordre est déjà le bon : une frappe qui ne change pas le classement.
+      if (rangees.some((c, i) => c !== toutes[i])) rangees.forEach((c) => $grid.appendChild(c));
     }
 
-    /* Les pages. L'ordre du DOM est maintenant définitif (pertinence ou ordre du
-       serveur) : on garde les `limite` premières cartes qui répondent, et les
-       suivantes se cachent comme n'importe quelle carte filtrée (« hidden »), si
-       bien que la navigation au clavier ne les voit pas non plus. Une vue
-       différente — autre filtre, autre recherche — repart de la première page. */
-    const signature = JSON.stringify([[...filtresStatut].sort(), [...filtresImage].sort(), favorisSeuls, prep.q, tri]);
-    if (signature !== signatureVue) {
+    /* Les pages. L'ordre du DOM est maintenant celui qu'on voit (rangé à l'instant, ou laissé
+       tel quel) : on garde les `limite` premières cartes qui répondent, et les suivantes se
+       cachent comme n'importe quelle carte filtrée (« hidden »), si bien que la navigation au
+       clavier ne les voit pas non plus. Une vue différente — autre filtre, autre recherche,
+       autre tri — repart de la première page. */
+    if (vueChangee) {
       signatureVue = signature;
       pagesAffichees = 1;
     }
@@ -804,16 +828,21 @@ window.Bibliotheque = (() => {
   /**
    * Remplace (ou ajoute) une carte à partir du HTML renvoyé par le serveur.
    *
-   * L'ordre affiché — du plus récemment modifié au plus ancien — vient du
-   * tri serveur au chargement de la page. Les deux cas n'appellent pas le
+   * L'ordre affiché vient du tri choisi (par défaut, du plus récemment
+   * modifié au plus ancien, celui du serveur) et ne se recalcule qu'au
+   * changement de vue (appliquerVue()). Les deux cas n'appellent pas le
    * même traitement :
    *
-   *   - une série MODIFIÉE garde sa place. La voir sauter ailleurs pendant
-   *     qu'on vient de la changer est désagréable, et on la perd des yeux ;
+   *   - une série MODIFIÉE garde sa place, QUEL QUE SOIT le tri. La voir
+   *     sauter ailleurs pendant qu'on vient de la changer est désagréable,
+   *     et on la perd des yeux. Elle reçoit un rang de tête (`remonte`) :
+   *     « Plus récent » la mènera devant au prochain changement de vue,
+   *     comme le serveur au rechargement. `remonte` vaut faux quand rien
+   *     n'a modifié la série côté serveur (son statut seul a changé) ;
    *   - une série NOUVELLE se met en TÊTE. Ajoutée en bas d'une liste de
    *     cent cinquante, il fallait recharger la page pour la retrouver.
    */
-  function poserCarte(html, id, focus = null) {
+  function poserCarte(html, id, focus = null, remonte = true) {
     const gabarit = document.createElement("div");
     gabarit.innerHTML = html.trim(); // HTML produit et échappé par carte.php
     const nouvelle = gabarit.firstElementChild;
@@ -830,9 +859,9 @@ window.Bibliotheque = (() => {
 
     const ancienne = $grid.querySelector('.card[data-id="' + CSS.escape(String(id)) + '"]');
     if (ancienne) {
-      // Une carte remplacée occupe la place de celle qu'elle remplace,
-      // y compris dans l'ordre d'origine mémorisé.
-      nouvelle._ordre = ancienne._ordre;
+      // Une carte remplacée occupe la place de celle qu'elle remplace ; son
+      // rang, lui, dit où le tri la mettra : en tête, si elle vient d'être modifiée.
+      nouvelle._ordre = remonte ? ordreNouveau-- : ancienne._ordre;
       const etaitActive = ancienne === carteActive;
       // Le focus peut aussi être DANS la carte sans qu'on l'ait signalé :
       // la couverture qui suit le tome la remplace après coup, en
@@ -1343,11 +1372,15 @@ window.Bibliotheque = (() => {
     rangee.querySelectorAll(".filter-btn").forEach((b) => surveillerBords.observe(b));
   });
 
-  /* ---------------- Les filtres reviennent quand on remonte ----------------
+  /* ---------------- La barre suit le défilement ----------------
      Sortis de la barre du haut (ils y prenaient jusqu'au tiers d'un
-     téléphone), les filtres obligeaient à remonter tout en haut pour en
-     changer. Ils se collent maintenant sous elle : ils s'y effacent quand
-     on descend, et reviennent dès qu'on remonte un peu. */
+     téléphone), les filtres se collent sous elle. La barre — les filtres, et
+     « Trier par » dessous — avance exactement de la distance qu'on fait défiler
+     (demande de l'utilisateur) : elle s'efface en descendant et revient en remontant,
+     à la même vitesse que la page. Descendre beaucoup puis remonter un peu ne
+     montre que « Trier par », rangée du bas ; il faut remonter de toute sa hauteur
+     pour revoir les filtres. Arrêtée en route, elle reste à moitié visible. (Avant :
+     tout ou rien, après dix pixels dans un sens.) */
 
   const $topbar = document.querySelector(".topbar");
   const $barreFiltres = document.getElementById("barre-filtres");
@@ -1366,23 +1399,39 @@ window.Bibliotheque = (() => {
   mesurerBarres.observe($topbar);
   mesurerBarres.observe($barreFiltres);
 
-  /* Quelques pixels dans le même sens avant de basculer : le pouce qui se
-     relève fait souvent remonter la page d'un rien. */
-  const SEUIL_SENS = 10;
-  let suivi = null; // le relevé précédent, voir Bibliotheque.suiviDefilement
+  let suivi = null; // le relevé précédent, voir Bibliotheque.positionBarre
   let suiviPrevu = false;
+  let decalagePose = -1;
 
-  function suivreDefilement() {
-    suiviPrevu = false;
-    const r = B.suiviDefilement(suivi, {
+  /* Le filet du bas compris : cachée, la barre ne laisse rien dépasser sous la barre du haut. */
+  function hauteurBarre() {
+    return $barreFiltres.offsetHeight + 2;
+  }
+
+  function mesureBarre() {
+    return {
       y: window.scrollY,
       max: racine.scrollHeight - window.innerHeight,
       gabarit: $main.offsetHeight + $topbar.offsetHeight,
-    }, SEUIL_SENS);
+      hauteur: hauteurBarre(),
+    };
+  }
+
+  /** Remonte la barre de `d` pixels derrière celle du haut : une propriété CSS (style.css), posée
+      en CSSOM — la CSP refuse l'attribut `style`. */
+  function poserDecalage(d) {
+    if (d === decalagePose) return;
+    decalagePose = d;
+    $barreFiltres.style.setProperty("--decalage", d + "px");
+  }
+
+  function suivreDefilement() {
+    suiviPrevu = false;
+    const r = B.positionBarre(suivi, mesureBarre());
     suivi = r.etat;
-    // Tout en haut, les filtres sont à leur place : ni fond, ni cache.
+    // Tout en haut, la barre est à sa place : ni fond, ni décalage.
     $barreFiltres.classList.toggle("collee", r.collee);
-    if (r.action) $barreFiltres.classList.toggle("escamotee", r.action === "cacher");
+    poserDecalage(r.decalage);
   }
 
   window.addEventListener("scroll", () => {
@@ -1391,9 +1440,44 @@ window.Bibliotheque = (() => {
     requestAnimationFrame(suivreDefilement);
   }, { passive: true });
 
-  /* Maj+Tab depuis la grille y revient alors qu'ils sont cachés derrière
-     la barre du haut : ils doivent se montrer. */
-  $barreFiltres.addEventListener("focusin", () => $barreFiltres.classList.remove("escamotee"));
+  /* Maj+Tab depuis la grille y revient alors qu'elle est cachée derrière
+     la barre du haut : elle doit se montrer. */
+  $barreFiltres.addEventListener("focusin", () => {
+    if (suivi) suivi.decalage = 0;
+    poserDecalage(0);
+  });
+
+  /* ---------------- Téléphone : taper une recherche cache la barre ----------------
+     Le clavier prend la moitié de l'écran : les filtres n'ont rien à y faire, ce sont les séries
+     qu'on veut voir (demande de l'utilisateur). Toucher le champ remonte donc la barre, et la
+     liste monte à sa place (Bibliotheque.positionSaisie). Faire défiler la page ferme le clavier
+     (commun.js) et, en REMONTANT, ramène la barre au fil du doigt, comme n'importe quand : la
+     fermer autrement (« OK », un toucher à côté) ne la ramène pas, seule la remontée le fait
+     (sauf une page devenue trop courte pour défiler : plus rien à cacher, la barre revient).
+     Que sur un écran tactile : au clavier d'un ordinateur, rien ne change. */
+
+  const ecranTactile = window.matchMedia("(pointer: coarse)");
+
+  $search.addEventListener("focus", () => {
+    if (!ecranTactile.matches) return;
+    /* De quoi défiler d'au moins la hauteur de la barre, même quand la recherche ne laisse que
+       deux séries : sans cela la place de la barre resterait vide au-dessus d'elles (style.css). */
+    racine.classList.add("saisie");
+    const s = B.positionSaisie(window.scrollY, hauteurBarre());
+    if (s.cible > window.scrollY) window.scrollTo({ top: s.cible, behavior: "instant" });
+    const m = mesureBarre();
+    const r = B.positionBarre({ y: m.y, decalage: s.decalage, gabarit: m.gabarit }, m);
+    suivi = r.etat;
+    $barreFiltres.classList.toggle("collee", r.collee);
+    poserDecalage(r.decalage);
+  });
+  $search.addEventListener("blur", () => {
+    racine.classList.remove("saisie");
+    /* Sans cette place en plus, une page raccourcie par la recherche ramène le défilement en haut :
+       la barre, cachée, laisserait un trou. Elle n'est jamais plus remontée que la page (positionBarre),
+       donc elle se montre alors d'elle-même — on ne la ramène pas autrement, seule la remontée le fait. */
+    suivreDefilement();
+  });
 
   /** Un filtre changé en cours de liste : la nouvelle se lit depuis son
       début — et non d'un endroit quelconque, ou de sa fin si elle est
@@ -2070,20 +2154,20 @@ window.Bibliotheque = (() => {
     try {
       const r = await L.api("serie.nouveautes", {});
       const trouvees = r.nouveaux || [];
+      /* Sous « Plus récent » et sans recherche, une série au tome nouveau passe en tête, comme au
+         rechargement : le serveur vient de lui donner la date de modification la plus récente, et
+         c'est sa place. Sous un autre tri, ou pendant une recherche, elle ne bouge pas (l'ordre ne
+         change qu'au changement de vue) : poserCarte() lui a déjà donné son rang de tête. */
+      const ordreDuServeur = tri === "recentes" && !L.prepareRecherche(recherche).q;
       trouvees.forEach((n) => {
         poserCarte(n.carte, n.id);
-        /* En tête, comme au rechargement : le serveur vient de lui donner la
-           date de modification la plus récente. */
         const carte = $grid.querySelector('.card[data-id="' + CSS.escape(String(n.id)) + '"]');
-        if (carte) {
-          carte._ordre = ordreNouveau--;
-          $grid.prepend(carte);
-        }
+        if (carte && ordreDuServeur) $grid.prepend(carte);
       });
       /* Une série qui change de statut (« En attente », « Terminée ») : sa
          carte est refaite, sans rien annoncer — la pastille le dit. Elle garde
          sa place : seul un tome NOUVEAU remonte une série en tête. */
-      (r.changements || []).forEach((c) => poserCarte(c.carte, c.id));
+      (r.changements || []).forEach((c) => poserCarte(c.carte, c.id, null, false));
       // Un tome nouveau fait repasser « En cours » une série qui attendait : les compteurs des filtres suivent.
       majCompteurs(r.compte);
       if (trouvees.length || (r.changements || []).length) appliquerVue();

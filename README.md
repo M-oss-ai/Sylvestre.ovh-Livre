@@ -315,7 +315,7 @@ tomes lus — la somme du « Vous avez lu le tome x » de chaque série. Elle se
 bouge (→, ←, création, suppression), sans appel au serveur, et disparaît tant qu'il n'y a aucune série.
 
 **« Trier par »** est une rangée de boutons **dans la barre des filtres** : comme eux, elle tient sur une ligne qui
-coulisse sur le côté, et se cache quand on descend pour revenir quand on remonte. Trois boutons — **Plus récent**,
+coulisse sur le côté, et suit le défilement de la page (voir plus bas). Trois boutons — **Plus récent**,
 **Tome**, **Tomes restants**. Le bouton choisi est allumé et porte une **flèche** : **↑ du plus petit au plus grand**,
 **↓ du plus grand au plus petit**. **Recliquer le bouton allumé inverse le sens.** Aucun texte d'explication : l'ordre se
 lit dans l'infobulle du bouton (survol, ou lecteur d'écran).
@@ -333,6 +333,19 @@ lue plus loin que MangaDex ne connaît — la série vient **en dernier**, quel 
 carte dit « il en reste N » ou « à jour » sous « Vous avez lu le tome x » ; le reste du temps, elle ne prend pas
 la place. Le tri se combine avec les filtres et la recherche (la pertinence passe d'abord), se **mémorise avec
 les filtres** (ce n'est pas un filtre : « Toutes » ne le remet pas à zéro) et ramène en haut de la liste.
+
+**L'ordre ne bouge que quand vous le demandez.** Modifier une série (→, ←, la fiche, l'étoile) ne la déplace pas, même
+si son nouveau tome devrait la mener ailleurs : elle ne la quitte pas des yeux. Elle prend sa vraie place quand vous
+changez le tri, un filtre ou la recherche, ou quand vous rechargez la page — sous « Plus récent », elle passe alors
+devant. Une série créée se met en tête.
+
+**La barre des filtres suit le défilement.** Elle remonte et redescend exactement de la distance dont vous faites
+défiler la page : en descendant beaucoup puis en remontant un peu, vous ne voyez d'abord que « Trier par », les filtres
+reviennent en remontant davantage. Arrêtée en route, elle reste à moitié visible.
+
+**Sur téléphone, taper dans la recherche cache la barre**, pour que les séries tiennent au-dessus du clavier. Faire
+défiler la page vers le haut ferme le clavier et ramène la barre au fil du doigt ; fermer le clavier autrement ne la
+ramène pas.
 ### Une série qu'on modifie ne disparaît pas sous vos yeux
 
 Retirer une série des favoris pendant que le filtre « Favoris » est

@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1253 tests : 1020 PHP en 59 fichiers, 233 JavaScript)
+php tests/lancer.php              # toute la suite (1286 tests : 1032 PHP en 60 fichiers, 254 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -343,7 +343,7 @@ page ne mélange pas :
 - **Le tri** : une rangée `nav#tri-rangee.filters.filters-tri` **DANS la barre collée** (`#barre-filtres`), sous les
   filtres : « TRIER PAR », puis trois boutons dans cet ordre — **« Plus récent », « Tome », « Tomes restants »**.
   Comme les autres rangées de filtres elle tient sur UNE ligne qui coulisse sur le côté, avec le même fondu
-  (`bordsDefilement()` / `majBords()` la prennent en compte), et elle se cache avec la barre quand on descend. Les
+  (`bordsDefilement()` / `majBords()` la prennent en compte), et elle suit la barre dans son défilement (voir « La barre suit le défilement »). Les
   boutons réutilisent `.filter-btn` (un peu plus petits, `.tri-btn`) mais vivent HORS de `#filters` : aucun écouteur de
   filtre ne les voit. La rangée est cachée tant qu'il n'y a aucune série, comme la ligne du total.
 - **« Tomes lus » = la somme de `tome_actuel`** (« Vous avez lu le tome 5 » en compte 5) — une hypothèse : on ne sait
@@ -380,9 +380,11 @@ page ne mélange pas :
   - `comparerTri()` est pure et testée ; **une série aux tomes restants inconnus passe TOUJOURS après, dans les deux
     sens** (la placer en tête du « moins d'abord » ferait croire qu'il ne lui reste rien à lire), et les ex aequo gardent
     l'ordre du serveur (`_ordre`).
-- **Dans `appliquerVue()`** : le tri et la recherche bousculent ensemble l'ordre du serveur (`ordreBouscule`) ; la
-  PERTINENCE passe d'abord, le tri départage, l'ordre d'origine départage les ex aequo. Le tri est dans la signature de
-  la vue (changer de tri repart de la première page), et les boutons ramènent en haut de la liste comme un filtre.
+- **Dans `appliquerVue()`** : la PERTINENCE passe d'abord (recherche), le tri départage, le rang d'origine (`_ordre`)
+  départage les ex aequo (`Bibliotheque.comparerVue()`, pure, testée). **Mais la grille ne se range qu'au changement de
+  VUE** — voir « L'ordre ne se recalcule qu'au changement de vue » plus bas. Le tri est dans l'empreinte de la vue
+  (`Bibliotheque.empreinteVue()` : changer de tri repart de la première page), et les boutons ramènent en haut de la
+  liste comme un filtre.
 - **Ce n'est pas un filtre** : « Toutes » ne le remet pas à zéro, aucune exception de carte ne s'efface. Il se mémorise
   avec les filtres (`tri`, même clé, par compte) et `triValide()` ramène une mémoire illisible à `recentes`.
 - **« il en reste N » / « à jour »** : un `<span class="card-restants">` dans `.card-progress`, **caché par défaut** et
@@ -500,6 +502,68 @@ sert la marge de défilement des cartes). `.barre-filtres` reste le
 PREMIER élément de `<main class="bibliotheque">`, qui n'a pas de
 rembourrage haut : c'est ce qui la fait coller dès le premier pixel, et
 ce qui permet au script de la dire « collée » dès que `scrollY > 0`.
+
+**La barre suit le défilement au pixel près** (demande de l'utilisateur : « ils descendent et remontent à la même
+vitesse que le scroll, donc si je descends beaucoup et que je remonte un peu, je vois seulement les tris et pas les
+filtres » ; avant, c'était tout ou rien : après 10 px dans un sens, elle disparaissait ou revenait d'un bloc).
+- `Bibliotheque.positionBarre(etat, mesure)` (pure, testée) rend le `decalage` : de combien de pixels la barre —
+  les filtres, puis « Trier par » dessous — est remontée derrière la barre du haut, de 0 (entière) à `hauteur`
+  (cachée, filet compris : `offsetHeight + 2`). Elle avance de la distance parcourue, dans les deux sens, et **reste où
+  l'on s'arrête** : à moitié montrée, elle le reste (pas de retour automatique). Elle **n'est jamais plus remontée que la
+  page ne l'est** (`decalage <= y`) : sans cela, un trou apparaîtrait entre elle et les séries quand une liste raccourcit.
+- **Elle sort par le BAS** : cachée, c'est son bas qui touche le bas de la barre du haut, et elle glisse vers le bas à
+  partir de là en remontant. « Trier par » se voit donc avant les filtres : il faut remonter de toute sa hauteur
+  (104 px) pour revoir les deux. (Mesuré : 40 px de remontée laissent voir 26 px de « Trier par » et aucun filtre.)
+- **Posé en `--decalage`** sur `#barre-filtres`, en CSSOM (la CSP refuse l'attribut `style`) ; `style.css` en fait
+  `transform: translateY(calc(var(--decalage, 0px) * -1))`, **sans transition** : un délai la ferait traîner derrière le
+  doigt. Plus de `.escamotee`, de `suiviDefilement()` ni de `SEUIL_SENS` : `tests/cas/ordre_barre_test.php` le garde.
+- Tout en haut de la page, le décalage est 0 et la barre n'est pas « collée ». Maj+Tab dans la barre la montre entière.
+- **Non vérifié sur un iPhone ni un Android réels.** C'est du JavaScript sur l'évènement `scroll` : sur téléphone, la
+  barre peut retarder d'une image sur le défilement (le défilement lui-même est géré à part par le navigateur).
+
+**Sur téléphone, taper dans la recherche cache la barre** (demande de l'utilisateur : « on ne doit pas voir les
+filtres, ils doivent être remontés pour voir les séries ; quand on monte ça fait partir le clavier virtuel et ça affiche
+les filtres »). Écran tactile seulement (`(pointer: coarse)`, comme les autres gestes tactiles) : sur ordinateur, rien.
+- **Toucher le champ** (`focus`) : `html.saisie`, puis `Bibliotheque.positionSaisie()` (pure, testée) — la barre toute
+  remontée, et la page défile d'au moins sa hauteur, pour que la liste monte à la place de la barre (la barre n'est
+  qu'une couche collée : cachée, sa place resterait vide). `html.saisie main.bibliotheque { min-height }` garantit que ce
+  défilement est possible même quand la recherche ne laisse que deux séries.
+- **Quitter le champ** (`blur`) : la classe est retirée et la position relue (`suivreDefilement()`). **La barre ne revient
+  PAS d'office** (choix de l'utilisateur) : fermer le clavier par « OK » ou un toucher à côté la laisse cachée. Faire
+  défiler la page vers le haut la ramène, au fil du doigt, et ferme déjà le clavier (`js/commun.js`, `touchmove`) ; vers le
+  bas, le clavier se ferme et elle reste cachée. Seule exception : une page devenue trop courte pour défiler (peu de
+  résultats) — plus rien à cacher, la barre revient.
+- **Vérifié dans le navigateur** (375 px, vrais clics, sauf que la molette seule fait défiler) : un tap dans le champ
+  descend la page de 106 px, la première série passe de 257 à 151 px du haut ; avec un seul résultat, la page reste
+  défilable et la barre cachée ; fermeture sur page courte : la barre revient ; sur page longue : elle reste cachée, une
+  molette vers le haut la ramène ; ordinateur : rien ne bouge. **Non vérifié : un vrai clavier virtuel** (iOS, Android) —
+  le navigateur intégré n'en a pas, et un `focus()` par script ne déclenche rien tant que la page n'a pas le focus
+  système (`document.hasFocus()` faux) : il faut un vrai clic. Safari sur iPhone décale aussi la zone visible quand le
+  clavier s'ouvre, ce qui peut déplacer les éléments collés : à regarder sur un vrai téléphone.
+
+**L'ordre ne se recalcule qu'au changement de vue** (demande de l'utilisateur : « l'ordre des séries doit se mettre à
+jour uniquement quand on change le tri ; si je modifie le tome je ne veux pas qu'il disparaisse »). Ce que font les
+séries, tri « Tome » ou « Tomes restants » compris :
+- **Une série MODIFIÉE reste où elle est** (→, ←, la fiche, l'étoile) : la carte se met à jour sur place, même si son
+  nouveau tome devrait la mener ailleurs. Elle prend sa vraie place quand la VUE change — un autre tri, un filtre
+  (statut, image, favoris, « Toutes »), la recherche — ou au rechargement de la page. Ouvrir ou fermer un groupe de
+  filtres ne change pas la vue. Le total « N séries · N tomes lus », lui, reste à jour en direct.
+- **`Bibliotheque.empreinteVue()`** (pure, testée) dit ce qui fait « une autre vue » : filtres de statut et d'image,
+  favoris, recherche, tri. `appliquerVue()` compare l'empreinte à la précédente (`vueChangee`) ; **le rangement du DOM n'a
+  lieu que dans ce bloc**, et les pages (« Afficher plus ») repartent de la première dans le même cas. Plus de
+  `ordreBouscule` : le rang `_ordre` n'est noté qu'une fois (au premier affichage), l'ancien code le réécrivait à chaque
+  appel et aurait effacé le rang de tête d'une série modifiée.
+- **Le rang `_ordre`** : l'index du serveur au chargement ; négatif et décroissant pour une série créée ou modifiée depuis
+  (`ordreNouveau--`, la plus récente devant). **`poserCarte(html, id, focus, remonte = true)`** : une série modifiée garde sa
+  place physique mais reçoit un rang de tête, pour que « Plus récent » la mène devant au prochain rangement, comme le
+  serveur au rechargement ; `remonte = false` quand le serveur n'a rien modifié (le relevé des nouveaux tomes qui ne fait
+  que changer un statut : « En attente », « Terminée » — elle garde son rang). Une série NOUVELLE se met toujours en tête,
+  quel que soit le tri, jusqu'au prochain rangement.
+- **Le relevé des nouveaux tomes** (`verifierNouveautes()`) ne remonte physiquement une série que sous « Plus récent » et
+  sans recherche (`ordreDuServeur`) : c'est alors sa place. Sous un autre tri, ou pendant une recherche, elle ne bouge
+  pas (son rang de tête est posé quand même).
+- **Vérifié dans le navigateur** : tri « Tome ↓ », Berserk du tome 49 à 50 puis 51 sous « Lue plus loin » (50) : il ne bouge
+  pas ; un clic sur « Tome » deux fois, et il passe devant ; « Plus récent » le met en tête, « Plus ancien » en dernier.
 
 **Un message après redirection passe par `flash()`, jamais par l'URL.**
 `?mdp=1` réaffichait « Mot de passe modifié » à chaque rechargement.
@@ -1304,9 +1368,11 @@ cartes sont en `content-visibility: auto` avec une taille estimée
 remontant une page rechargée en cours de liste, chaque rangée dessinée
 pour la première fois décale `scrollY` de +111 px, alors qu'on remonte.
 Déplier un groupe de filtres (« Statut ▾ », « Image ▾ ») fait de même. Lu comme un geste, ce recalage cachait
-les filtres au moment précis où on les voulait. `suivreDefilement()`
+les filtres au moment précis où on les voulait. `positionBarre()`
 (`js/app.js`) ignore donc le mouvement de toute image où la hauteur de
-`<main>` ou de la barre a changé.
+`<main>` ou de la barre a changé : la barre ne bouge pas avec lui. (Effet voulu : le premier défilement qui suit
+un changement de hauteur — par exemple la première molette après le chargement, quand les cartes prennent leur
+vraie taille — peut ne pas faire bouger la barre ; le suivant, si.)
 
 **`content-visibility: auto` et WebKit.** Sur iPhone (tous les
 navigateurs d'iOS sont WebKit), une carte insérée par le script restait

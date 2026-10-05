@@ -209,5 +209,5 @@ test('le tri est mémorisé avec les filtres, et lu par triValide() : une mémoi
 });
 
 test('changer de tri revient à la première page de la liste', function () use ($js) {
-    motif('~prep\.q, tri\]\)~', $js, 'le tri est dans la signature de la vue : une autre vue repart de la page 1');
+    contient('B.empreinteVue(filtresStatut, filtresImage, favorisSeuls, prep.q, tri)', $js, 'le tri est dans l empreinte de la vue : une autre vue repart de la page 1, et se range');
 });

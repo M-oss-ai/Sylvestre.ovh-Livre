@@ -82,11 +82,11 @@ test('js/app.js : le découpage se fait APRÈS le filtre et la recherche, et rep
     $js = source_series_pages('js/app.js');
     $vue = substr($js, (int) strpos($js, 'function appliquerVue()'), 6500);
     contient('B.pagesSeries(visibles, SERIES_PAR_PAGE, pagesAffichees)', $vue, 'la taille vient de la fonction pure, testée');
-    contient('JSON.stringify([[...filtresStatut].sort(), [...filtresImage].sort(), favorisSeuls, prep.q, tri])', $vue,
-        'la vue = filtres + recherche + tri : une autre vue repart de la première page');
+    contient('B.empreinteVue(filtresStatut, filtresImage, favorisSeuls, prep.q, tri)', $vue,
+        'la vue = filtres + recherche + tri (fonction pure, testée dans tests/js) : une autre vue repart de la première page');
     contient('pagesAffichees = 1;', $vue, 'remise à une page');
-    vrai(strpos($vue, 'ordreBouscule = false;') < strpos($vue, 'B.pagesSeries('),
-        'après le classement par pertinence : on garde les PREMIÈRES séries dans l\'ordre définitif');
+    vrai(strpos($vue, 'const rangees') < strpos($vue, 'B.pagesSeries('),
+        'après le rangement par pertinence et par tri : on garde les PREMIÈRES séries dans l\'ordre définitif');
     contient('c.classList.add("hidden")', $vue, 'les séries au-delà se cachent comme les séries filtrées : le clavier ne les voit pas');
     contient('$grid.classList.toggle("hidden", visibles === 0);', $vue, 'la grille et « aucune série » se décident sur les séries qui RÉPONDENT, pas sur celles qu\'on montre');
 });

@@ -513,7 +513,7 @@ test('un changement de statut est rendu à l\'écran, sans rien annoncer', funct
     contient("'changements' => \$changements", $bloc, 'leur carte est renvoyée');
     contient("'compte'      => compter_series(\$pdo, \$mon_id)", $bloc, 'avec les compteurs des filtres');
     $js = source('js/app.js');
-    contient('(r.changements || []).forEach((c) => poserCarte(c.carte, c.id));', $js, 'le navigateur refait ces cartes');
+    contient('(r.changements || []).forEach((c) => poserCarte(c.carte, c.id, null, false));', $js, 'le navigateur refait ces cartes, sans les remonter : leur date de modification n a pas bougé côté serveur');
     contient('majCompteurs(r.compte);', substr($js, (int) strpos($js, 'async function verifierNouveautes')), 'et met les compteurs à jour');
 });
 

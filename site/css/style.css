@@ -283,10 +283,11 @@ code {
 .filter-btn.status-abandon.active { border-color: var(--abandon); background: var(--abandon-bg); color: var(--abandon); }
 
 /* Les filtres vivent en tête de la page, hors de la barre du haut. Ils se
-   collent sous elle, s'y effacent quand on descend et reviennent dès
-   qu'on remonte (js/app.js). Leur point d'accroche est la hauteur exacte
-   de la barre, que le script mesure ; sans lui, ils glissent simplement
-   dessous, comme avant. */
+   collent sous elle et la barre — les filtres, puis « Trier par » — suit le
+   défilement au pixel près (js/app.js) : elle s'efface en descendant et
+   revient en remontant, à la même vitesse que la page. Leur point d'accroche
+   est la hauteur exacte de la barre, que le script mesure ; sans lui, ils
+   glissent simplement dessous, comme avant. */
 main.bibliotheque { padding-top: 0; }
 
 .barre-filtres {
@@ -298,7 +299,9 @@ main.bibliotheque { padding-top: 0; }
      défilement, sans saut. */
   padding: 14px 0 12px;
   margin-bottom: 4px;
-  transition: transform 0.2s ease;
+  /* De combien elle est remontée derrière la barre du haut : posé par js/app.js (positionBarre),
+     en pixels, à chaque défilement. AUCUNE transition : elle suit la page, pas le temps. */
+  transform: translateY(calc(var(--decalage, 0px) * -1));
 }
 
 /* Collés : un fond opaque, sans quoi les cartes se liraient au travers.
@@ -316,8 +319,10 @@ main.bibliotheque { padding-top: 0; }
   clip-path: inset(0 -100vmax -1px);
 }
 
-/* Cachés derrière la barre du haut, filet compris. */
-.barre-filtres.escamotee { transform: translateY(calc(-100% - 2px)); }
+/* Un champ de recherche touché sur téléphone cache la barre (js/app.js, « la saisie »). Cachée,
+   elle laisse sa place vide dans la page tant que celle-ci n'a pas défilé d'au moins sa hauteur :
+   on s'assure que ce défilement est possible, même quand la recherche ne laisse que deux séries. */
+html.saisie main.bibliotheque { min-height: calc(100vh + var(--hauteur-filtres, 0px) + 8px); }
 
 /* Le total de la bibliothèque (« 42 séries · 318 tomes lus »), sous les filtres. Ce n'est pas un
    filtre : la ligne ne se colle pas, elle défile avec la page. */

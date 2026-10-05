@@ -2,7 +2,7 @@
    js/app.js — la logique pure de la bibliothèque (window.Bibliotheque).
 
    Ce qui se décide sans toucher à la page : la carte voisine au clavier,
-   le suivi du défilement qui cache et ramène les filtres, le groupe de
+   la barre des filtres qui suit le défilement (et se cache pendant la saisie sur téléphone), le groupe de
    filtres déplié, le moment où « Toutes » s allume, les bords qui ont de
    la suite quand une rangée coulisse, les textes des
    quotas, la touche qui supprime et les champs où elle efface du texte,
@@ -68,83 +68,154 @@ test("une carte qui n est plus affichée n a pas de voisine", () => {
   egale(-1, B.voisine(GRILLE, 0, "diagonale"), "direction inconnue");
 });
 
-groupe("Bibliotheque.suiviDefilement() — les filtres reviennent quand on remonte");
+groupe("Bibliotheque.positionBarre() — la barre suit le défilement au pixel près");
 
-const SEUIL = 10;
 const GABARIT = 5000;
+const HAUTEUR = 106; // la barre : deux rangées de filtres, filet compris
 
-/** Enchaîne des positions comme autant de relevés : rend le dernier, et la suite des actions. */
-function derouler(positions, depart = null, gabarit = GABARIT) {
+/** Enchaîne des positions comme autant de relevés : rend le dernier résultat et la suite des décalages. */
+function derouler(positions, depart = null, gabarit = GABARIT, hauteur = HAUTEUR) {
   let etat = depart;
-  const actions = [];
+  const decalages = [];
   let r = null;
   for (const y of positions) {
-    r = B.suiviDefilement(etat, { y, max: 20000, gabarit }, SEUIL);
+    r = B.positionBarre(etat, { y, max: 20000, gabarit, hauteur });
     etat = r.etat;
-    actions.push(r.action);
+    decalages.push(r.decalage);
   }
-  return { r, actions };
+  return { r, decalages };
 }
 
-test("tout en haut, les filtres sont à leur place", () => {
+test("tout en haut, la barre est à sa place : entière, et pas collée", () => {
   const { r } = derouler([0]);
-  egale("montrer", r.action, "montrés");
-  faux(r.collee, "pas collés : ils sont dans la page");
+  egale(0, r.decalage, "aucun décalage");
+  faux(r.collee, "pas collée : elle est dans la page");
 });
 
-test("page rechargée en cours de liste : rien ne bouge au premier relevé", () => {
+test("page rechargée en cours de liste : la barre est entière au premier relevé", () => {
   const { r } = derouler([3000]);
-  estNul(r.action, "aucune action sans mouvement");
-  vrai(r.collee, "collés sous la barre");
+  egale(0, r.decalage, "rien n a bougé encore");
+  vrai(r.collee, "collée sous la barre du haut");
 });
 
-test("en descendant, ils s effacent passé le seuil", () => {
-  const { actions } = derouler([1000, 1005, 1012]);
-  egale([null, null, "cacher"], actions, "5 px : rien ; 12 px : cachés");
+test("en descendant, elle remonte exactement de la distance parcourue", () => {
+  const { decalages } = derouler([1000, 1030, 1070, 1071]);
+  egale([0, 30, 70, 71], decalages, "30 px de défilement : 30 px ; puis 40 de plus : 70 ; puis 1 : 71");
 });
 
-test("en remontant, ils reviennent passé le seuil", () => {
-  const { actions } = derouler([1000, 1100, 1095, 1088]);
-  egale([null, "cacher", null, "montrer"], actions, "5 px vers le haut : rien ; 12 px : de retour");
+test("elle ne remonte pas plus que sa hauteur : cachée, elle reste cachée", () => {
+  const { decalages } = derouler([1000, 1100, 1500, 3000]);
+  egale([0, 100, HAUTEUR, HAUTEUR], decalages, "au plus la hauteur de la barre");
 });
 
-test("les petits allers-retours du pouce ne comptent pas", () => {
-  // Chaque changement de sens repart de zéro : 8 px, puis 8 dans l'autre sens…
-  const { actions } = derouler([1000, 1008, 1000, 1008, 1000]);
-  egale([null, null, null, null, null], actions, "jamais le seuil dans un même sens");
+test("en remontant, elle revient à la même vitesse que la page", () => {
+  const { decalages } = derouler([1000, 1300, 1280, 1250]);
+  egale([0, HAUTEUR, HAUTEUR - 20, HAUTEUR - 50], decalages, "20 px de remontée : 20 px de barre ; 30 de plus : 50");
+});
+
+test("descendre beaucoup puis remonter un peu : seul le bas de la barre se voit, « Trier par » et pas les filtres", () => {
+  const { r } = derouler([1000, 2000, 1960]);
+  egale(66, r.decalage, "remontée de 40 px sur 106");
+  egale(40, HAUTEUR - r.decalage, "il n en reste que 40 px de visibles : le bas de la barre, la rangée du tri");
+  const tout = derouler([1000, 2000, 1960, 1894]);
+  egale(0, tout.r.decalage, "il faut remonter de toute sa hauteur pour revoir les filtres");
+});
+
+test("arrêtée en route, elle reste à moitié visible", () => {
+  const { decalages } = derouler([1000, 1050, 1050, 1050]);
+  egale([0, 50, 50, 50], decalages, "pas de retour automatique à tout caché ni tout montré");
+});
+
+test("un petit mouvement fait bouger la barre d autant, dans les deux sens", () => {
+  const { decalages } = derouler([1000, 1003, 1000, 1008, 1000]);
+  egale([0, 3, 0, 8, 0], decalages, "plus de seuil de dix pixels : chaque pixel compte");
+});
+
+test("elle ne remonte jamais plus que la page : pas de trou entre elle et les séries", () => {
+  // Une hauteur change (liste filtrée, page raccourcie) : le défilement est ramené, la barre suit.
+  const avant = { y: 100, decalage: 100, gabarit: GABARIT };
+  const r = B.positionBarre(avant, { y: 30, max: 20000, gabarit: GABARIT + 900, hauteur: HAUTEUR });
+  egale(30, r.decalage, "décalage ≤ position");
+  const haut = B.positionBarre(avant, { y: 30, max: 20000, gabarit: GABARIT, hauteur: HAUTEUR });
+  egale(30, haut.decalage, "même sans changement de hauteur : 100 − 70 = 30, et jamais plus que y");
 });
 
 test("un décalage dû à une hauteur qui change n est pas un geste", () => {
-  /* Déplier « Image ▾ » agrandit les filtres : le navigateur décale la
-     page d'autant pour garder la même chose sous les yeux. Pris pour une
-     descente, ce décalage cachait les filtres qu'on venait d'ouvrir. */
-  const avant = derouler([1500, 1460]).r.etat; // remontés : filtres montrés
-  const r = B.suiviDefilement(avant, { y: 1507, max: 20000, gabarit: GABARIT + 47 }, SEUIL);
-  estNul(r.action, "47 px de décalage : les filtres restent");
-  egale(1507, r.etat.y, "le relevé repart de la nouvelle position");
-  const suite = B.suiviDefilement(r.etat, { y: 1519, max: 20000, gabarit: GABARIT + 47 }, SEUIL);
-  egale("cacher", suite.action, "une vraie descente ensuite compte normalement");
+  /* Déplier « Image ▾ » agrandit les filtres : le navigateur décale la page d'autant pour
+     garder la même chose sous les yeux. La barre ne doit pas bouger avec ce décalage. */
+  const avant = derouler([1500, 1550]).r.etat; // descendus de 50 px : la barre est remontée de 50
+  const r = B.positionBarre(avant, { y: 1597, max: 20000, gabarit: GABARIT + 47, hauteur: HAUTEUR });
+  egale(50, r.decalage, "47 px de décalage : la barre reste où elle est");
+  egale(1597, r.etat.y, "le relevé repart de la nouvelle position");
+  const suite = B.positionBarre(r.etat, { y: 1607, max: 20000, gabarit: GABARIT + 47, hauteur: HAUTEUR });
+  egale(60, suite.decalage, "une vraie descente ensuite compte normalement");
 });
 
 test("le rebond élastique en haut de page ne compte pas", () => {
   // Sur iPhone, la position passe sous zéro puis revient.
-  const { actions } = derouler([30, -40, 0]);
-  egale("montrer", actions[1], "sous zéro : comme tout en haut");
-  egale("montrer", actions[2], "à zéro : montrés");
+  const { decalages, r } = derouler([60, 100, -40, 0]);
+  egale([0, 40, 0, 0], decalages, "sous zéro : comme tout en haut, la barre est entière");
+  faux(r.collee, "et dans la page");
 });
 
-test("le rebond élastique en bas de page ne ramène pas les filtres", () => {
+test("le rebond élastique en bas de page ne ramène pas la barre", () => {
   // La position dépasse la fin de la page puis y revient : ce retour n'est pas une remontée.
   let etat = null;
   const releve = (y) => {
-    const r = B.suiviDefilement(etat, { y, max: 8000, gabarit: GABARIT }, SEUIL);
+    const r = B.positionBarre(etat, { y, max: 8000, gabarit: GABARIT, hauteur: HAUTEUR });
     etat = r.etat;
-    return r.action;
+    return r.decalage;
   };
   releve(7900);
-  egale("cacher", releve(8000), "on descend jusqu en bas : cachés");
-  estNul(releve(8060), "au-delà de la fin : bornée à la fin, aucun mouvement");
-  estNul(releve(8000), "retour du rebond : toujours rien");
+  egale(100, releve(8000), "on descend jusqu en bas : la barre a suivi");
+  egale(100, releve(8060), "au-delà de la fin : bornée à la fin, aucun mouvement");
+  egale(100, releve(8000), "retour du rebond : toujours rien");
+});
+
+test("la barre qui rétrécit ramène son décalage à sa nouvelle hauteur", () => {
+  const cachee = derouler([1000, 2000]).r.etat; // décalage 106
+  const r = B.positionBarre(cachee, { y: 2000, max: 20000, gabarit: GABARIT, hauteur: 56 });
+  egale(56, r.decalage, "elle reste cachée sans dépasser");
+});
+
+test("sans hauteur connue, rien ne remonte", () => {
+  for (const hauteur of [0, undefined, NaN, -5, "abc"]) {
+    const r = B.positionBarre(null, { y: 500, max: 20000, gabarit: GABARIT, hauteur });
+    const s = B.positionBarre(r.etat, { y: 700, max: 20000, gabarit: GABARIT, hauteur });
+    egale(0, s.decalage, "hauteur " + String(hauteur));
+  }
+});
+
+groupe("Bibliotheque.positionSaisie() — taper une recherche cache la barre");
+
+test("tout en haut : la barre toute remontée, et la page défile de sa hauteur", () => {
+  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie(0, HAUTEUR), "y = 0");
+});
+
+test("un peu défilé : on complète jusqu à la hauteur de la barre", () => {
+  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie(40, HAUTEUR), "y = 40 : la place de la barre n est pas encore sortie");
+});
+
+test("déjà plus loin que sa hauteur : on ne redescend pas", () => {
+  egale({ decalage: HAUTEUR, cible: 900 }, B.positionSaisie(900, HAUTEUR), "la page reste où elle est");
+  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie(HAUTEUR, HAUTEUR), "pile à sa hauteur");
+});
+
+test("une valeur illisible ne donne jamais NaN", () => {
+  egale({ decalage: 0, cible: 0 }, B.positionSaisie(undefined, undefined), "rien de connu");
+  egale({ decalage: 0, cible: 50 }, B.positionSaisie(50, "abc"), "hauteur illisible : rien à cacher");
+  egale({ decalage: HAUTEUR, cible: HAUTEUR }, B.positionSaisie("x", HAUTEUR), "position illisible : 0");
+});
+
+test("la barre cachée par la saisie reste cachée au défilement suivant, puis revient en remontant", () => {
+  // Le même enchaînement que js/app.js : positionSaisie, puis des relevés.
+  const s = B.positionSaisie(0, HAUTEUR);
+  let r = B.positionBarre({ y: s.cible, decalage: s.decalage, gabarit: GABARIT }, { y: s.cible, max: 20000, gabarit: GABARIT, hauteur: HAUTEUR });
+  egale(HAUTEUR, r.decalage, "cachée une fois la page défilée");
+  r = B.positionBarre(r.etat, { y: s.cible + 80, max: 20000, gabarit: GABARIT, hauteur: HAUTEUR });
+  egale(HAUTEUR, r.decalage, "en descendant : toujours cachée");
+  r = B.positionBarre(r.etat, { y: s.cible + 80 - 30, max: 20000, gabarit: GABARIT, hauteur: HAUTEUR });
+  egale(HAUTEUR - 30, r.decalage, "en remontant : elle revient au fil du doigt");
 });
 
 groupe("Bibliotheque.annonceQuota() — la limite de 150 séries");
@@ -722,6 +793,88 @@ test("antisymétrique : a avant b si et seulement si b après a", () => {
   }
 });
 
+groupe("Bibliotheque.comparerVue() — pertinence, puis tri, puis rang d origine");
+
+const vue = (pertinence, tome, restants, ordre) => ({ pertinence, tome, restants, ordre });
+
+/** Le rangement d une liste (ce que fait appliquerVue quand la vue change). */
+const ranger = (tri, series) => series.slice().sort((a, b) => B.comparerVue(tri, a, b)).map((s) => s.nom);
+
+test("la pertinence passe avant le tri", () => {
+  vrai(B.comparerVue("tome-desc", vue(0, 1, null, 5), vue(1, 99, null, 1)) < 0, "titre exact avant titre approchant, même au plus petit tome");
+  vrai(B.comparerVue("restants-asc", vue(2, 1, 0, 0), vue(1, 1, 9, 9)) > 0, "et dans l autre sens");
+});
+
+test("à pertinence égale, le tri choisi décide", () => {
+  vrai(B.comparerVue("tome-desc", vue(0, 30, null, 9), vue(0, 2, null, 0)) < 0, "30 avant 2 sous « Tome ↓ »");
+  vrai(B.comparerVue("tome-asc", vue(0, 30, null, 0), vue(0, 2, null, 9)) > 0, "et l inverse sous « Tome ↑ »");
+});
+
+test("à égalité de tout, le rang d origine départage : le résultat ne change jamais d un affichage à l autre", () => {
+  vrai(B.comparerVue("tome-desc", vue(0, 4, null, 2), vue(0, 4, null, 5)) < 0, "le rang 2 avant le rang 5");
+  egale(0, B.comparerVue("tome-desc", vue(0, 4, null, 2), vue(0, 4, null, 2)), "même rang : égalité");
+});
+
+test("« Plus récent » : le rang d origine seul, et une série modifiée (rang négatif) passe devant", () => {
+  const liste = [
+    { nom: "A", tome: 1, restants: null, ordre: 0, pertinence: 0 },
+    { nom: "B", tome: 2, restants: null, ordre: 1, pertinence: 0 },
+    { nom: "C", tome: 3, restants: null, ordre: -1, pertinence: 0 }, // modifiée depuis le chargement
+  ];
+  egale(["C", "A", "B"], ranger("recentes", liste), "la modifiée en tête, comme le serveur au rechargement");
+  egale(["B", "A", "C"], ranger("recentes-asc", liste), "« Plus ancien » : l inverse");
+});
+
+test("sous un autre tri, une série modifiée prend la place que son nouveau tome lui donne, au prochain rangement", () => {
+  const liste = [
+    { nom: "A", tome: 10, restants: 5, ordre: 0, pertinence: 0 },
+    { nom: "B", tome: 3, restants: 0, ordre: 1, pertinence: 0 },
+    { nom: "C", tome: 25, restants: null, ordre: 2, pertinence: 0 },
+  ];
+  egale(["C", "A", "B"], ranger("tome-desc", liste), "avant");
+  liste[1] = { nom: "B", tome: 40, restants: 0, ordre: -1, pertinence: 0 }; // → jusqu au tome 40
+  egale(["B", "C", "A"], ranger("tome-desc", liste), "après : B est première, d après son nouveau tome");
+});
+
+test("les séries aux tomes restants inconnus restent à la fin, dans les deux sens, recherche comprise", () => {
+  const liste = [
+    { nom: "A", tome: 1, restants: null, ordre: 0, pertinence: 0 },
+    { nom: "B", tome: 1, restants: 3, ordre: 1, pertinence: 0 },
+    { nom: "C", tome: 1, restants: 0, ordre: 2, pertinence: 0 },
+  ];
+  egale(["C", "B", "A"], ranger("restants-asc", liste), "↑");
+  egale(["B", "C", "A"], ranger("restants-desc", liste), "↓");
+});
+
+groupe("Bibliotheque.empreinteVue() — ce qui fait « une autre vue »");
+
+const E = (statuts = [], images = [], favoris = false, q = "", tri = "recentes") => B.empreinteVue(statuts, images, favoris, q, tri);
+
+test("deux vues égales ont la même empreinte, quel que soit l ordre où les filtres ont été posés", () => {
+  egale(E(["cours", "termine"]), E(["termine", "cours"]), "statuts");
+  egale(E([], ["mangadex", "lien"]), E([], ["lien", "mangadex"]), "images");
+  egale(E(new Set(["a", "b"])), E(new Set(["b", "a"])), "des Set, comme dans app.js");
+  egale(E(), E(), "la vue de départ");
+});
+
+test("chaque élément de la vue change l empreinte : un filtre, les favoris, la recherche, le tri", () => {
+  const base = E();
+  vrai(base !== E(["cours"]), "un statut");
+  vrai(base !== E([], ["lien"]), "une image");
+  vrai(base !== E([], [], true), "les favoris");
+  vrai(base !== E([], [], false, "ber"), "la recherche");
+  for (const t of B.TRIS.filter((x) => x !== "recentes")) vrai(base !== E([], [], false, "", t), "le tri " + t);
+});
+
+test("les favoris sont un oui ou un non, pas la valeur qu on a posée", () => {
+  egale(E([], [], true), E([], [], 1), "true et 1");
+  egale(E([], [], false), E([], [], 0), "false et 0");
+});
+
+test("l empreinte ne mélange pas les éléments : un statut n est pas une image", () => {
+  vrai(E(["x"], []) !== E([], ["x"]), "même mot, autre filtre");
+  vrai(E([], [], false, "a b") !== E([], [], false, "ab"), "la recherche garde ses espaces");
+});
 groupe("Bibliotheque.statistiques() — le total de la bibliothèque");
 
 test("le nombre de séries et la somme des tomes lus", () => {
