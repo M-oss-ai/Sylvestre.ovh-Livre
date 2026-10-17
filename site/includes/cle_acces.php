@@ -41,9 +41,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/google.php';      // base64url(), base64url_decoder()
 
-/** Ce que le site sait vérifier : COSE -7 (ES256) et -257 (RS256). */
-const CLE_ALGOS = [-7 => 'ES256', -257 => 'RS256'];
-
 /** Longueur maximale de l'identifiant d'une clé, en octets (la norme en admet 1023). */
 const CLE_ID_MAX = 512;
 

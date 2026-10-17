@@ -1,6 +1,6 @@
 <?php
 /* =====================================================================
-   carte_html(), serie_a_venir() et serie_fin_etiquette() — le bout des tomes.
+   carte_html() et serie_fin_etiquette() — le bout des tomes.
 
    Une série arrivée au dernier tome paru passe « En attente » (elle continue)
    ou « Terminée » (finie, ou arrêtée) — includes/nouveautes.php — et sa carte
@@ -35,31 +35,6 @@ function serie_en_attente(array $modifications = []): array
         'nouveau_tome' => 0,
     ];
 }
-
-groupe('serie_a_venir() — le statut « En attente », et rien d\'autre');
-
-test('« En attente » : le tome suivant n\'existe pas encore', function () {
-    vrai(serie_a_venir(serie_en_attente()), 'en attente');
-    vrai(serie_a_venir(['statut' => 'attente']), 'le statut suffit');
-});
-
-test('tous les autres statuts : non', function () {
-    foreach (['cours', 'envie', 'termine', 'abandon', '', 'inconnu', 'ATTENTE'] as $statut) {
-        faux(serie_a_venir(serie_en_attente(['statut' => $statut])), var_export($statut, true));
-    }
-});
-
-test('une série « En cours » qui serait au bout sans qu\'on le sache n\'est PAS dite en attente', function () {
-    /* On ne prétend rien qu'on ne sache : tant que le statut n'est pas posé
-       (par « → » ou par le relevé), la carte garde son libellé habituel. */
-    faux(serie_a_venir(serie_en_attente(['statut' => 'cours'])), 'en cours, tome lu = dernier tome connu');
-    faux(serie_a_venir(serie_en_attente(['statut' => 'cours', 'dernier_tome' => 0])), 'en cours, dernier tome inconnu');
-});
-
-test('une ligne sans statut ni les colonnes des nouveaux tomes : non', function () {
-    faux(serie_a_venir([]), 'aucune clé');
-    faux(serie_a_venir(['tome_actuel' => 3]), 'sans statut');
-});
 
 groupe('carte_html() — la pastille, la couverture et la mention dans le corps de la carte');
 
