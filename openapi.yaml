@@ -1,0 +1,538 @@
+openapi: 3.0.3
+info:
+  title: Ma Bibliothèque Manga — API
+  version: 1.0.0
+  description: |
+    API JSON pour lire et modifier SA bibliothèque depuis un serveur
+    (appel de serveur à serveur : pas de CORS, jamais depuis un navigateur).
+
+    - Authentification : `Authorization: Bearer <jeton>` (jeton créé sur `jeton-api.php`).
+    - HTTPS uniquement (en HTTP : `403 https_requis`).
+    - 60 requêtes par minute et par jeton.
+    - **Aucune suppression** : il n'y a pas de route `DELETE`.
+
+    La version lisible, avec exemples `curl`, est `API.md`.
+servers:
+  - url: https://livre.sylvestre.ovh/api/v1
+    description: Production
+security:
+  - jeton: []
+
+tags:
+  - name: Compte
+  - name: Séries
+  - name: Couvertures
+
+paths:
+  /moi:
+    get:
+      tags: [Compte]
+      operationId: moi
+      summary: Le compte, ses limites et les statuts autorisés
+      description: Sert aussi à vérifier qu'un jeton fonctionne.
+      responses:
+        '200':
+          description: Le compte du jeton.
+          headers:
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [compte]
+                properties:
+                  compte:
+                    $ref: '#/components/schemas/Compte'
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '429': { $ref: '#/components/responses/TropDeRequetes' }
+
+  /series:
+    get:
+      tags: [Séries]
+      operationId: listerSeries
+      summary: Rechercher dans la bibliothèque
+      description: |
+        Trie par modification la plus récente. `q` cherche dans le titre et
+        l'auteur, sans tenir compte de la casse ni des accents ; `%` et `_`
+        y sont du texte.
+      parameters:
+        - name: q
+          in: query
+          description: Texte cherché dans le titre et l'auteur (190 caractères au plus).
+          schema: { type: string, maxLength: 190 }
+        - name: statut
+          in: query
+          schema: { $ref: '#/components/schemas/Statut' }
+        - name: favori
+          in: query
+          description: "`true`/`1` : favoris seulement ; `false`/`0` : les autres."
+          schema: { type: string, enum: ['true', 'false', '1', '0'] }
+        - name: limite
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: decalage
+          in: query
+          description: Nombre de séries à sauter.
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Une page de séries.
+          headers:
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [series, total, limite, decalage]
+                properties:
+                  series:
+                    type: array
+                    items: { $ref: '#/components/schemas/Serie' }
+                  total:
+                    type: integer
+                    description: Toutes les séries qui correspondent, pas seulement la page.
+                  limite: { type: integer }
+                  decalage: { type: integer }
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/TropDeRequetes' }
+    post:
+      tags: [Séries]
+      operationId: creerSerie
+      summary: Ajouter une série
+      description: |
+        Valeurs par défaut, identiques au site : `auteur` vide, `tome_lu` 0,
+        `statut` `cours`, `favori` `false`. L'API ne refuse pas les doublons
+        de titre : chercher avant d'ajouter.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SerieEntree' }
+            example:
+              titre: Vinland Saga
+              auteur: Makoto Yukimura
+              tome_lu: 10
+              statut: cours
+              favori: true
+      responses:
+        '201':
+          description: Série créée.
+          headers:
+            Location:
+              description: Adresse de la série créée.
+              schema: { type: string, format: uri }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SerieReponse' }
+        '400': { $ref: '#/components/responses/CorpsInvalide' }
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '413': { $ref: '#/components/responses/CorpsInvalide' }
+        '415': { $ref: '#/components/responses/CorpsInvalide' }
+        '422':
+          description: Données invalides (`validation`) ou limite de séries atteinte (`quota_series`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erreur' }
+        '429': { $ref: '#/components/responses/TropDeRequetes' }
+
+  /series/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdSerie'
+    get:
+      tags: [Séries]
+      operationId: lireSerie
+      summary: Lire une série
+      responses:
+        '200':
+          description: La série.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SerieReponse' }
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '404': { $ref: '#/components/responses/SerieIntrouvable' }
+        '429': { $ref: '#/components/responses/TropDeRequetes' }
+    patch:
+      tags: [Séries]
+      operationId: modifierSerie
+      summary: Modifier une série
+      description: |
+        N'envoyer que les champs à changer (au moins un). Une seule valeur
+        fausse n'en applique aucune. Rien n'est déduit : avancer `tome_lu`
+        ne change pas le `statut` (le site, lui, passe « Envie » en « En cours »).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SerieModification' }
+            examples:
+              tome:
+                summary: J'ai lu le tome 11
+                value: { tome_lu: 11 }
+              fin:
+                summary: Série terminée, retirée des favoris
+                value: { statut: termine, favori: false }
+      responses:
+        '200':
+          description: La série à jour.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SerieReponse' }
+        '400': { $ref: '#/components/responses/CorpsInvalide' }
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '404': { $ref: '#/components/responses/SerieIntrouvable' }
+        '413': { $ref: '#/components/responses/CorpsInvalide' }
+        '415': { $ref: '#/components/responses/CorpsInvalide' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/TropDeRequetes' }
+
+  /series/{id}/couvertures/recherche:
+    parameters:
+      - $ref: '#/components/parameters/IdSerie'
+    post:
+      tags: [Couvertures]
+      operationId: chercherCouvertures
+      summary: Recherche auto de la couverture du tome suivant
+      description: |
+        Lance la Recherche auto du site (MangaDex). Tome cherché : le tome
+        suivant (`tome_lu + 1`) pour une série `cours` ou `envie`, le tome
+        lu pour une série `termine` ou `abandon`, jamais moins de 1.
+
+        **Lente** : une quinzaine d'appels à MangaDex, plusieurs secondes
+        (jusqu'à ~20 s) — prévoir un délai d'attente d'au moins 60 s.
+        Le quota est celui du compte, partagé avec le site (30 recherches
+        par 2 minutes en forfait standard, aucun en illimité).
+
+        Une liste vide veut dire « rien trouvé », mais peut aussi venir
+        d'une indisponibilité passagère : réessayer une fois.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                tome:
+                  type: integer
+                  minimum: 1
+                  maximum: 9999
+                  description: Impose un autre tome que le calcul par défaut.
+      responses:
+        '200':
+          description: Les propositions, la plus probable en premier.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [serie_id, tome, propositions, recherches, filtre_actif]
+                properties:
+                  serie_id: { type: integer }
+                  tome:
+                    type: integer
+                    description: Le tome effectivement cherché.
+                  propositions:
+                    type: array
+                    items: { $ref: '#/components/schemas/Proposition' }
+                  recherches:
+                    nullable: true
+                    description: Ce qu'il reste dans la tranche ; `null` en forfait illimité.
+                    type: object
+                    properties:
+                      restantes: { type: integer }
+                      max: { type: integer }
+                      fenetre: { type: integer, description: "Durée de la tranche, en secondes." }
+                  filtre_actif:
+                    type: boolean
+                    description: Le filtre de contenu sensible a pu écarter des séries.
+        '400': { $ref: '#/components/responses/CorpsInvalide' }
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '404': { $ref: '#/components/responses/SerieIntrouvable' }
+        '415': { $ref: '#/components/responses/CorpsInvalide' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429':
+          description: |
+            `trop_de_requetes`, `quota_recherche` (quota du compte épuisé) ou
+            `service_occupe` (file MangaDex pleine ; la recherche n'est pas décomptée).
+            Attendre `Retry-After` secondes.
+          headers:
+            Retry-After: { $ref: '#/components/headers/RetryAfter' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Erreur' }
+
+  /series/{id}/couverture:
+    parameters:
+      - $ref: '#/components/parameters/IdSerie'
+    put:
+      tags: [Couvertures]
+      operationId: choisirCouverture
+      summary: Enregistrer la proposition choisie
+      description: |
+        N'accepte qu'une image de `uploads.mangadex.org/covers/<uuid>/`, telle
+        que renvoyée par la recherche : toute autre adresse est refusée.
+        Le lien MangaDex de la série en est déduit. Une image envoyée par
+        fichier sur le site est remplacée.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              additionalProperties: false
+              properties:
+                url:
+                  type: string
+                  maxLength: 500
+                  pattern: '^https://uploads\.mangadex\.org/covers/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[A-Za-z0-9._-]{1,120}\.(jpg|jpeg|png|webp)$'
+            example:
+              url: https://uploads.mangadex.org/covers/d9e2f26e-c762-41a6-bb71-b6ae18cadde2/2c0f5097-45f9-444b-8fcf-99ae9173d387.jpg.512.jpg
+      responses:
+        '200':
+          description: La série, avec sa nouvelle couverture.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SerieReponse' }
+        '400': { $ref: '#/components/responses/CorpsInvalide' }
+        '401': { $ref: '#/components/responses/NonAuthentifie' }
+        '404': { $ref: '#/components/responses/SerieIntrouvable' }
+        '415': { $ref: '#/components/responses/CorpsInvalide' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/TropDeRequetes' }
+
+components:
+  securitySchemes:
+    jeton:
+      type: http
+      scheme: bearer
+      description: |
+        Jeton `lbm_…` (68 caractères) créé sur `https://livre.sylvestre.ovh/jeton-api.php`.
+        Sans expiration, révocable. À garder dans la configuration du serveur,
+        jamais côté navigateur.
+
+  parameters:
+    IdSerie:
+      name: id
+      in: path
+      required: true
+      description: Identifiant d'une série de TON compte (sinon 404).
+      schema: { type: integer, minimum: 1 }
+
+  headers:
+    RetryAfter:
+      description: Secondes à attendre avant de réessayer.
+      schema: { type: integer }
+    RateLimitLimit:
+      description: Requêtes permises par tranche (accompagne chaque réponse authentifiée).
+      schema: { type: integer }
+    RateLimitRemaining:
+      description: Requêtes restantes dans la tranche en cours.
+      schema: { type: integer }
+    RateLimitReset:
+      description: Secondes avant la prochaine tranche.
+      schema: { type: integer }
+
+  schemas:
+    Statut:
+      type: string
+      enum: [cours, envie, termine, abandon]
+      description: |
+        `cours` = En cours, `envie` = Envie, `termine` = Terminée,
+        `abandon` = Abandonnée. « En attente » n'existe pas.
+
+    Serie:
+      type: object
+      required: [id, titre, auteur, tome_lu, tome_suivant, statut, statut_libelle, favori, couverture, cree_le, modifie_le]
+      properties:
+        id: { type: integer }
+        titre: { type: string, maxLength: 190 }
+        auteur:
+          type: string
+          maxLength: 190
+          description: Sous-titre / auteur (une seule colonne sur le site).
+        tome_lu:
+          type: integer
+          minimum: 0
+          maximum: 9999
+          description: Dernier tome lu ; 0 = série non commencée.
+        tome_suivant:
+          type: integer
+          description: "`tome_lu + 1`, calculé."
+        statut: { $ref: '#/components/schemas/Statut' }
+        statut_libelle: { type: string, example: En cours }
+        favori: { type: boolean }
+        couverture:
+          type: object
+          required: [url, source, mangadex_id]
+          properties:
+            url:
+              type: string
+              format: uri
+              nullable: true
+            source:
+              type: string
+              enum: [aucune, mangadex, importee, lien]
+              description: "`importee` = fichier envoyé sur le site ; `lien` = autre adresse https."
+            mangadex_id:
+              type: string
+              format: uuid
+              nullable: true
+              description: Série MangaDex liée (couvertures suivantes en une requête).
+        cree_le: { type: string, format: date-time }
+        modifie_le: { type: string, format: date-time }
+
+    SerieReponse:
+      type: object
+      required: [serie]
+      properties:
+        serie: { $ref: '#/components/schemas/Serie' }
+
+    SerieEntree:
+      type: object
+      additionalProperties: false
+      required: [titre]
+      properties:
+        titre: { type: string, minLength: 1, maxLength: 190 }
+        auteur: { type: string, maxLength: 190, default: '' }
+        tome_lu: { type: integer, minimum: 0, maximum: 9999, default: 0 }
+        statut: { allOf: [{ $ref: '#/components/schemas/Statut' }], default: cours }
+        favori: { type: boolean, default: false }
+
+    SerieModification:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        titre: { type: string, minLength: 1, maxLength: 190 }
+        auteur: { type: string, maxLength: 190, description: '"" pour l''effacer.' }
+        tome_lu: { type: integer, minimum: 0, maximum: 9999 }
+        statut: { $ref: '#/components/schemas/Statut' }
+        favori: { type: boolean, description: "Une valeur, pas une bascule." }
+
+    Proposition:
+      type: object
+      required: [serie, mangadex_id, tome, exacte, url]
+      properties:
+        serie:
+          type: string
+          description: Titre de la série chez MangaDex.
+        mangadex_id: { type: string, format: uuid }
+        tome: { type: integer }
+        exacte:
+          type: boolean
+          description: "`true` : la vraie couverture du tome demandé ; `false` : une couverture de la série, en repli."
+        url:
+          type: string
+          format: uri
+          description: À renvoyer tel quel à `PUT /series/{id}/couverture`.
+
+    Compte:
+      type: object
+      properties:
+        identifiant: { type: string }
+        forfait: { type: string, enum: [standard, illimite] }
+        series: { type: integer }
+        series_max: { type: integer, nullable: true, description: "`null` en forfait illimité." }
+        tome_max: { type: integer }
+        statuts:
+          type: object
+          additionalProperties: { type: string }
+          example: { cours: En cours, envie: Envie, termine: Terminée, abandon: Abandonnée }
+        requetes:
+          type: object
+          properties:
+            max: { type: integer }
+            fenetre: { type: integer, description: Secondes. }
+        recherches_couverture:
+          nullable: true
+          type: object
+          properties:
+            max: { type: integer }
+            fenetre: { type: integer, description: Secondes. }
+
+    Erreur:
+      type: object
+      required: [erreur]
+      properties:
+        erreur:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable — c'est lui que le programme teste.
+              enum:
+                - corps_requis
+                - json_invalide
+                - jeton_invalide
+                - jeton_expire
+                - https_requis
+                - route_inconnue
+                - serie_introuvable
+                - methode_non_autorisee
+                - corps_trop_gros
+                - type_non_supporte
+                - validation
+                - quota_series
+                - trop_de_requetes
+                - trop_d_echecs
+                - quota_recherche
+                - service_occupe
+                - erreur_interne
+            message:
+              type: string
+              description: Pour un humain, en français ; peut changer.
+            champs:
+              type: object
+              additionalProperties: { type: string }
+              description: "Seulement pour `validation` : un message par champ fautif."
+            attente:
+              type: integer
+              description: Secondes à attendre (429).
+
+  responses:
+    NonAuthentifie:
+      description: |
+        `jeton_invalide` (absent, inconnu, mal formé ou révoqué — indiscernables)
+        ou `jeton_expire`. L'application doit s'arrêter et prévenir, pas réessayer en boucle.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string, example: 'Bearer realm="Ma Bibliotheque Manga"' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erreur' }
+    SerieIntrouvable:
+      description: "`serie_introuvable` — la série n'existe pas ou n'est pas à toi (même réponse)."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erreur' }
+    Validation:
+      description: "`validation` — une valeur est refusée ; `champs` dit laquelle."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erreur' }
+          example:
+            erreur:
+              code: validation
+              message: Données invalides.
+              champs:
+                statut: "Doit être l'une de : cours, envie, termine, abandon."
+    CorpsInvalide:
+      description: "`corps_requis`, `json_invalide` (400), `corps_trop_gros` (413, > 16 Ko) ou `type_non_supporte` (415, Content-Type ≠ application/json)."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erreur' }
+    TropDeRequetes:
+      description: |
+        `trop_de_requetes` (60 par minute et par jeton) ou `trop_d_echecs`
+        (trop de jetons refusés depuis cette adresse IP). Attendre `Retry-After` secondes.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Erreur' }

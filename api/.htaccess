@@ -1,0 +1,36 @@
+# =====================================================================
+# API JSON : tout ce qui n'est pas un fichier réel est confié à index.php
+# (/api/v1/series/12 → api/index.php).
+#
+# « RewriteOptions Inherit » : sans lui, les règles de ce dossier
+# remplacent celles du .htaccess racine, dont la redirection vers
+# https://. L'API resterait alors joignable en http://.
+# (index.php refuse de toute façon une requête non chiffrée.)
+# =====================================================================
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteOptions Inherit
+
+    # Chez OVH, PHP tourne en FPM/CGI : Apache ne lui transmet pas
+    # l'en-tête Authorization. On le recopie dans une variable
+    # d'environnement, que PHP lit sous REDIRECT_HTTP_AUTHORIZATION.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Une réponse de l'API ne se met jamais en cache.
+<IfModule mod_headers.c>
+    Header always set Cache-Control "no-store, private"
+</IfModule>
+<IfModule mod_expires.c>
+    ExpiresActive Off
+</IfModule>
+
+# Aucune ouverture à d'autres sites : pas de CORS, volontairement. L'API
+# est appelée de serveur à serveur.

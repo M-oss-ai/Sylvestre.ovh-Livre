@@ -20,7 +20,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (550 tests : 495 PHP en 39 fichiers, 55 JavaScript)
+php tests/lancer.php              # toute la suite (660 tests : 605 PHP en 45 fichiers, 55 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -62,6 +62,12 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 
 `purger.php` est la tâche planifiée : ménage des tables, rattrapage des
 e-mails, et rapport d'activité envoyé à `ADMIN_EMAIL`.
+
+`api/index.php` est l'**API JSON** de serveur à serveur (`/api/v1/…`, voir
+`API.md` et `openapi.yaml`). Elle n'a rien à voir avec `api.php` : pas de
+session, pas de CSRF, un jeton `Authorization: Bearer`. Sa logique vit dans
+`includes/api_v1.php`. `jeton-api.php` est la page où l'on crée et révoque
+les jetons.
 
 ### Le client
 
@@ -157,6 +163,23 @@ l'id posé en `data-compte` sur `<body>`. Une clé commune faisait ouvrir
 qui l'empêche de revenir du cache par « Précédent » après une
 déconnexion (voir « pageshow » dans `js/commun.js`).
 
+**L'API JSON n'ouvre jamais de session.** `api/index.php` définit
+`SANS_SESSION` avant d'inclure `fonctions.php`, qui saute alors
+`session_start()` et la reconnexion par cookie. Aucune page ne le définit :
+`tests/cas/api_sans_session_test.php` garde les deux côtés. Ses jetons sont
+stockés hachés (`jeton_api`), jamais en clair, et jamais écrits au journal.
+
+**L'API n'expose aucune suppression, et n'accepte pour couverture qu'une
+image `uploads.mangadex.org/covers/<uuid>/…`** (`api_couverture_url_acceptee`).
+Ce n'est pas un oubli : un jeton volé ne doit pouvoir ni vider la
+bibliothèque ni faire afficher une adresse choisie par un tiers. Une route
+`DELETE` ou une URL libre se décide avec le propriétaire, pas en passant.
+
+**Les entrées de l'API sont strictes, celles du site corrigent.** Le site
+rabote un titre trop long ou ramène un statut inconnu à « En cours » ; l'API
+répond `422` avec un message par champ. Un programme doit apprendre qu'il se
+trompe. Les statuts viennent de `STATUTS` : ne pas en ajouter un côté API.
+
 ## Les trois freins, et pourquoi ils ne se ressemblent pas
 
 Les confondre a déjà coûté cher. Ils ne protègent pas les mêmes choses.
@@ -167,6 +190,13 @@ Les confondre a déjà coûté cher. Ils ne protègent pas les mêmes choses.
 | `mangadex_attendre_son_tour()` | l'**adresse IP du serveur**, face à MangaDex | File d'attente (`flock`, 250 ms). Ne compte personne, ne sanctionne personne |
 | `couverture_quota()` / `couverture_consommer()` | l'**équité entre comptes** | Règle fixe et annoncée : 30 recherches / 2 min en forfait standard. **Aucun quota en `illimite`** (`couverture_quota()` rend 0) : illimité veut dire illimité, seule la file d'attente l'espace. Aucune escalade |
 
+L'API JSON en ajoute deux, sur le même principe : un compteur de requêtes
+**par jeton** (`API_REQUETES_MAX` par `API_FENETRE` s, sans sanction : colonnes
+`essais`/`fenetre_fin` de `jeton_api`) et un limiteur d'**échecs** par adresse
+IP pour les jetons refusés (`limiteur_echec('api_jeton')`, qui double — c'est de
+la force brute). Sa Recherche auto réutilise `couverture_consommer()` : le
+quota est celui du compte, partagé avec le site.
+
 Le limiteur à peine doublante convient à des mots de passe essayés au
 hasard. L'appliquer à l'usage normal d'une fonctionnalité revient à
 punir quelqu'un qui s'en sert autant qu'elle le permet — ne pas
@@ -174,10 +204,12 @@ recommencer.
 
 ## Base de données
 
-Huit tables : `utilisateur`, `serie`, `jeton_action`,
+Neuf tables : `utilisateur`, `serie`, `jeton_action`,
 `session_persistante`, `tentative_ip`, `mail_file`,
 `recherche_couverture`, `rapport_cron` (une seule ligne : la date du
-dernier rapport du cron).
+dernier rapport du cron), `jeton_api` (les jetons de l'API JSON : une
+ligne par jeton, empreinte sha256, révocable, plusieurs valides à la fois
+pour changer de jeton sans coupure).
 
 `livre.sql` est **entièrement rejouable**. Pour mettre à jour une base
 existante, on rejoue le fichier **en entier** en retirant seulement les
@@ -213,8 +245,10 @@ pour ça : il couvre chaque élément du dossier local (le tableau en tête
 du fichier dit ce qui est servi, ce qui est gardé mais bloqué, et ce qui
 est à supprimer). Entre l'envoi et le ménage, rien de ce qui est arrivé
 en trop n'est lisible. À supprimer ensuite : `tests/`, `.git/`,
-`.env.example`, `.gitignore`, `*.md`, `livre.sql`, et les images de test
-de `uploads/`.
+`.env.example`, `.gitignore`, `*.md`, `*.yaml` (`openapi.yaml`), `livre.sql`,
+et les images de test de `uploads/`. Le dossier `api/` est à envoyer **avec
+son `.htaccess`** (cachée, elle réécrit `/api/v1/…` vers `index.php` et
+transmet l'en-tête `Authorization` que PHP en FPM ne reçoit pas toujours).
 
 **Seule exception, à exclure du transfert lui-même : `.env`.** Le `.env`
 local (base `localhost`) écraserait celui du serveur, et le site perdrait
@@ -240,6 +274,15 @@ réglages SMTP sont vidés (rien ne part).
 Le périmètre est celui des **fonctions pures** : rien qui exige la base
 ou le réseau. `tests/LISEZMOI.md` tient la liste de ce qui est couvert,
 de ce qui ne l'est pas, et pourquoi.
+
+**Seule exception : l'API JSON**, dont `tests/cas/api_v1_http_test.php`
+parle à un vrai serveur (le serveur intégré de PHP, routé par
+`tests/serveur_api.php`) devant une base jetable **`Livre_test`**, créée et
+remplie par `tests/base_de_test.php` à partir de `livre.sql` (qu'il rejoue
+donc à chaque fois : c'est aussi un test du fichier). Le nom est écrit en
+dur : ces tests ne touchent jamais à `Livre`. L'appel réel à MangaDex n'y
+est pas : on vérifie ce qui le précède (jeton, corps, quota) et ce qui le
+suit (choix de la couverture).
 
 Le JavaScript se teste **dans un navigateur**, pas avec Node (que le
 projet n'a pas) : `tests/js/banc.html` charge `commun.js` et `app.js`

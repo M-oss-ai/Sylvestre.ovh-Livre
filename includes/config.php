@@ -739,6 +739,24 @@ define('CRON_TOKEN', env('CRON_TOKEN', ''));
    pratique en développement, mais coûteux sur un disque réseau. */
 define('ASSETS_VERSION', env('ASSETS_VERSION', ''));
 
+/* ---------------------------------------------------------------------
+   API JSON (api/index.php)
+
+   Deux freins distincts, comme pour le reste du site :
+     - API_REQUETES_MAX par tranche de API_FENETRE secondes, PAR JETON : un
+       usage normal, compté sans sanction ni escalade (voir
+       couverture_consommer() pour la même idée) ;
+     - API_ECHECS_MAX jetons refusés par adresse IP, après quoi
+       l'adresse est bloquée API_ECHECS_BLOCAGE secondes (le limiteur
+       d'échecs de fonctions.php : c'est de la force brute).
+   Chaque valeur a un plancher et un plafond : un .env mal rempli ne doit
+   pas pouvoir supprimer la protection.
+   --------------------------------------------------------------------- */
+define('API_REQUETES_MAX', min(10000, max(1, (int) env('API_REQUETES_MAX', '60'))));
+define('API_FENETRE', min(3600, max(10, (int) env('API_FENETRE', '60'))));
+define('API_ECHECS_MAX', min(1000, max(1, (int) env('API_ECHECS_MAX', '10'))));
+define('API_ECHECS_BLOCAGE', min(3600, max(10, (int) env('API_ECHECS_BLOCAGE', '60'))));
+
 /* Fuseau horaire pour les dates affichées */
 date_default_timezone_set('Europe/Paris');
 

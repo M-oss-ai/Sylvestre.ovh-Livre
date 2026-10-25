@@ -22,6 +22,8 @@
 #   .git/, .claude/, .vscode/…     à supprimer      dossiers cachés
 #   README.md, CLAUDE.md, *.md     à supprimer      « .md »
 #   livre.sql, *.sql               à supprimer      « .sql »
+#   openapi.yaml, *.yaml           à supprimer      « .yaml »
+#   api/                           servi            api/.htaccess (l'API JSON)
 #   tests/                         à supprimer      « tests » + son .htaccess
 #
 # (*) Aucune règle d'ici ne protège le .env du SERVEUR contre un envoi :
@@ -65,7 +67,7 @@
 # Un 404 plutôt qu'un 403 : « accès interdit » confirme que le fichier
 # existe, « introuvable » ne dit rien.
 <IfModule mod_alias.c>
-    RedirectMatch 404 (?i)/[^/]+\.(md|sql)$
+    RedirectMatch 404 (?i)/[^/]+\.(md|sql|yaml)$
 </IfModule>
 
 # Les fichiers inclus par PHP (require_once), jamais demandés par un
