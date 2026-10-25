@@ -244,7 +244,7 @@ function carte_html(array $s, bool $lecture_seule = false): string
 
     $image = $couverture !== ''
         ? '<img class="card-cover-img" src="' . e($couverture) . '" alt="' . e($alt) . '" loading="lazy">'
-        : '<span class="no-cover" aria-hidden="true">📕</span>';
+        : '<span class="no-cover" aria-hidden="true"></span>';
 
     $etiquette = $emprunter ? '<div class="next-tag">Tome ' . $suivant . ' à emprunter</div>' : '';
     /* La mention ; et, SEULEMENT quand elle n'a pas de numéro de tome (« En cours de
@@ -315,7 +315,7 @@ function carte_html(array $s, bool $lecture_seule = false): string
                     aria-label="' . ($favori ? 'Retirer' : 'Mettre') . ' &quot;' . e($titre) . '&quot; ' . ($favori ? 'des' : 'en') . ' favori' . ($favori ? 's' : '') . '">'
               . ETOILE_SVG . '</button>
             <button type="button" class="btn-edit" data-action="edit" tabindex="-1"
-                    title="Modifier / gérer la couverture" aria-label="Modifier ' . e($titre) . '">✏️</button>
+                    title="Modifier / gérer la couverture" aria-label="Modifier ' . e($titre) . '">✎</button>
           </div>';
     }
 

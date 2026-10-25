@@ -292,7 +292,7 @@ test('js/app.js : les gestes restés possibles sont fermés', function () {
 test('parametres.php : forfait dit, import et « Vider » désactivés, export intact', function () {
     $page = source('parametres.php');
     motif('/\$bloque\s*= compte_bloque\(\$moi\)/', $page, 'la page sait que le compte est bloqué');
-    contient('<b>Bloqué 🔒</b>', $page, 'la carte Forfait le dit');
+    contient('<b>Bloqué</b>', $page, 'la carte Forfait le dit');
     motif('/id="btn-import-all"[^>]*<\?= \$bloque \? \' disabled\'/', $page, 'l\'import est désactivé');
     motif('/id="btn-clear-library"[^>]*<\?= \$bloque \? \' disabled\'/', $page, '« Vider » est désactivé');
     contient('id="btn-export-all"', $page, 'l\'export reste');

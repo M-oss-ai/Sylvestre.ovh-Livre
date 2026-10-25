@@ -70,7 +70,7 @@ function google_mdp_ouvrir(int $id, string $action): never
     if ($action !== '') {
         noter_confirmation($id, $action);
         journal_securite('google_confirmation', ['utilisateur' => $id, 'action' => $action]);
-        flash('Identité confirmée ✅ — vous avez ' . secondes_lisibles(CONFIRMATION_DUREE)
+        flash('Identité confirmée — vous avez ' . secondes_lisibles(CONFIRMATION_DUREE)
             . ' pour ' . ACTIONS_SENSIBLES[$action] . '.');
     } else {
         connecter($id);   // sans confirmation : chaque action à risque demande de se reconnecter
@@ -123,7 +123,7 @@ $csrf = jeton_csrf();
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Mot de passe — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body class="auth-body">
@@ -131,7 +131,6 @@ $csrf = jeton_csrf();
 <main class="auth-wrap">
   <section class="auth-card">
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📚</p>
       <h1><?= $action !== '' ? 'Confirmez votre identité' : 'Bonjour ' . e($u['identifiant']) ?></h1>
       <p class="hint">Google a confirmé votre identité. Saisissez maintenant votre mot de passe<?= $action !== '' ? ' pour ' . e(ACTIONS_SENSIBLES[$action]) : '' ?>.</p>
     </div>
@@ -149,7 +148,7 @@ $csrf = jeton_csrf();
           <input id="mot_de_passe" name="mot_de_passe" type="password" required autocomplete="current-password"
                  <?= $erreurs ? champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe') : 'autofocus' ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="mot_de_passe"
-                  aria-label="Afficher le mot de passe">👁️</button>
+                  aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?php if ($attente > 0): ?>
           <p class="erreur-champ" id="mot_de_passe-erreur"><?= e($erreurs['mot_de_passe']) ?>

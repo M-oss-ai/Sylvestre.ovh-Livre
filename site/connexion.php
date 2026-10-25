@@ -214,7 +214,7 @@ $csrf = jeton_csrf();
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Connexion — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body class="auth-body" data-csrf="<?= e($csrf) ?>">
@@ -230,7 +230,6 @@ $csrf = jeton_csrf();
       </nav>
     <?php endif; ?>
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📚</p>
       <h1>Ma Bibliothèque</h1>
       <p class="hint">Connectez-vous pour retrouver vos séries.</p>
     </div>
@@ -254,7 +253,7 @@ $csrf = jeton_csrf();
       <form method="post" action="connexion.php">
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
         <input type="hidden" name="renvoyer" value="1">
-        <button type="submit" class="btn btn-ghost full">📬 Renvoyer le lien de confirmation</button>
+        <button type="submit" class="btn btn-ghost full">Renvoyer le lien de confirmation</button>
       </form>
       <div class="settings-divider"></div>
     <?php endif; ?>
@@ -263,7 +262,7 @@ $csrf = jeton_csrf();
       <!-- Étape 1 : COMMENT se connecter. Google authentifie la personne chez
            lui (google.php fait le reste) ; l'adresse e-mail mène au formulaire. -->
       <div class="choix-methode">
-        <a class="btn btn-primary full" href="connexion.php?avec=email">✉️ Continuer avec une adresse e-mail</a>
+        <a class="btn btn-primary full" href="connexion.php?avec=email">Continuer avec une adresse e-mail</a>
         <?= bouton_google('Continuer avec Google') ?>
         <?= bouton_cle_acces() ?>
       </div>
@@ -292,7 +291,7 @@ $csrf = jeton_csrf();
         <div class="password-wrap">
           <input id="mot_de_passe" name="mot_de_passe" type="password" required autocomplete="current-password"<?= $decrit ?><?= $identifiant !== '' ? ' autofocus' : '' ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="mot_de_passe"
-                  aria-label="Afficher le mot de passe">👁️</button>
+                  aria-label="Afficher le mot de passe">Afficher</button>
         </div>
       </div>
 

@@ -565,7 +565,7 @@ function cle_nom(mixed $saisi, ?int $maintenant = null): string
 function bouton_cle_acces(): string
 {
     return '<button type="button" id="btn-cle-acces" class="btn btn-ghost full hidden">'
-        . "🔑 Se connecter avec une clé d'accès</button>"
+        . "Se connecter avec une clé d'accès</button>"
         . '<p class="erreur-champ hidden" id="btn-cle-acces-erreur" role="alert"></p>';
 }
 

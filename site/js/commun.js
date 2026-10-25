@@ -83,7 +83,7 @@ window.Lib = (() => {
   }
 
   /* ---------- Toast ----------
-     Pour les confirmations (« Série ajoutée ✅ ») : les ERREURS d'un
+     Pour les confirmations (« Série ajoutée ») : les ERREURS d'un
      formulaire vont sous leur champ, voir erreurChamp().
 
      La durée suit la longueur du message — 60 ms par caractère, quatre
@@ -217,7 +217,7 @@ window.Lib = (() => {
   /* ---------- Adresse d'image : https uniquement ----------
      La Content-Security-Policy n'accepte que « https: » pour les images,
      et le serveur refuse le reste. Une adresse en http:// s'affichait en
-     image cassée, puis la série s'enregistrait « ✅ »… sans elle. */
+     image cassée, puis la série s'enregistrait avec un message de succès… sans elle. */
   const MESSAGE_URL_REFUSEE = "Seules les adresses d'image en https:// sont acceptées.";
   const urlImageAcceptee = (val) => /^https:\/\/[^\s/]+/i.test(val);
 
@@ -553,7 +553,7 @@ window.Lib = (() => {
         if (!champ) return;
         const visible = champ.type === "text";
         champ.type = visible ? "password" : "text";
-        btn.textContent = visible ? "👁️" : "🙈";
+        btn.textContent = visible ? "Afficher" : "Masquer";
         btn.setAttribute("aria-label", visible ? "Afficher le mot de passe" : "Masquer le mot de passe");
       });
     });
@@ -569,7 +569,6 @@ window.Lib = (() => {
       if (img.classList.contains("card-cover-img")) {
         const repli = document.createElement("span");
         repli.className = "no-cover";
-        repli.textContent = "📕";
         img.replaceWith(repli);
       } else if (img.classList.contains("avatar-img") || img.classList.contains("settings-avatar-img")) {
         img.classList.add("hidden");

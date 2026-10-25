@@ -129,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             unset($_SESSION['google_inscription']);
             connecter($id);
             journal_securite('google_compte_cree', ['utilisateur' => $id]);
-            flash('Bienvenue ' . $identifiant . ' ! Votre compte a été créé avec Google ✅');
+            flash('Bienvenue ' . $identifiant . ' ! Votre compte a été créé avec Google');
             header('Location: index.php');
             exit;
         }
@@ -149,7 +149,7 @@ $csrf = jeton_csrf();
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Créer votre compte — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body class="auth-body">
@@ -157,7 +157,6 @@ $csrf = jeton_csrf();
 <main class="auth-wrap">
   <section class="auth-card">
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📚</p>
       <h1>Presque terminé</h1>
       <p class="hint">Choisissez votre identifiant sur le site.</p>
     </div>
@@ -188,7 +187,7 @@ $csrf = jeton_csrf();
            passe auquel on vient de renoncer. -->
       <details class="ajout-mdp"<?= $mdp_ouvert ? ' open' : '' ?>>
         <summary>
-          <span class="btn btn-ghost full"><span class="si-ferme">🔑 Ajouter un mot de passe</span><span class="si-ouvert">Ne pas ajouter de mot de passe</span></span>
+          <span class="btn btn-ghost full"><span class="si-ferme">Ajouter un mot de passe</span><span class="si-ouvert">Ne pas ajouter de mot de passe</span></span>
           <span class="hint" id="mdp-facultatif">Facultatif : il vous sera demandé après Google, à chaque connexion.</span>
         </summary>
 
@@ -199,7 +198,7 @@ $csrf = jeton_csrf();
                  <?= attributs_regles_mdp() ?> data-identifiant="identifiant"
                  <?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe', 'mdp-facultatif') ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="mot_de_passe"
-                  aria-label="Afficher le mot de passe">👁️</button>
+                  aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
       </div>
@@ -210,7 +209,7 @@ $csrf = jeton_csrf();
           <input id="confirmation" name="confirmation" type="password" autocomplete="new-password" maxlength="<?= MDP_MAX ?>"
                  placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="confirmation"
-                  aria-label="Afficher le mot de passe">👁️</button>
+                  aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
       </div>

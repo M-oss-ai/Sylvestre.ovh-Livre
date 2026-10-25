@@ -55,7 +55,7 @@ $flash = flash_prendre();
 <title>Ma Bibliothèque Manga</title>
 <meta name="description" content="Gérez votre collection de mangas : séries, tomes, statuts de lecture.">
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <!-- L'application installable (écran d'accueil) : indispensable aux notifications sur
      iPhone, qui n'en propose qu'à un site ajouté à l'écran d'accueil. -->
 <link rel="manifest" href="manifest.webmanifest">
@@ -81,7 +81,7 @@ $flash = flash_prendre();
      .barre-filtres). -->
 <header class="topbar">
   <div class="topbar-row">
-    <h1>📚 Ma Bibliothèque</h1>
+    <h1>Ma Bibliothèque</h1>
     <a id="btn-account" class="avatar-btn" href="parametres.php" aria-label="Paramètres du compte">
       <?php if ($photo !== ''): ?>
         <img class="avatar-img" src="<?= e($photo) ?>" alt="">
@@ -93,7 +93,6 @@ $flash = flash_prendre();
 
   <div class="search-row">
     <div class="search-wrap">
-      <span class="search-icon" aria-hidden="true">🔎</span>
       <!-- Texte indicatif court : le champ partage désormais sa rangée avec
            le « ＋ », et la version longue était coupée sur téléphone. -->
       <input id="search" type="search" placeholder="Titre ou auteur…" autocomplete="off" aria-label="Rechercher un titre ou un auteur">
@@ -222,13 +221,11 @@ $flash = flash_prendre();
   </div>
 
   <div id="empty-collection" class="empty-state<?= $series ? ' hidden' : '' ?>">
-    <p class="empty-emoji">📖</p>
     <p>Votre bibliothèque est vide pour l'instant.</p>
     <button class="btn btn-primary<?= $bloque ? ' hidden' : '' ?>" id="btn-add-first" type="button">Ajouter votre première série</button>
   </div>
 
   <div id="empty-search" class="empty-state hidden">
-    <p class="empty-emoji">🔍</p>
     <p>Aucune série ne correspond à votre recherche.</p>
   </div>
 </main>
@@ -300,7 +297,6 @@ $flash = flash_prendre();
         <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Déposer ou choisir une image">
           <img id="cover-preview" class="cover-preview hidden" alt="Aperçu de la couverture">
           <div id="cover-placeholder" class="cover-placeholder">
-            <span class="cover-icon" aria-hidden="true">🖼️</span>
             <span class="indice-souris">Glissez-déposez une image ici<br>ou utilisez les options ci-dessous</span>
             <span class="indice-tactile">Appuyez ici pour choisir une photo</span>
           </div>
@@ -314,13 +310,13 @@ $flash = flash_prendre();
           <input id="f-image-url" name="couverture_url" type="url" placeholder="https://…" inputmode="url" maxlength="500">
           <input type="hidden" name="couverture_retiree" id="f-cover-removed" value="0">
           <div class="cover-actions-buttons">
-            <button type="button" id="btn-search-cover" class="btn btn-ghost small">🔎 Recherche auto</button>
+            <button type="button" id="btn-search-cover" class="btn btn-ghost small">Recherche auto</button>
             <label class="btn btn-ghost small file-label">
-              📁 Choisir un fichier
+              Choisir un fichier
               <input id="f-image-file" name="couverture_fichier" type="file" accept="image/*" class="visually-hidden">
             </label>
-            <button type="button" id="btn-cover-linked" class="btn btn-ghost small hidden">🖼️ Image MangaDex</button>
-            <button type="button" id="btn-cover-unlink" class="btn btn-ghost small hidden" title="Garde cette image, mais arrête de la faire suivre automatiquement les tomes">🔓 Délier de MangaDex</button>
+            <button type="button" id="btn-cover-linked" class="btn btn-ghost small hidden">Image MangaDex</button>
+            <button type="button" id="btn-cover-unlink" class="btn btn-ghost small hidden" title="Garde cette image, mais arrête de la faire suivre automatiquement les tomes">Délier de MangaDex</button>
             <button type="button" id="btn-remove-cover" class="btn btn-ghost small danger-text">Retirer l'image</button>
           </div>
         </div>

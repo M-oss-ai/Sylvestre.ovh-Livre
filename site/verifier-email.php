@@ -54,7 +54,7 @@ if (!$compte) {
         $pdo->prepare('UPDATE utilisateur SET email_verifie = 1 WHERE id = ?')
             ->execute([(int) $compte['id']]);
         consommer_jeton_action((int) $compte['jeton_id']);
-        $titre   = 'E-mail confirmé ✅';
+        $titre   = 'E-mail confirmé';
         $message = 'Votre adresse e-mail est confirmée. Vous pouvez vous connecter.';
 
     } else {
@@ -77,7 +77,7 @@ if (!$compte) {
             $pdo->prepare('UPDATE utilisateur SET email = ?, email_verifie = 1 WHERE id = ?')
                 ->execute([$nouvelle, (int) $compte['id']]);
             journal_securite('email_change', ['utilisateur' => (int) $compte['id']]);
-            $titre   = 'Adresse e-mail modifiée ✅';
+            $titre   = 'Adresse e-mail modifiée';
             $message = 'Votre compte utilise désormais cette adresse, et elle est confirmée.';
         }
     }
@@ -92,7 +92,7 @@ $csrf = jeton_csrf();
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?= e($titre) ?> — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body class="auth-body">
@@ -100,7 +100,6 @@ $csrf = jeton_csrf();
 <main class="auth-wrap">
   <section class="auth-card">
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📚</p>
       <h1><?= e($titre) ?></h1>
       <p class="hint"><?= e($message) ?></p>
     </div>
