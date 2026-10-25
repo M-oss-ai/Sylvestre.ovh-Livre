@@ -201,7 +201,8 @@ function google_page_action(string $action): string
         'compte.profil'                           => 'parametres.php#profil',
         'compte.motdepasse', 'compte.supprimer_mdp',
         'compte.cle_creer'                        => 'parametres.php#securite',
-        default                                   => 'parametres.php#donnees',
+        'api.jeton'                               => 'jeton-api.php',
+        default                                  => 'parametres.php#donnees',
     };
 }
 

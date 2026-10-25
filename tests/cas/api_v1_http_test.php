@@ -662,4 +662,33 @@ test('le journal ne contient jamais un jeton', function () use ($u, $A) {
     sans(str_repeat('f', 64), $tous, 'le jeton refusé non plus');
 });
 
+groupe('Compte en consultation seule (forfait « bloque »)');
+
+test('il lit sa bibliothèque mais ne peut rien écrire, ni chercher chez MangaDex', function () use ($u, $bd, $creer) {
+    $K = compte_de_test($bd, 'bloque');
+    $s = $creer(['titre' => 'Avant le blocage'], $K['jeton']);
+    $bd->prepare("UPDATE utilisateur SET forfait = 'bloque', raison_blocage = 'Abus constaté' WHERE id = ?")->execute([$K['id']]);
+
+    egale(200, appel_api($u, 'GET', '/api/v1/moi', $K['jeton'])['code'], '/moi reste lisible');
+    egale(200, appel_api($u, 'GET', '/api/v1/series', $K['jeton'])['code'], 'la liste reste lisible');
+    egale(200, appel_api($u, 'GET', '/api/v1/series/' . $s['id'], $K['jeton'])['code'], 'une série reste lisible');
+
+    foreach ([
+        ['POST', '/api/v1/series', ['titre' => 'Nouvelle']],
+        ['PATCH', '/api/v1/series/' . $s['id'], ['tome_lu' => 9]],
+        ['POST', '/api/v1/series/' . $s['id'] . '/couvertures/recherche', null],
+        ['PUT', '/api/v1/series/' . $s['id'] . '/couverture',
+            ['url' => 'https://uploads.mangadex.org/covers/a1b2c3d4-0000-4000-8000-0123456789ab/x.jpg']],
+    ] as [$m, $chemin, $corps]) {
+        $r = appel_api($u, $m, $chemin, $K['jeton'], $corps);
+        egale(403, $r['code'], $m . ' ' . $chemin . ' refusé');
+        egale('compte_bloque', $r['json']['erreur']['code'], 'code stable');
+        contient('Abus constaté', $r['json']['erreur']['message'], 'la raison de l\'administrateur est dite');
+    }
+
+    $m = appel_api($u, 'GET', '/api/v1/series/' . $s['id'], $K['jeton'])['json']['serie'];
+    egale(['Avant le blocage', 0], [$m['titre'], $m['tome_lu']], 'rien n\'a changé');
+    egale(1, appel_api($u, 'GET', '/api/v1/series', $K['jeton'])['json']['total'], 'aucune série créée');
+});
+
 $arreter_tout();

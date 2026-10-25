@@ -47,7 +47,10 @@ bibliothèque (pas la supprimer). Il est :
 
 1. Connecte-toi sur le site, puis ouvre **`https://livre.sylvestre.ovh/jeton-api.php`**.
 2. Donne un nom au jeton (ex. « App PWA — serveur »), saisis ton mot de passe,
-   clique **Créer un jeton**.
+   clique **Créer un jeton**. Créer un jeton est une action sensible du site,
+   comme changer d'e-mail : un compte **Google** doit d'abord se reconnecter
+   avec Google (et retaper son mot de passe, s'il en a un), puis dispose de
+   10 minutes pour créer le jeton.
 3. Copie-le tout de suite : il commence par `lbm_` et fait 68 caractères.
    Il ne sera plus jamais affiché.
 4. Range-le dans la configuration **du serveur** de l'app (`.env`, variable
@@ -121,6 +124,7 @@ Aucune erreur ne contient de détail interne (SQL, chemin, trace).
 | 401 | `jeton_invalide` | jeton absent, inconnu, mal formé ou révoqué (volontairement indiscernables) |
 | 401 | `jeton_expire` | le jeton a une date d'expiration dépassée (n'arrive pas avec un jeton normal) |
 | 403 | `https_requis` | requête en HTTP clair |
+| 403 | `compte_bloque` | le compte est en **consultation seule** (forfait « bloqué ») : toute écriture et toute Recherche auto sont refusées, la lecture reste permise. Le message dit la raison donnée par l'administrateur |
 | 404 | `route_inconnue` | adresse inconnue |
 | 404 | `serie_introuvable` | la série n'existe pas **ou n'est pas à toi** |
 | 405 | `methode_non_autorisee` | mauvaise méthode ; l'en-tête `Allow` liste les bonnes |
