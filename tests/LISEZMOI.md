@@ -221,7 +221,7 @@ continuent.
 - `vider_journal_test()` — repart d'un journal vide.
 - `executer_php($script, $arguments)` — lance un script en
   sous-processus et rend `['sortie' => …, 'code' => …]`.
-- `CHEMIN_PROJET` — la racine du projet.
+- `CHEMIN_PROJET` — la racine du dépôt ; `CHEMIN_SITE` — son dossier `site/`, ce qu'on envoie par FTP.
 
 ---
 

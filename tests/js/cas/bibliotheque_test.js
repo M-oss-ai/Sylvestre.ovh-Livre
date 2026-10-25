@@ -64,83 +64,93 @@ test("une carte qui n est plus affichée n a pas de voisine", () => {
   egale(-1, B.voisine(GRILLE, 0, "diagonale"), "direction inconnue");
 });
 
-groupe("Bibliotheque.suiviDefilement() — les filtres reviennent quand on remonte");
+groupe("Bibliotheque.positionBarre() — la barre des filtres suit la page");
 
-const SEUIL = 10;
 const GABARIT = 5000;
+const HAUTEUR = 100;
 
-/** Enchaîne des positions comme autant de relevés : rend le dernier, et la suite des actions. */
+/** Enchaîne des positions comme autant de relevés : rend le dernier, et la suite des décalages. */
 function derouler(positions, depart = null, gabarit = GABARIT) {
   let etat = depart;
-  const actions = [];
+  const decalages = [];
   let r = null;
   for (const y of positions) {
-    r = B.suiviDefilement(etat, { y, max: 20000, gabarit }, SEUIL);
+    r = B.positionBarre(etat, { y, max: 20000, gabarit, hauteur: HAUTEUR });
     etat = r.etat;
-    actions.push(r.action);
+    decalages.push(r.decalage);
   }
-  return { r, actions };
+  return { r, decalages };
 }
 
-test("tout en haut, les filtres sont à leur place", () => {
+test("tout en haut, la barre est à sa place", () => {
   const { r } = derouler([0]);
-  egale("montrer", r.action, "montrés");
-  faux(r.collee, "pas collés : ils sont dans la page");
+  egale(0, r.decalage, "entière");
+  faux(r.collee, "pas collée : elle est dans la page");
 });
 
 test("page rechargée en cours de liste : rien ne bouge au premier relevé", () => {
   const { r } = derouler([3000]);
-  estNul(r.action, "aucune action sans mouvement");
-  vrai(r.collee, "collés sous la barre");
+  egale(0, r.decalage, "aucun décalage sans mouvement");
+  vrai(r.collee, "collée sous la barre du haut");
 });
 
-test("en descendant, ils s effacent passé le seuil", () => {
-  const { actions } = derouler([1000, 1005, 1012]);
-  egale([null, null, "cacher"], actions, "5 px : rien ; 12 px : cachés");
+test("en descendant, elle remonte de la distance parcourue", () => {
+  const { decalages } = derouler([1000, 1030, 1070]);
+  egale([0, 30, 70], decalages, "ni plus ni moins que la page");
 });
 
-test("en remontant, ils reviennent passé le seuil", () => {
-  const { actions } = derouler([1000, 1100, 1095, 1088]);
-  egale([null, "cacher", null, "montrer"], actions, "5 px vers le haut : rien ; 12 px : de retour");
+test("elle ne dépasse jamais sa hauteur : cachée, elle reste cachée", () => {
+  const { decalages } = derouler([1000, 1300]);
+  egale([0, HAUTEUR], decalages, "plafonnée à la hauteur de la barre");
 });
 
-test("les petits allers-retours du pouce ne comptent pas", () => {
-  // Chaque changement de sens repart de zéro : 8 px, puis 8 dans l'autre sens…
-  const { actions } = derouler([1000, 1008, 1000, 1008, 1000]);
-  egale([null, null, null, null, null], actions, "jamais le seuil dans un même sens");
+test("en remontant, elle redescend à la même vitesse", () => {
+  const { decalages } = derouler([1000, 1300, 1260, 1200]);
+  egale([0, HAUTEUR, 60, 0], decalages, "40 px vers le haut : 40 px montrés");
+});
+
+test("à moitié montrée, elle le reste là où l on s arrête", () => {
+  const { decalages } = derouler([1000, 1040, 1040, 1040]);
+  egale([0, 40, 40, 40], decalages, "pas de mouvement, pas de changement");
+});
+
+test("jamais plus remontée que la page ne l est", () => {
+  const { decalages } = derouler([0, 30]);
+  egale([0, 30], decalages, "decalage <= y : pas de trou sous elle");
 });
 
 test("un décalage dû à une hauteur qui change n est pas un geste", () => {
   /* Déplier « Image ▾ » agrandit les filtres : le navigateur décale la
      page d'autant pour garder la même chose sous les yeux. Pris pour une
      descente, ce décalage cachait les filtres qu'on venait d'ouvrir. */
-  const avant = derouler([1500, 1460]).r.etat; // remontés : filtres montrés
-  const r = B.suiviDefilement(avant, { y: 1507, max: 20000, gabarit: GABARIT + 47 }, SEUIL);
-  estNul(r.action, "47 px de décalage : les filtres restent");
+  const avant = derouler([1500, 1460]).r.etat;
+  const r = B.positionBarre(avant, { y: 1507, max: 20000, gabarit: GABARIT + 47, hauteur: HAUTEUR });
+  egale(avant.decalage, r.decalage, "47 px de décalage : la barre ne bouge pas");
   egale(1507, r.etat.y, "le relevé repart de la nouvelle position");
-  const suite = B.suiviDefilement(r.etat, { y: 1519, max: 20000, gabarit: GABARIT + 47 }, SEUIL);
-  egale("cacher", suite.action, "une vraie descente ensuite compte normalement");
+  const suite = B.positionBarre(r.etat, { y: 1519, max: 20000, gabarit: GABARIT + 47, hauteur: HAUTEUR });
+  egale(r.decalage + 12, suite.decalage, "une vraie descente ensuite compte normalement");
 });
 
 test("le rebond élastique en haut de page ne compte pas", () => {
   // Sur iPhone, la position passe sous zéro puis revient.
-  const { actions } = derouler([30, -40, 0]);
-  egale("montrer", actions[1], "sous zéro : comme tout en haut");
-  egale("montrer", actions[2], "à zéro : montrés");
+  const { decalages, r } = derouler([30, -40, 0]);
+  egale(0, decalages[1], "sous zéro : comme tout en haut");
+  egale(0, decalages[2], "à zéro : entière");
+  faux(r.collee, "à zéro : pas collée");
 });
 
-test("le rebond élastique en bas de page ne ramène pas les filtres", () => {
+test("le rebond élastique en bas de page ne ramène pas la barre", () => {
   // La position dépasse la fin de la page puis y revient : ce retour n'est pas une remontée.
   let etat = null;
   const releve = (y) => {
-    const r = B.suiviDefilement(etat, { y, max: 8000, gabarit: GABARIT }, SEUIL);
+    const r = B.positionBarre(etat, { y, max: 8000, gabarit: GABARIT, hauteur: HAUTEUR });
     etat = r.etat;
-    return r.action;
+    return r.decalage;
   };
   releve(7900);
-  egale("cacher", releve(8000), "on descend jusqu en bas : cachés");
-  estNul(releve(8060), "au-delà de la fin : bornée à la fin, aucun mouvement");
-  estNul(releve(8000), "retour du rebond : toujours rien");
+  egale(HAUTEUR, releve(8000), "on descend jusqu en bas : cachée");
+  egale(HAUTEUR, releve(8060), "au-delà de la fin : bornée, aucun mouvement");
+  egale(HAUTEUR, releve(8000), "retour du rebond : toujours cachée");
 });
 
 groupe("Bibliotheque.annonceQuota() — la limite de 150 séries");

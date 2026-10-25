@@ -179,7 +179,8 @@ test('de l UTF-8 invalide est refusé d un seul message', function () {
     vrai(erreur_mentionne($erreurs, 'non reconnus'), 'le message explique la cause');
 });
 
-test('une chaîne vide accumule les manquements', function () {
-    $erreurs = valider_mot_de_passe('');
-    vrai(count($erreurs) >= 5, 'longueur et les quatre classes sont signalées');
+test('une chaîne vide est dite obligatoire, une chaîne pauvre accumule les manquements', function () {
+    egale([MESSAGE_CHAMP_OBLIGATOIRE], valider_mot_de_passe(''), 'vide : un seul message');
+    $erreurs = valider_mot_de_passe('a');
+    vrai(count($erreurs) >= 4, 'longueur, majuscule, chiffre et caractère spécial sont signalés');
 });

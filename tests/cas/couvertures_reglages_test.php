@@ -59,11 +59,11 @@ test('la cadence des appels sortants ne peut pas être supprimée', function () 
     egale(200, COUVERTURE_FILE_MAX, 'le .env ne tolérait aucune attente');
 });
 
-test('le quota par compte reste praticable', function () {
-    /* Un quota de zéro ne protégerait rien : il supprimerait la
-       fonctionnalité pour tout le monde, ce qui n est jamais l intention
-       derrière un chiffre mal saisi. */
-    egale(1, COUVERTURE_QUOTA, 'le .env demandait 0 recherche autorisée');
+test('le quota par compte à zéro veut dire « illimité »', function () {
+    /* Exception voulue à la règle des planchers (voir config.php) : ce
+       quota répartit l usage entre comptes, il ne protège pas le serveur,
+       que la file d attente vers MangaDex défend seule. */
+    egale(0, COUVERTURE_QUOTA, 'le .env demandait 0 recherche autorisée : pas de quota');
     egale(10, COUVERTURE_FENETRE, 'le .env demandait une tranche de 0 seconde');
 });
 

@@ -38,7 +38,7 @@ test('les quatre clés existent dans IMAGES_TYPES', function () {
        liste : une clé rendue par type_image() mais absente d IMAGES_TYPES
        serait un état impossible à filtrer, donc des séries invisibles
        quel que soit le filtre choisi. */
-    egale(['aucune', 'mangadex', 'importee', 'lien'], array_keys(IMAGES_TYPES),
+    egale(['mangadex', 'lien', 'importee', 'aucune'], array_keys(IMAGES_TYPES),
         'les clés attendues, dans l ordre d affichage');
 
     foreach (IMAGES_TYPES as $cle => $libelle) {

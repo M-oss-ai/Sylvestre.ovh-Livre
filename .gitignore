@@ -2,8 +2,8 @@
 .env
 
 # Images envoyées par les utilisateurs
-/uploads/*
-!/uploads/.htaccess
+/site/uploads/*
+!/site/uploads/.htaccess
 
 # Fichiers système / éditeurs
 .DS_Store

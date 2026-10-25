@@ -74,7 +74,7 @@ groupe('valider_profil() — la forme de l adresse');
 test('une adresse invalide est refusée', function () {
     vrai(erreur_parle_de(valider_profil('lecteur', 'pas-une-adresse', 1), 'e-mail'), 'sans arobase');
     vrai(erreur_parle_de(valider_profil('lecteur', 'a@', 1), 'e-mail'), 'tronquée');
-    vrai(erreur_parle_de(valider_profil('lecteur', '', 1), 'e-mail'), 'vide');
+    vrai(isset(valider_profil('lecteur', '', 1)['email']), 'vide : l erreur est rangée sous le champ e-mail');
 });
 
 test('une saisie invalide n atteint jamais la base', function () {
@@ -148,7 +148,7 @@ test('un chemin hors uploads/ ne supprime rien', function () {
         }
 
         vrai(is_file($cible), 'le fichier visé est toujours là');
-        vrai(is_file(CHEMIN_PROJET . '/includes/config.php'), 'config.php aussi');
+        vrai(is_file(CHEMIN_SITE . '/includes/config.php'), 'config.php aussi');
     } finally {
         @unlink($cible);
     }

@@ -15,7 +15,7 @@
 declare(strict_types=1);
 require __DIR__ . '/../lanceur.php';
 
-require_once CHEMIN_PROJET . '/includes/couvertures.php';
+require_once CHEMIN_SITE . '/includes/couvertures.php';
 
 groupe('mangadex_id_depuis_url() — le lien se lit dans l image');
 

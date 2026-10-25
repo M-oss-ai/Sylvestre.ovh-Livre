@@ -12,39 +12,38 @@ require __DIR__ . '/../lanceur.php';
 
 groupe('initiales() — l avatar par défaut');
 
-test('prénom et nom donnent deux initiales', function () {
-    egale('MB', initiales(['prenom' => 'Marc', 'nom' => 'Bonvin']), 'la forme habituelle');
+test('l identifiant donne les deux initiales', function () {
+    egale('MB', initiales(['identifiant' => 'mbonvin']), 'la forme habituelle');
 });
 
-test('un seul des deux suffit', function () {
-    egale('M', initiales(['prenom' => 'Marc', 'nom' => '']), 'prénom seul');
-    egale('B', initiales(['prenom' => '', 'nom' => 'Bonvin']), 'nom seul');
+test('un identifiant d une lettre donne une initiale', function () {
+    egale('M', initiales(['identifiant' => 'm']), 'une seule lettre');
 });
 
 test('le résultat est en majuscules', function () {
-    egale('MB', initiales(['prenom' => 'marc', 'nom' => 'bonvin']), 'saisie en minuscules');
+    egale('MB', initiales(['identifiant' => 'mb']), 'saisie en minuscules');
 });
 
 test('les accents sont conservés et mis en majuscule', function () {
     /* mb_strtoupper() et non strtoupper() : ce dernier laisserait « é »
        intact et l avatar afficherait « éO » au lieu de « ÉÔ ». */
-    egale('ÉÔ', initiales(['prenom' => 'éva', 'nom' => 'ôte']), 'É et Ô');
+    egale('ÉÔ', initiales(['identifiant' => 'éôte']), 'É et Ô');
 });
 
-test('un prénom non latin n est pas tronqué au milieu d un caractère', function () {
+test('un identifiant non latin n est pas tronqué au milieu d un caractère', function () {
     // mb_substr() compte des caractères, pas des octets.
-    egale('荒川', initiales(['prenom' => '荒', 'nom' => '川']), 'des idéogrammes');
+    egale('荒川', initiales(['identifiant' => '荒川']), 'des idéogrammes');
 });
 
 test('sans nom ni prénom, on retombe sur l identifiant', function () {
     egale('LE', initiales(['identifiant' => 'lecteur92']), 'les deux premières lettres');
 });
 
-test('les espaces ne comptent pas pour un prénom', function () {
+test('les espaces autour de l identifiant ne comptent pas', function () {
     /* Sans le trim(), un prénom fait d un seul espace produirait une
        initiale vide au lieu de laisser la place à l identifiant. */
-    egale('LE', initiales(['prenom' => '   ', 'nom' => '', 'identifiant' => 'lecteur92']),
-        'on passe bien à l identifiant');
+    egale('LE', initiales(['identifiant' => '   lecteur92']),
+        'les espaces sont retirés');
 });
 
 test('un identifiant d une seule lettre ne casse rien', function () {
@@ -106,10 +105,10 @@ test('le drapeau Secure suit la présence de HTTPS', function () {
     }
 });
 
-groupe('STATUTS — les quatre états d une série');
+groupe('STATUTS — les cinq états d une série');
 
-test('les quatre statuts sont définis', function () {
-    egale(['cours', 'envie', 'termine', 'abandon'], array_keys(STATUTS), 'les clés attendues');
+test('les cinq statuts sont définis', function () {
+    egale(['cours', 'attente', 'envie', 'termine', 'abandon'], array_keys(STATUTS), 'les clés attendues');
 });
 
 test('chaque statut a un libellé lisible', function () {

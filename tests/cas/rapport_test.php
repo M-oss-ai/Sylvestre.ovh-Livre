@@ -40,10 +40,10 @@ test('un rapport ne part pas plus souvent que le cron ne passe', function () {
     egale([24, 24], cron_reglages(24, 0), '0 = à chaque passage');
 });
 
-test('les valeurs absurdes sont ramenées dans [1, 720]', function () {
+test('les valeurs absurdes sont ramenées dans [1, 168] (cron) et [1, 720] (rapport)', function () {
     egale([1, 1], cron_reglages(0, 0), 'zéro');
     egale([1, 50], cron_reglages(-5, 50), 'négatif');
-    egale([720, 720], cron_reglages(1000, 1000), 'au-delà de 30 jours');
+    egale([168, 720], cron_reglages(1000, 1000), 'au-delà d une semaine / de 30 jours');
 });
 
 groupe('rapport_du() — quand il part');

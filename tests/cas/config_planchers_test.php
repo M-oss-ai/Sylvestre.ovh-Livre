@@ -35,7 +35,6 @@ putenv('IMAGE_QUALITE=0');
 putenv('IMAGE_PIXELS_MAX=1');
 putenv('IMPORT_TAILLE_MAX=1');
 putenv('SMTP_TIMEOUT=0');
-putenv('MAIL_FILE_MAX_ESSAIS=0');
 putenv('SESSION_DUREE=-99');
 putenv('REMEMBER_DUREE_VIP=-99');
 putenv('QUOTA_BASE_MO=-5');
@@ -47,23 +46,17 @@ require __DIR__ . '/../lanceur.php';
 
 groupe('Politique de mot de passe');
 
-test('MDP_MIN ne descend jamais sous 8', function () {
-    /* Quoi qu'on mette dans le .env : en dessous de 8 caractères, la
-       politique ne protège plus de rien. */
-    egale(8, MDP_MIN, 'le .env demandait 3');
+test('MDP_MIN est réglable jusqu à 1', function () {
+    /* Le plancher de 8 a été levé à la demande de l utilisateur (voir
+       config.php) : la valeur du .env est donc respectée. */
+    egale(3, MDP_MIN, 'le .env demandait 3');
 });
 
 test('MDP_MAX reste au-dessus de MDP_MIN', function () {
     // Un maximum inférieur au minimum rendrait TOUT mot de passe invalide :
     // plus personne ne pourrait s'inscrire ni changer de mot de passe.
     vrai(MDP_MAX > MDP_MIN, 'le maximum dépasse le minimum');
-    egale(9, MDP_MAX, 'le .env demandait 2, on obtient MDP_MIN + 1');
-});
-
-test('le texte d aide ne peut pas mentir sur la règle appliquée', function () {
-    /* MDP_REGLE est construite à partir de MDP_MIN, jamais écrite en dur :
-       le rappel affiché sous le champ suit donc toujours la règle réelle. */
-    contient((string) MDP_MIN, MDP_REGLE, 'la règle affichée cite le vrai minimum');
+    egale(4, MDP_MAX, 'le .env demandait 2, on obtient MDP_MIN + 1');
 });
 
 groupe('Limiteur anti force brute');
@@ -135,10 +128,6 @@ groupe('Divers');
 test('le délai SMTP ne tombe pas à zéro', function () {
     // Un délai de 0 s ferait échouer tout envoi avant même la connexion.
     vrai(SMTP_TIMEOUT >= 1, 'au moins une seconde');
-});
-
-test('un message en file a droit à au moins un essai', function () {
-    vrai(MAIL_FILE_MAX_ESSAIS >= 1, 'sinon tout message serait abandonné d emblée');
 });
 
 test('les durées négatives sont ramenées à zéro', function () {

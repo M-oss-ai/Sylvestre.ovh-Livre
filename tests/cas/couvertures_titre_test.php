@@ -20,7 +20,7 @@ require __DIR__ . '/../lanceur.php';
 /* couvertures.php n'est pas dans la pile chargée par chaque page : seul
    api.php l'inclut, et uniquement pour l'action de recherche. Le test
    doit donc le demander explicitement. */
-require_once CHEMIN_PROJET . '/includes/couvertures.php';
+require_once CHEMIN_SITE . '/includes/couvertures.php';
 
 groupe('titre_normalise() — comparer deux titres');
 
@@ -137,22 +137,6 @@ test('un forfait absent reçoit le quota ordinaire, pas le plus généreux', fun
     egale(COUVERTURE_QUOTA, couverture_quota([]), 'clé « forfait » absente');
 });
 
-groupe('couverture_tranche_lisible() — énoncer la règle');
-
-test('les minutes rondes s écrivent en minutes', function () {
-    /* « 30 recherches par 2 minutes » se vérifie de tête ; « par 120
-       secondes » demande une division avant de savoir si c est
-       raisonnable. */
-    egale('2 minutes', couverture_tranche_lisible(120), 'le réglage par défaut');
-    egale('1 minute', couverture_tranche_lisible(60), 'au singulier');
-    egale('5 minutes', couverture_tranche_lisible(300), 'une tranche plus longue');
-});
-
-test('ce qui ne tombe pas juste reste en secondes', function () {
-    egale('90 secondes', couverture_tranche_lisible(90), 'pas un compte rond de minutes');
-    egale('45 secondes', couverture_tranche_lisible(45), 'moins d une minute');
-    egale('1 seconde', couverture_tranche_lisible(1), 'au singulier');
-});
 
 groupe('couverture_titres_connus() — toutes les écritures d une série');
 

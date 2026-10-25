@@ -199,7 +199,7 @@ test('le nom est l empreinte SALÉE du contenu', function () {
         $sans_sel = 'uploads/' . hash('sha256', $contenu) . '.webp';
         differe($sans_sel, $chemin, 'l empreinte nue ne permet pas de retrouver le fichier');
     } finally {
-        @unlink(CHEMIN_PROJET . '/' . $chemin);
+        @unlink(CHEMIN_SITE . '/' . $chemin);
     }
 });
 
@@ -208,10 +208,10 @@ test('le fichier est réellement écrit, avec le bon contenu', function () {
     $chemin  = ecrire_image($contenu, 'webp');
 
     try {
-        vrai(is_file(CHEMIN_PROJET . '/' . $chemin), 'le fichier existe sur le disque');
-        egale($contenu, file_get_contents(CHEMIN_PROJET . '/' . $chemin), 'le contenu est intact');
+        vrai(is_file(CHEMIN_SITE . '/' . $chemin), 'le fichier existe sur le disque');
+        egale($contenu, file_get_contents(CHEMIN_SITE . '/' . $chemin), 'le contenu est intact');
     } finally {
-        @unlink(CHEMIN_PROJET . '/' . $chemin);
+        @unlink(CHEMIN_SITE . '/' . $chemin);
     }
 });
 
@@ -223,7 +223,7 @@ test('deux envois du même contenu partagent un seul fichier', function () {
     try {
         egale($premier, ecrire_image($contenu, 'webp'), 'le même chemin est rendu');
     } finally {
-        @unlink(CHEMIN_PROJET . '/' . $premier);
+        @unlink(CHEMIN_SITE . '/' . $premier);
     }
 });
 
@@ -233,15 +233,15 @@ test('aucun fichier temporaire ne reste derrière', function () {
        moitié écrit. Le nom du temporaire tombe sous les extensions
        refusées par le .htaccess de uploads/ — un résidu ne serait donc
        jamais servi en clair, mais il ne doit pas non plus s accumuler. */
-    $avant   = glob(CHEMIN_PROJET . '/uploads/.part-*.tmp') ?: [];
+    $avant   = glob(CHEMIN_SITE . '/uploads/.part-*.tmp') ?: [];
     $contenu = 'octets-uniques-' . bin2hex(random_bytes(16));
     $chemin  = ecrire_image($contenu, 'webp');
 
     try {
-        $apres = glob(CHEMIN_PROJET . '/uploads/.part-*.tmp') ?: [];
+        $apres = glob(CHEMIN_SITE . '/uploads/.part-*.tmp') ?: [];
         egale(count($avant), count($apres), 'le temporaire a été renommé, pas laissé');
     } finally {
-        @unlink(CHEMIN_PROJET . '/' . $chemin);
+        @unlink(CHEMIN_SITE . '/' . $chemin);
     }
 });
 
@@ -267,10 +267,10 @@ test('une image valide en data URI est restituée sur le disque', function () {
     try {
         vrai(is_string($chemin), 'un chemin est rendu');
         motif('#^uploads/[a-f0-9]{64}\.(webp|png)$#', (string) $chemin, 'la forme attendue');
-        vrai(is_file(CHEMIN_PROJET . '/' . $chemin), 'le fichier est bien là');
+        vrai(is_file(CHEMIN_SITE . '/' . $chemin), 'le fichier est bien là');
     } finally {
         if (is_string($chemin)) {
-            @unlink(CHEMIN_PROJET . '/' . $chemin);
+            @unlink(CHEMIN_SITE . '/' . $chemin);
         }
     }
 });

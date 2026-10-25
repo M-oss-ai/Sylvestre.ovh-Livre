@@ -38,6 +38,13 @@ Sous Windows sans `php` dans le `PATH` : `C:\xampp\php\php.exe`.
 
 ## Structure
 
+Le dépôt sépare ce qui se **déploie** de ce qui ne se déploie pas : tout le
+site vit dans `site/` (c'est son contenu qu'on envoie par FTP), et la racine
+ne garde que `tests/`, `livre.sql`, `.env.example`, `.ovhconfig` et la
+documentation. Les chemins ci-dessous sont relatifs à `site/`. Le `.env`
+réel se place à la racine du dépôt (au-dessus de `site/`), ce que
+`config.php` cherche en premier. Les tests définissent `CHEMIN_SITE`.
+
 ### Le noyau
 
 | Fichier | Rôle |

@@ -70,10 +70,12 @@ test('un statut inventé ne se glisse pas dans le HTML', function () {
 
 groupe('carte_html() — le tome et le repli des valeurs');
 
-test('une série à 0 est dite « non commencée », pas « tome 0 »', function () {
-    foreach (['cours', 'envie', 'termine', 'abandon'] as $statut) {
+test('une série à 0 est dite « non commencée » si on l envie, sinon « aucun tome lu »', function () {
+    $html = carte_html(serie(['tome_actuel' => 0, 'statut' => 'envie']));
+    contient('Série non commencée', $html, 'statut envie');
+    foreach (['cours', 'attente', 'termine', 'abandon'] as $statut) {
         $html = carte_html(serie(['tome_actuel' => 0, 'statut' => $statut]));
-        contient('Série non commencée', $html, "statut {$statut}");
+        contient("Vous n'avez lu aucun tome", $html, "statut {$statut}");
         sans('lu le tome', $html, "aucun tome lu annoncé ({$statut})");
     }
 });
