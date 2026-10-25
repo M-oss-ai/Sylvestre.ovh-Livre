@@ -953,6 +953,7 @@ const ACTIONS_SENSIBLES = [
     'compte.motdepasse'    => 'définir ou changer votre mot de passe',
     'compte.supprimer_mdp' => 'supprimer votre mot de passe',
     'compte.cle_creer'     => "ajouter une clé d'accès",
+    'api.jeton'            => "créer un jeton d'API",
     'donnees.vider'        => 'vider votre bibliothèque',
     'compte.supprimer'     => 'supprimer votre compte',
 ];

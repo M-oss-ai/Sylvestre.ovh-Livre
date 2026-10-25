@@ -10,6 +10,8 @@ info:
     - HTTPS uniquement (en HTTP : `403 https_requis`).
     - 60 requêtes par minute et par jeton.
     - **Aucune suppression** : il n'y a pas de route `DELETE`.
+    - Un compte en consultation seule (forfait « bloqué ») peut lire mais pas
+      écrire : toute autre route répond `403 compte_bloque`.
 
     La version lisible, avec exemples `curl`, est `API.md`.
 servers:
@@ -472,6 +474,7 @@ components:
                 - jeton_invalide
                 - jeton_expire
                 - https_requis
+                - compte_bloque
                 - route_inconnue
                 - serie_introuvable
                 - methode_non_autorisee

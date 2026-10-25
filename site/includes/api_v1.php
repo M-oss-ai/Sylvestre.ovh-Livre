@@ -118,7 +118,7 @@ function api_jeton_chercher(PDO $pdo, string $jeton): ?array
         'SELECT j.id AS jeton_id,
                 (j.revoque_le IS NOT NULL) AS revoque,
                 (j.expire IS NOT NULL AND j.expire <= NOW()) AS expire,
-                u.id, u.identifiant, u.email, u.forfait, u.adulte_confirme, u.filtre_sensible
+                u.id, u.identifiant, u.email, u.forfait, u.raison_blocage, u.adulte_confirme, u.filtre_sensible
            FROM jeton_api j
            JOIN utilisateur u ON u.id = j.utilisateur_id
           WHERE j.jeton_hash = ?'
@@ -197,6 +197,18 @@ function api_route(string $methode, string $chemin): array
         return ['route' => $methodes[$methode], 'id' => $groupe ? (int) $m[1] : null];
     }
     return ['erreur' => 404];
+}
+
+/**
+ * Cette route écrit-elle quelque chose, ou sollicite-t-elle MangaDex au
+ * profit du compte ? Un compte en consultation seule (forfait « bloque »)
+ * n'y a pas droit — comme dans api.php (ACTIONS_BLOQUEES), le serveur est
+ * le seul juge. La liste est FERMÉE du côté des lectures : toute route
+ * nouvelle est refusée au compte bloqué tant qu'on ne l'a pas dite libre.
+ */
+function api_route_libre_pour_bloque(string $route): bool
+{
+    return in_array($route, ['moi', 'series.lister', 'series.lire'], true);
 }
 
 /* ---------------------------------------------------------------------
@@ -605,8 +617,12 @@ function api_servir(): void
         api_erreur(404, 'route_inconnue', 'Adresse inconnue.');
     }
 
+    if (compte_bloque($moi) && !api_route_libre_pour_bloque($route['route'])) {
+        api_erreur(403, 'compte_bloque', message_compte_bloque((string) ($moi['raison_blocage'] ?? '')));
+    }
+
     switch ($route['route']) {
-        case 'moi':                  api_h_moi($pdo, $moi);
+        case 'moi':                 api_h_moi($pdo, $moi);
         case 'series.lister':        api_h_lister($pdo, $mon_id);
         case 'series.lire':          reponse_json(['serie' => api_serie_json(api_serie_du_compte($pdo, $mon_id, $route['id']))]);
         case 'series.creer':         api_h_creer($pdo, $moi);

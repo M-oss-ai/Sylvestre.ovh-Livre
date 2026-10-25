@@ -17,6 +17,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/includes/fonctions.php';
+require_once __DIR__ . '/includes/google.php';     // bouton_google(), pour un compte Google
 require_once __DIR__ . '/includes/api_v1.php';
 
 $moi    = exiger_connexion();
@@ -36,16 +37,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nom = 'Mon application';
         }
 
+        /* Même règle que les autres actions à risque (ACTIONS_SENSIBLES) :
+           un compte e-mail retape son mot de passe ; un compte Google doit
+           s'être reconnecté (Google, puis son mot de passe s'il en a un)
+           pour CETTE action, ce qui lui donne CONFIRMATION_DUREE secondes. */
         $attente = null;
-        if (!verifier_mot_de_passe_limite($mon_id, (string) ($_POST['mot_de_passe'] ?? ''), $attente)) {
+        if (!verifier_mot_de_passe_limite($mon_id, (string) ($_POST['mot_de_passe'] ?? ''), $attente, 'api.jeton')) {
             $erreurs['mot_de_passe'] = $attente > 0
                 ? 'Trop de tentatives. Réessayez dans ' . $attente . ' secondes.'
-                : 'Mot de passe incorrect.';
+                : (compte_google($mon_id)
+                    ? message_reconnexion_google('api.jeton')
+                    : 'Mot de passe incorrect.');
         } else {
             $nouveau = api_jeton_creer($pdo, $mon_id, $nom);
             if ($nouveau === null) {
                 $erreurs['nom'] = 'Vous avez déjà ' . API_JETONS_MAX . ' jetons actifs. Révoquez-en un d\'abord.';
             } else {
+                oublier_confirmation();   // elle ne sert qu'une fois
                 journal_securite('api_jeton_cree', ['utilisateur' => $mon_id, 'jeton_id' => $nouveau['id']]);
             }
         }
@@ -68,6 +76,13 @@ $req = $pdo->prepare(
 );
 $req->execute([$mon_id]);
 $jetons = $req->fetchAll();
+
+/* Message laissé par le retour de Google (« Identité confirmée ✅ »). */
+$flash = flash_prendre($genre_flash);
+
+$par_google = compte_google($mon_id);
+$confirme   = confirmation_en_cours($mon_id);
+$confirme_ici = ($confirme['action'] ?? '') === 'api.jeton';
 
 $csrf = jeton_csrf();
 ?>
@@ -95,6 +110,10 @@ $csrf = jeton_csrf();
       <div class="alert alert-info"><?= e($info) ?></div>
     <?php endif; ?>
 
+    <?php if ($flash): ?>
+      <div class="alert <?= $genre_flash === 'erreur' ? 'alert-error' : 'alert-info' ?>" role="status"><?= e($flash) ?></div>
+    <?php endif; ?>
+
     <?php if ($nouveau): ?>
       <div class="alert alert-info" role="status">
         <p><b>Copiez ce jeton maintenant.</b> Il ne sera plus jamais affiché : si vous le perdez, créez-en un autre.</p>
@@ -116,13 +135,24 @@ $csrf = jeton_csrf();
         <?= champ_erreur($erreurs, 'nom', 'nom') ?>
       </div>
 
+      <?php if ($par_google && !$confirme_ici): ?>
+        <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
+      <?php elseif ($par_google): ?>
+        <p class="hint">✅ Identité confirmée : il vous reste <?= (int) $confirme['restant'] ?> secondes pour <?= e(ACTIONS_SENSIBLES['api.jeton']) ?>.</p>
+      <?php else: ?>
       <div class="field">
         <label for="mot_de_passe">Votre mot de passe</label>
         <input id="mot_de_passe" name="mot_de_passe" type="password" required autocomplete="current-password"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe') ?>>
         <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
       </div>
+      <?php endif; ?>
 
+      <?php if ($par_google && !$confirme_ici): ?>
+        <p class="hint">Il faut d'abord vous reconnecter avec Google. Vous aurez ensuite <?= e(secondes_lisibles(CONFIRMATION_DUREE)) ?> pour <?= e(ACTIONS_SENSIBLES['api.jeton']) ?>.</p>
+        <?= bouton_google('Se reconnecter avec Google', 'parametres', 'api.jeton') ?>
+      <?php else: ?>
       <button type="submit" class="btn btn-primary full">Créer un jeton</button>
+      <?php endif; ?>
     </form>
 
     <h2>Vos jetons</h2>

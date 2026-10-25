@@ -12,6 +12,7 @@ declare(strict_types=1);
 require __DIR__ . '/../lanceur.php';
 require_once CHEMIN_SITE . '/includes/couvertures.php';
 require_once CHEMIN_SITE . '/includes/api_v1.php';
+require_once CHEMIN_SITE . '/includes/google.php';
 
 groupe('Jeton — forme et empreinte');
 
@@ -388,4 +389,95 @@ test('la sortie ne contient aucun champ interne', function () {
     $j = api_serie_json(['id' => 1, 'titre' => 'x', 'auteur' => '', 'tome_actuel' => 0, 'statut' => 'envie',
         'couverture' => '', 'mangadex_id' => '', 'favori' => 0, 'utilisateur_id' => 99]);
     sans('utilisateur_id', implode(',', array_keys($j)), 'pas d\'identifiant de compte');
+});
+
+groupe('Compte en consultation seule');
+
+test('seules les lectures restent libres pour un compte bloqué', function () {
+    foreach (['moi', 'series.lister', 'series.lire'] as $route) {
+        vrai(api_route_libre_pour_bloque($route), $route . ' est libre');
+    }
+    foreach (['series.creer', 'series.modifier', 'couvertures.chercher', 'couvertures.choisir', 'inconnue', ''] as $route) {
+        faux(api_route_libre_pour_bloque($route), $route . ' est refusée');
+    }
+});
+
+test('toute route de l\'API écrivante est classée (une route ajoutée sans choix échoue ici)', function () {
+    $routes = [];
+    foreach (['v1/moi', 'v1/series', 'v1/series/1', 'v1/series/1/couvertures/recherche', 'v1/series/1/couverture'] as $chemin) {
+        foreach (['GET', 'POST', 'PATCH', 'PUT'] as $m) {
+            $r = api_route($m, $chemin);
+            if (isset($r['route'])) {
+                $routes[] = $r['route'];
+            }
+        }
+    }
+    egale(7, count($routes), 'les sept routes de l\'API');
+    foreach ($routes as $route) {
+        $ecrit = !in_array($route, ['moi', 'series.lister', 'series.lire'], true);
+        egale(!$ecrit, api_route_libre_pour_bloque($route), $route);
+    }
+});
+
+groupe('Créer un jeton — action sensible du site');
+
+test('« api.jeton » est une action sensible, avec un libellé et une page de retour', function () {
+    vrai(isset(ACTIONS_SENSIBLES['api.jeton']), 'dans ACTIONS_SENSIBLES');
+    contient('jeton', ACTIONS_SENSIBLES['api.jeton'], 'libellé lisible');
+    egale('jeton-api.php', google_page_action('api.jeton'), 'un compte Google revient sur la page des jetons');
+});
+
+test('la confirmation de cette action ne vaut pas pour une autre, ni l\'inverse', function () {
+    $session = ['confirme' => ['id' => 5, 'action' => 'api.jeton', 'le' => 1000]];
+    vrai(confirmation_recente(5, 'api.jeton', $session, 1001), 'valable pour api.jeton');
+    faux(confirmation_recente(5, 'compte.supprimer', $session, 1001), 'pas pour supprimer le compte');
+    faux(confirmation_recente(6, 'api.jeton', $session, 1001), 'pas pour un autre compte');
+    $session = ['confirme' => ['id' => 5, 'action' => 'compte.profil', 'le' => 1000]];
+    faux(confirmation_recente(5, 'api.jeton', $session, 1001), 'celle d\'une autre action ne crée pas de jeton');
+});
+
+groupe('Compte en consultation seule');
+
+test('seules les lectures restent libres pour un compte bloqué', function () {
+    foreach (['moi', 'series.lister', 'series.lire'] as $route) {
+        vrai(api_route_libre_pour_bloque($route), $route . ' est libre');
+    }
+    foreach (['series.creer', 'series.modifier', 'couvertures.chercher', 'couvertures.choisir', 'inconnue', ''] as $route) {
+        faux(api_route_libre_pour_bloque($route), $route . ' est refusée');
+    }
+});
+
+test('les sept routes de l\'API sont toutes classées', function () {
+    $routes = [];
+    foreach (['v1/moi', 'v1/series', 'v1/series/1', 'v1/series/1/couvertures/recherche', 'v1/series/1/couverture'] as $chemin) {
+        foreach (['GET', 'POST', 'PATCH', 'PUT'] as $m) {
+            $r = api_route($m, $chemin);
+            if (isset($r['route'])) {
+                $routes[] = $r['route'];
+            }
+        }
+    }
+    egale(7, count($routes), 'sept routes : une de plus doit être classée ici et dans api_route_libre_pour_bloque()');
+    foreach ($routes as $route) {
+        $lecture = in_array($route, ['moi', 'series.lister', 'series.lire'], true);
+        egale($lecture, api_route_libre_pour_bloque($route), $route);
+    }
+});
+
+groupe('Créer un jeton — action sensible du site');
+
+test('« api.jeton » est une action sensible, avec un libellé et une page de retour', function () {
+    vrai(isset(ACTIONS_SENSIBLES['api.jeton']), 'dans ACTIONS_SENSIBLES');
+    contient('jeton', ACTIONS_SENSIBLES['api.jeton'], 'libellé lisible');
+    egale('jeton-api.php', google_page_action('api.jeton'), 'un compte Google revient sur la page des jetons');
+});
+
+test('la confirmation de cette action ne vaut que pour elle, ce compte et le délai', function () {
+    $session = ['confirme' => ['id' => 5, 'action' => 'api.jeton', 'le' => 1000]];
+    vrai(confirmation_recente(5, 'api.jeton', $session, 1001), 'valable pour api.jeton');
+    faux(confirmation_recente(5, 'compte.supprimer', $session, 1001), 'pas pour supprimer le compte');
+    faux(confirmation_recente(6, 'api.jeton', $session, 1001), 'pas pour un autre compte');
+    faux(confirmation_recente(5, 'api.jeton', $session, 1000 + CONFIRMATION_DUREE + 1), 'plus après le délai');
+    $autre = ['confirme' => ['id' => 5, 'action' => 'compte.profil', 'le' => 1000]];
+    faux(confirmation_recente(5, 'api.jeton', $autre, 1001), 'celle d\'une autre action ne crée pas de jeton');
 });
