@@ -64,7 +64,7 @@ header(
  * un préchargement) se disputent le jeton : la première le consomme, la
  * seconde ne le trouve plus et déconnecte l'utilisateur.
  *
- * ⚠️ Déclarée ICI et pas à côté de la fonction qui s'en sert : un « const »
+ * ATTENTION : Déclarée ICI et pas à côté de la fonction qui s'en sert : un « const »
  * au niveau du fichier n'existe qu'une fois la ligne exécutée, alors que
  * les fonctions, elles, sont utilisables avant leur définition. Déclarée
  * plus bas, elle était encore inconnue au moment de l'appel ci-dessous —
@@ -468,7 +468,7 @@ function limiteur_echec(string $action, int $max_essais, int $duree_base, ?strin
           récidive, plafonnée. La condition « essais >= ? » est évaluée
           par MySQL sur la valeur à jour : deux requêtes concurrentes ne
           peuvent pas déclencher deux blocages pour un seul dépassement. */
-    /* ⚠️ L'ordre des affectations compte : MySQL les évalue de gauche à
+    /* ATTENTION : L'ordre des affectations compte : MySQL les évalue de gauche à
        droite, et une colonne déjà affectée est lue avec sa NOUVELLE
        valeur. « bloque_jusqu » doit donc être calculé AVANT l'incrément
        de « blocages », sinon le premier blocage dure déjà deux fois la
@@ -784,7 +784,7 @@ function champ_erreur(array $erreurs, string $champ, string $id): string
  *
  * url_image_sure() rend une chaîne vide dans les deux cas, et c'est ce
  * qui faisait disparaître une adresse en http:// sans un mot : la série
- * s'enregistrait « ✅ », sans l'image. Les appelants répondent désormais
+ * s'enregistrait avec un message de succès, sans l'image. Les appelants répondent désormais
  * par une erreur sur le champ.
  */
 function url_image_refusee(mixed $saisie): bool
@@ -915,7 +915,7 @@ function photo_depuis_formulaire(?string $fichier, string $ancienne): string
  * d'adresse e-mail, suppression du compte, vidage de la bibliothèque) :
  * une session volée ne doit pas suffire à faire ces choses-là.
  *
- * ⚠️ Appeler verifier_mot_de_passe_limite() plutôt que cette fonction :
+ * ATTENTION : Appeler verifier_mot_de_passe_limite() plutôt que cette fonction :
  * celle-ci ne compte pas les échecs.
  */
 function mot_de_passe_correct(int $utilisateur_id, string $mot_de_passe): bool
@@ -1183,7 +1183,7 @@ function creer_session_persistante(int $utilisateur_id): void
     /* Plafond d'appareils : au-delà, les plus anciens jetons partent.
        Chaque ligne est un accès valide un an.
 
-       ⚠️ Deux conditions « remplace_le IS NULL », et elles ne font pas la
+       ATTENTION : Deux conditions « remplace_le IS NULL », et elles ne font pas la
        même chose.
 
        Dans la sous-requête : seuls les jetons ACTIFS occupent une place.
@@ -1309,7 +1309,7 @@ function initiales(array $u): string
  * Un message pour la PROCHAINE page affichée, et pour elle seule.
  *
  * Porté par l'URL (« ?mdp=1 »), il revenait à chaque rechargement :
- * « Mot de passe modifié ✅ » s'affichait encore après avoir vidé la
+ * « Mot de passe modifié » s'affichait encore après avoir vidé la
  * bibliothèque. Rangé dans la session, il disparaît dès qu'il est lu.
  */
 function flash(string $message, string $genre = 'info'): void

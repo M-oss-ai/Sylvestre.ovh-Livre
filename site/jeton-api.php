@@ -77,7 +77,7 @@ $req = $pdo->prepare(
 $req->execute([$mon_id]);
 $jetons = $req->fetchAll();
 
-/* Message laissé par le retour de Google (« Identité confirmée ✅ »). */
+/* Message laissé par le retour de Google (« Identité confirmée »). */
 $flash = flash_prendre($genre_flash);
 
 $par_google = compte_google($mon_id);
@@ -93,7 +93,7 @@ $csrf = jeton_csrf();
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Jetons d'API — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body class="auth-body" data-prive="1">
@@ -101,7 +101,6 @@ $csrf = jeton_csrf();
 <main class="auth-wrap">
   <section class="auth-card">
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">🔑</p>
       <h1>Jetons d'API</h1>
       <p class="hint">Un jeton permet à une application de lire et modifier vos séries, sans jamais les supprimer. Il ne vaut que pour votre compte.</p>
     </div>
@@ -138,7 +137,7 @@ $csrf = jeton_csrf();
       <?php if ($par_google && !$confirme_ici): ?>
         <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
       <?php elseif ($par_google): ?>
-        <p class="hint">✅ Identité confirmée : il vous reste <?= (int) $confirme['restant'] ?> secondes pour <?= e(ACTIONS_SENSIBLES['api.jeton']) ?>.</p>
+        <p class="hint">Identité confirmée : il vous reste <?= (int) $confirme['restant'] ?> secondes pour <?= e(ACTIONS_SENSIBLES['api.jeton']) ?>.</p>
       <?php else: ?>
       <div class="field">
         <label for="mot_de_passe">Votre mot de passe</label>

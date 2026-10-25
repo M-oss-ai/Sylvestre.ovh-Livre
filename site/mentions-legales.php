@@ -38,7 +38,7 @@ $connecte = utilisateur_actuel() !== null;
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Mentions légales — Ma Bibliothèque Manga</title>
 <meta name="description" content="Mentions légales et politique de confidentialité.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body>
@@ -54,7 +54,7 @@ $connecte = utilisateur_actuel() !== null;
 <main class="settings-main legal-main">
 
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">📇</span> Éditeur du site</h2>
+    <h2 class="settings-card-title">Éditeur du site</h2>
     <dl class="legal-liste">
       <dt>Responsable du traitement</dt>
       <dd><?= legal(LEGAL_EDITEUR, 'LEGAL_EDITEUR') ?></dd>
@@ -84,7 +84,7 @@ $connecte = utilisateur_actuel() !== null;
   </section>
 
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🗄️</span> Hébergement</h2>
+    <h2 class="settings-card-title">Hébergement</h2>
     <dl class="legal-liste">
       <dt>Hébergeur</dt>
       <dd><?= legal(LEGAL_HEBERGEUR, 'LEGAL_HEBERGEUR') ?></dd>
@@ -101,7 +101,7 @@ $connecte = utilisateur_actuel() !== null;
   </section>
 
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔐</span> Données personnelles</h2>
+    <h2 class="settings-card-title">Données personnelles</h2>
 
     <h3 class="legal-h3">Ce qui est collecté</h3>
     <ul class="legal-puces">
@@ -175,7 +175,7 @@ $connecte = utilisateur_actuel() !== null;
   </section>
 
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🍪</span> Cookies</h2>
+    <h2 class="settings-card-title">Cookies</h2>
     <p class="hint">
       Ce site ne dépose que des cookies <b>strictement nécessaires</b> à son
       fonctionnement, qui ne demandent donc pas de consentement :
@@ -203,7 +203,7 @@ $connecte = utilisateur_actuel() !== null;
   </section>
 
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🌐</span> Services tiers</h2>
+    <h2 class="settings-card-title">Services tiers</h2>
     <ul class="legal-puces">
       <li><b>MangaDex</b> — la « recherche auto » de couverture envoie le titre que vous
           avez saisi et le numéro du tome à <code>api.mangadex.org</code>. La requête part
@@ -225,7 +225,7 @@ $connecte = utilisateur_actuel() !== null;
   </section>
 
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">©️</span> Propriété intellectuelle</h2>
+    <h2 class="settings-card-title">Propriété intellectuelle</h2>
     <p class="hint">
       Les titres, couvertures et noms d'auteurs enregistrés restent la propriété de leurs
       ayants droit. Ce site est un outil de suivi personnel : il n'héberge aucune œuvre et

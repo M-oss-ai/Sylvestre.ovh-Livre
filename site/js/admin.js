@@ -99,7 +99,7 @@ window.Admin = (() => {
   }
 
   /* Les groupes de réglages se replient (demande de l'utilisateur : une flèche à droite du titre,
-     « comme sur Google »). Ceux qu'on a repliés sont mémorisés dans ce navigateur : « ↩ .env »
+     « comme sur Google »). Ceux qu'on a repliés sont mémorisés dans ce navigateur : « Rétablir .env »
      recharge la page, qui les rouvrirait tous sinon. Un confort d'affichage, pas une donnée :
      sans stockage, tout reste ouvert. */
   const CLE_GROUPES = "livre.admin.groupes.replies";
@@ -471,7 +471,7 @@ window.Admin = (() => {
         if (!bouton) return;
         const signe = document.createElement("span");
         signe.className = "admin-non";
-        signe.textContent = "⚠";
+        signe.textContent = "!";
         signe.title = "Image introuvable : le fichier a disparu, ou l'adresse ne répond plus.";
         bouton.replaceWith(signe);
       },
@@ -488,7 +488,7 @@ window.Admin = (() => {
   function brancherReglages() {
     const L = window.Lib;
 
-    // Le message de « ↩ .env », mis de côté avant le rechargement de la page.
+    // Le message de « Rétablir .env », mis de côté avant le rechargement de la page.
     try {
       const message = sessionStorage.getItem(CLE_MESSAGE);
       if (message) {

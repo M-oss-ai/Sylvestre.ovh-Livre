@@ -2,7 +2,7 @@
 /* =====================================================================
    flash() et duree_cookie_lisible() — deux messages qui ne mentaient plus.
 
-   « Mot de passe modifié ✅ » était porté par l'URL (?mdp=1) et revenait
+   « Mot de passe modifié » était porté par l'URL (?mdp=1) et revenait
    à chaque rechargement ; flash() le range dans la session, où il ne se
    lit qu'une fois.
 
@@ -17,8 +17,8 @@ require __DIR__ . '/../lanceur.php';
 groupe('flash() — un message pour la page suivante, et elle seule');
 
 test('le message est rendu une fois, puis plus jamais', function () {
-    flash('Mot de passe modifié ✅');
-    egale('Mot de passe modifié ✅', flash_prendre(), 'la page suivante le lit');
+    flash('Mot de passe modifié');
+    egale('Mot de passe modifié', flash_prendre(), 'la page suivante le lit');
     egale('', flash_prendre(), 'un rechargement ne le revoit pas');
 });
 

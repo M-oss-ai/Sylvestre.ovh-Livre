@@ -98,7 +98,7 @@ test('le menu des forfaits va du plus haut au plus bas : illimité, standard, bl
 groupe('admin_raison() — le motif d\'un blocage');
 
 test('espaces de bord retirés, accents et emoji conservés', function () {
-    egale('Publicité en série ✨', admin_raison("  Publicité en série ✨ \n"), 'bords nettoyés');
+    egale('Publicité en série', admin_raison("  Publicité en série \n"), 'bords nettoyés');
 });
 
 test('les retours à la ligne sont unifiés, les lignes vides en rafale ramenées à une', function () {

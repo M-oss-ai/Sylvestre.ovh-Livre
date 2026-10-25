@@ -13,7 +13,7 @@
    Ce dossier est à la racine du dépôt, hors de site/ : il ne monte jamais
    sur le serveur, et le .htaccess de développement ne le sert pas.
 
-   ⚠️ La clé PRIVÉE est un secret, comme CRON_TOKEN : ne la collez ni dans un
+   ATTENTION : La clé PRIVÉE est un secret, comme CRON_TOKEN : ne la collez ni dans un
    message, ni dans un fichier suivi par git. Régénérer la paire invalide
    tous les appareils déjà enregistrés : chacun est lié à la clé publique qu'il
    a vue, et devra réactiver ses notifications.

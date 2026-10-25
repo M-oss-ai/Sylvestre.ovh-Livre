@@ -183,9 +183,9 @@ function nouveaute_message(string $titre, int $tome): string
 function fin_de_serie_message(string $titre, string $etat, int $suivant): string
 {
     if ($etat === 'termine') {
-        return '« ' . $titre . ' » : dernier tome atteint, la série passe en « Terminée » 🏁';
+        return '« ' . $titre . ' » : dernier tome atteint, la série passe en « Terminée »';
     }
-    return '« ' . $titre . ' » : vous êtes à jour, le tome ' . $suivant . " n'est pas encore paru — la série passe « En attente » ⏳";
+    return '« ' . $titre . ' » : vous êtes à jour, le tome ' . $suivant . " n'est pas encore paru — la série passe « En attente »";
 }
 
 /* ---------------------------------------------------------------------

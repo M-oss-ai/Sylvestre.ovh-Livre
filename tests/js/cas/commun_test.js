@@ -38,7 +38,7 @@ test("l adresse se vérifie telle qu on la donne : à l appelant d ôter les esp
 groupe("Lib.dureeToast() — le temps de lire");
 
 test("quatre secondes au moins", () => {
-  egale(4000, Lib.dureeToast("OK ✅"), "un message court");
+  egale(4000, Lib.dureeToast("OK"), "un message court");
   egale(4000, Lib.dureeToast(""), "un message vide");
 });
 
@@ -90,7 +90,7 @@ test("le message posé par PHP est repris, pas doublé", () => {
 
 test("un mot de passe : le message va après le bouton œil, pas entre les deux", () => {
   terrain('<div class="password-wrap"><input id="a-nouveau" type="password">'
-    + '<button type="button" class="toggle-password">👁️</button></div>');
+    + '<button type="button" class="toggle-password">Afficher</button></div>');
   Lib.erreurChamp(document.getElementById("a-nouveau"), "Trop court.");
   egale("a-nouveau-erreur", document.querySelector(".password-wrap").nextElementSibling.id, "après l enveloppe");
 });
@@ -224,7 +224,7 @@ test("un bouton en tabindex -1 n est jamais le dernier arrêt de la fenêtre", (
      serait « le dernier » quand il clôt la fenêtre, et Tab depuis le vrai
      dernier bouton s'échapperait vers la page derrière. */
   terrain('<div id="m"><input id="m-champ"><button id="m-ok" type="button">Confirmer</button>'
-    + '<button id="m-oeil" type="button" tabindex="-1">👁️</button></div>');
+    + '<button id="m-oeil" type="button" tabindex="-1">Afficher</button></div>');
   let empeche = false;
   document.getElementById("m-ok").focus();
   Lib.piegerFocus(document.getElementById("m"), { key: "Tab", shiftKey: false, preventDefault() { empeche = true; } });
@@ -233,7 +233,7 @@ test("un bouton en tabindex -1 n est jamais le dernier arrêt de la fenêtre", (
 });
 
 test("un bouton en tabindex -1 n est jamais le premier arrêt non plus", () => {
-  terrain('<div id="m"><button id="m-oeil" type="button" tabindex="-1">👁️</button>'
+  terrain('<div id="m"><button id="m-oeil" type="button" tabindex="-1">Afficher</button>'
     + '<input id="m-champ"><button id="m-ok" type="button">Confirmer</button></div>');
   let empeche = false;
   document.getElementById("m-champ").focus();

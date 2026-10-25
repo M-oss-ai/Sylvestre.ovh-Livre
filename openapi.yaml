@@ -201,7 +201,7 @@ paths:
       summary: Recherche auto de la couverture du tome suivant
       description: |
         Lance la Recherche auto du site (MangaDex). Tome cherché : le tome
-        suivant (`tome_lu + 1`) pour une série `cours` ou `envie`, le tome
+        suivant (`tome_lu + 1`) pour une série `cours`, `attente` ou `envie`, le tome
         lu pour une série `termine` ou `abandon`, jamais moins de 1.
 
         **Lente** : une quinzaine d'appels à MangaDex, plusieurs secondes
@@ -342,10 +342,10 @@ components:
   schemas:
     Statut:
       type: string
-      enum: [cours, envie, termine, abandon]
+      enum: [cours, attente, envie, termine, abandon]
       description: |
-        `cours` = En cours, `envie` = Envie, `termine` = Terminée,
-        `abandon` = Abandonnée. « En attente » n'existe pas.
+        `cours` = En cours, `attente` = En attente, `envie` = Envie, `termine` = Terminée,
+        `abandon` = Abandonnée. Exactement les statuts du site (`attente` est posé et levé aussi par le site, à la vérification des nouveautés).
 
     Serie:
       type: object
@@ -444,7 +444,7 @@ components:
         statuts:
           type: object
           additionalProperties: { type: string }
-          example: { cours: En cours, envie: Envie, termine: Terminée, abandon: Abandonnée }
+          example: { cours: En cours, attente: En attente, envie: Envie, termine: Terminée, abandon: Abandonnée }
         requetes:
           type: object
           properties:
@@ -524,7 +524,7 @@ components:
               code: validation
               message: Données invalides.
               champs:
-                statut: "Doit être l'une de : cours, envie, termine, abandon."
+                statut: "Doit être l'une de : cours, attente, envie, termine, abandon."
     CorpsInvalide:
       description: "`corps_requis`, `json_invalide` (400), `corps_trop_gros` (413, > 16 Ko) ou `type_non_supporte` (415, Content-Type ≠ application/json)."
       content:

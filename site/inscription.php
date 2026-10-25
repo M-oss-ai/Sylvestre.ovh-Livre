@@ -198,7 +198,7 @@ $csrf = jeton_csrf();
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Créer un compte — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body class="auth-body">
@@ -209,7 +209,6 @@ $csrf = jeton_csrf();
   <?php if ($envoye): ?>
 
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📬</p>
       <h1>Vérifiez vos e-mails</h1>
       <p class="hint">
         Un message vient d'être envoyé à <b><?= e($valeurs['email']) ?></b>.
@@ -229,13 +228,12 @@ $csrf = jeton_csrf();
       <a href="inscription.php" aria-current="page">Créer un compte</a>
     </nav>
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">✨</p>
       <h1>Créer un compte</h1>
       <p class="hint">Votre bibliothèque vous suit d'un appareil à l'autre.</p>
     </div>
 
     <div class="choix-methode">
-      <a class="btn btn-primary full" href="inscription.php?avec=email">✉️ S'inscrire avec une adresse e-mail</a>
+      <a class="btn btn-primary full" href="inscription.php?avec=email">S'inscrire avec une adresse e-mail</a>
       <?= bouton_google("S'inscrire avec Google") ?>
     </div>
 
@@ -244,7 +242,6 @@ $csrf = jeton_csrf();
   <?php else: ?>
 
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📚</p>
       <h1>Créer un compte</h1>
       <p class="hint">Votre bibliothèque vous suit d'un appareil à l'autre.</p>
     </div>
@@ -288,7 +285,7 @@ $csrf = jeton_csrf();
                  autocomplete="new-password" maxlength="<?= MDP_MAX ?>"
                  <?= attributs_regles_mdp() ?> data-identifiant="identifiant"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe') ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="mot_de_passe"
-                  aria-label="Afficher le mot de passe">👁️</button>
+                  aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
       </div>
@@ -299,7 +296,7 @@ $csrf = jeton_csrf();
           <input id="confirmation" name="confirmation" type="password" required
                  autocomplete="new-password" maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
           <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="confirmation"
-                  aria-label="Afficher le mot de passe">👁️</button>
+                  aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
       </div>

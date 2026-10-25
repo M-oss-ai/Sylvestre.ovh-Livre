@@ -1029,6 +1029,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
 }
 
 .icon-btn:hover { color: var(--text); }
+/* Le bouton afficher/masquer est un mot, plus un pictogramme. */
+.toggle-password { font-size: 13px; }
 
 .file-label { display: inline-flex; align-items: center; cursor: pointer; }
 
@@ -1308,7 +1310,6 @@ main { max-width: 1400px; margin: 0 auto; padding: 22px 20px 40px; }
   font-weight: 600;
 }
 
-.erreur-champ::before { content: "⚠️ "; }
 
 .field input[aria-invalid="true"],
 .cover-actions input[aria-invalid="true"],

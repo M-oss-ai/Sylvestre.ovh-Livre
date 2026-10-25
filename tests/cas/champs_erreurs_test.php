@@ -99,7 +99,7 @@ test('une adresse acceptée n est pas refusée', function () {
 
 test('une adresse en http:// est refusée', function () {
     /* Le cas de l'audit : acceptée à l'écran, puis jetée en silence par
-       le serveur, la série s'enregistrant « ✅ » sans son image. */
+       le serveur, la série s'enregistrant avec un message de succès sans son image. */
     vrai(url_image_refusee('http://exemple.test/couverture.png'), 'http');
 });
 

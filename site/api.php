@@ -221,7 +221,7 @@ switch ($action) {
             $statut = 'cours';
         }
         /* Une adresse refusée était ignorée sans un mot : la série
-           s'enregistrait « ✅ »… sans l'image que l'on croyait avoir mise. */
+           s'enregistrait avec un message de succès… sans l'image que l'on croyait avoir mise. */
         if (url_image_refusee($_POST['couverture_url'] ?? '')) {
             reponse_json(['ok' => false, 'champ' => 'couverture_url', 'erreur' => MESSAGE_URL_IMAGE_REFUSEE], 422);
         }
@@ -279,7 +279,7 @@ switch ($action) {
                   WHERE id = ? AND utilisateur_id = ?'
             );
             $req->execute([$titre, $auteur, $tome, $statut, $couverture, $lien, $id, $mon_id]);
-            $message = 'Série mise à jour ✅';
+            $message = 'Série mise à jour';
 
             /* Une autre série MangaDex (ou plus aucune) : ce qu'on savait de
                l'ancienne — son dernier tome, la date de vérification, l'annonce
@@ -324,7 +324,7 @@ switch ($action) {
             }
 
             $id = (int) $pdo->lastInsertId();
-            $message = 'Série ajoutée ✅';
+            $message = 'Série ajoutée';
         }
 
         // L'ancienne image locale devenue inutile est effacée du disque
@@ -374,8 +374,8 @@ switch ($action) {
             'carte'   => carte_html($s),
             'compte'  => compter_series($pdo, $mon_id),
             'message' => ($demarre || $repasse)
-                ? '« ' . $s['titre'] . ' » → tome ' . $tome . ' 📖 (passée en « En cours »)'
-                : '« ' . $s['titre'] . ' » → tome ' . $tome . ' 📖',
+                ? '« ' . $s['titre'] . ' » → tome ' . $tome . ' (passée en « En cours »)'
+                : '« ' . $s['titre'] . ' » → tome ' . $tome,
         ]);
     }
 
@@ -401,7 +401,7 @@ switch ($action) {
             'ok'      => true,
             'carte'   => carte_html($s),
             'compte'  => compter_series($pdo, $mon_id),
-            'message' => '« ' . $s['titre'] . ' » → retour au tome ' . $tome . ' ↩️'
+            'message' => '« ' . $s['titre'] . ' » → retour au tome ' . $tome
                 . ($repasse ? ' (repassée « En cours »)' : ''),
         ]);
     }
@@ -515,7 +515,7 @@ switch ($action) {
             supprimer_image_locale($ancienne);
         }
 
-        $message = 'Profil enregistré ✅';
+        $message = 'Profil enregistré';
         if ($email_change) {
             journal_securite('changement_email_demande', [
                 'utilisateur' => $mon_id, 'vers' => $email,
@@ -634,8 +634,8 @@ switch ($action) {
             'ok'      => true,
             'csrf'    => jeton_csrf(),
             'message' => (int) $moi['sans_mot_de_passe'] === 1
-                ? 'Mot de passe défini ✅ — il vous sera demandé après Google, à chaque connexion.'
-                : 'Mot de passe modifié ✅ — les autres appareils ont été déconnectés.',
+                ? 'Mot de passe défini — il vous sera demandé après Google, à chaque connexion.'
+                : 'Mot de passe modifié — les autres appareils ont été déconnectés.',
         ]);
     }
 
@@ -700,7 +700,7 @@ switch ($action) {
         journal_securite('cle_acces_ajoutee', ['utilisateur' => $mon_id]);
         avertir_cle_acces_ajoutee((string) $moi['email'], (string) $moi['identifiant'], $nom,
             acces_compte($moi['google_sub'], (int) $moi['sans_mot_de_passe'] === 0));
-        reponse_json(['ok' => true, 'message' => "Clé d'accès ajoutée ✅"]);
+        reponse_json(['ok' => true, 'message' => "Clé d'accès ajoutée"]);
     }
 
     case 'cle.supprimer': {
@@ -708,7 +708,7 @@ switch ($action) {
             reponse_json(['ok' => false, 'erreur' => "Clé d'accès introuvable."], 404);
         }
         journal_securite('cle_acces_retiree', ['utilisateur' => $mon_id]);
-        reponse_json(['ok' => true, 'message' => "Clé d'accès retirée ✅"]);
+        reponse_json(['ok' => true, 'message' => "Clé d'accès retirée"]);
     }
 
     /* ---------------- Renoncer à l'action confirmée ----------------
@@ -737,7 +737,7 @@ switch ($action) {
         reponse_json([
             'ok'      => $envoye,
             'message' => $envoye
-                ? 'E-mail de confirmation renvoyé ✅'
+                ? 'E-mail de confirmation renvoyé'
                 : "Échec de l'envoi. Réessayez plus tard ou contactez l'administrateur à " . ADMIN_EMAIL . '.',
         ]);
     }
@@ -894,7 +894,7 @@ switch ($action) {
             reponse_json(['ok' => false, 'erreur' => "L'import a échoué. Vérifiez le fichier et réessayez."], 500);
         }
 
-        $phrases = [$importees . ' série(s) ajoutée(s) ✅'];
+        $phrases = [$importees . ' série(s) ajoutée(s)'];
         if ($presentes > 0) {
             $phrases[] = $presentes . ' déjà présente(s) dans la bibliothèque, non dupliquée(s)'
                 . ($completees > 0 ? ' — ' . $completees . ' complétée(s) (image ou favori)' : '');
@@ -933,7 +933,7 @@ switch ($action) {
         supprimer_images_locales($couvertures);
         journal_securite('bibliotheque_videe', ['utilisateur' => $mon_id, 'series' => count($couvertures)]);
 
-        reponse_json(['ok' => true, 'message' => 'Bibliothèque vidée 🗑️']);
+        reponse_json(['ok' => true, 'message' => 'Bibliothèque vidée']);
     }
 
     /* ---------------- Suppression complète du compte ---------------- */

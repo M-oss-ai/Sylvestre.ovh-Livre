@@ -316,7 +316,7 @@ function corps_html(string $texte, string $sujet = ''): string
    suivaient ne partaient jamais. L'appelant reçoit false et le dit à
    l'utilisateur, qui recommence.
 
-   ⚠️ Il n'y a AUCUN plafond d'envoi applicatif. Le seul frein restant est
+   ATTENTION : Il n'y a AUCUN plafond d'envoi applicatif. Le seul frein restant est
    le limiteur par IP des pages qui déclenchent un envoi (inscription,
    mot de passe oublié, renvoi de confirmation) — qu'une attaque
    distribuée contourne par construction. La limite d'envoi journalière

@@ -826,7 +826,7 @@ define('LEGAL_HEBERGEUR_TEL', env('LEGAL_HEBERGEUR_TEL', '1007'));
    est une information juridique distincte d'une adresse postale — et
    elle reste exacte même si l'hébergeur déménage ses bureaux.
 
-   ⚠️ En le changeant, vérifiez que le nouveau pays figure toujours sur
+   ATTENTION : En le changeant, vérifiez que le nouveau pays figure toujours sur
    la liste des États à protection adéquate (annexe 1 OPDo) : sinon le
    transfert exige des garanties supplémentaires, et la phrase
    correspondante de mentions-legales.php devient fausse. */

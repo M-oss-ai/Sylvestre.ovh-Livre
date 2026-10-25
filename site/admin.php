@@ -119,7 +119,7 @@ function admin_oui_non(bool $oui, string $quoi): string
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Administration — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body data-csrf="<?= e($csrf) ?>" data-prive="1" data-compte="<?= $mon_id ?>"
@@ -144,7 +144,7 @@ function admin_oui_non(bool $oui, string $quoi): string
        Le lien reçu à ADMIN_EMAIL mène ici. Rien n'est supprimé avant le
        bouton : un GET ne supprime jamais. -->
   <section class="settings-card admin-suppression" aria-labelledby="admin-suppr-titre">
-    <h2 class="settings-card-title" id="admin-suppr-titre"><span class="settings-icon" aria-hidden="true">🗑️</span> Confirmer la suppression</h2>
+    <h2 class="settings-card-title" id="admin-suppr-titre">Confirmer la suppression</h2>
     <?php $c = $demande['cible']; ?>
     <p>
       <?= e($demande['par']) ?> demande la suppression du compte de
@@ -175,7 +175,7 @@ function admin_oui_non(bool $oui, string $quoi): string
 
   <!-- ---------------- Les chiffres ---------------- -->
   <section class="settings-card" aria-labelledby="admin-chiffres-titre">
-    <h2 class="settings-card-title" id="admin-chiffres-titre"><span class="settings-icon" aria-hidden="true">📊</span> En un coup d'œil</h2>
+    <h2 class="settings-card-title" id="admin-chiffres-titre">En un coup d'œil</h2>
     <dl class="admin-chiffres">
       <div><dt>Comptes</dt><dd><?= $totaux['comptes'] ?> <small>/ <?= MAX_UTILISATEURS ?></small></dd><dd class="admin-sous"><?= $restant ?> place(s) restante(s)</dd></div>
       <div><dt>Confirmés</dt><dd data-total="confirmes"><?= $totaux['confirmes'] ?></dd></div>
@@ -189,7 +189,7 @@ function admin_oui_non(bool $oui, string $quoi): string
 
   <!-- ---------------- Les comptes ---------------- -->
   <section class="settings-card" aria-labelledby="admin-comptes-titre">
-    <h2 class="settings-card-title" id="admin-comptes-titre"><span class="settings-icon" aria-hidden="true">👥</span> Comptes</h2>
+    <h2 class="settings-card-title" id="admin-comptes-titre">Comptes</h2>
 
     <div class="admin-outils">
       <div class="field admin-recherche">
@@ -239,7 +239,7 @@ function admin_oui_non(bool $oui, string $quoi): string
                 <!-- La colonne n'est pas vide, mais le site refuse l'adresse (http://, chemin
                      étranger…) : un ✓ ferait croire qu'on peut la voir. -->
                 <span class="admin-non" role="img" aria-label="Image de profil : adresse refusée par le site"
-                      title="Une image est enregistrée, mais son adresse est refusée par le site : elle n'est pas affichée.">⚠</span>
+                      title="Une image est enregistrée, mais son adresse est refusée par le site : elle n'est pas affichée.">!</span>
               <?php else: ?>
                 <?= admin_oui_non(false, 'Image de profil') ?>
               <?php endif; ?>
@@ -287,7 +287,7 @@ function admin_oui_non(bool $oui, string $quoi): string
        chaque valeur a ses bornes ; ce qui touche aux secrets, à l'adresse du
        site, à ADMIN_EMAIL ou aux mots de passe reste dans le .env. -->
   <section class="settings-card" id="reglages" aria-labelledby="admin-reglages-titre">
-    <h2 class="settings-card-title" id="admin-reglages-titre"><span class="settings-icon" aria-hidden="true">⚙️</span> Réglages</h2>
+    <h2 class="settings-card-title" id="admin-reglages-titre">Réglages</h2>
 
     <?php if (!$reglages_dispo): ?>
       <p class="alert alert-error" role="alert">
@@ -297,7 +297,7 @@ function admin_oui_non(bool $oui, string $quoi): string
     <?php else: ?>
       <p class="hint admin-reglages-intro">
         Une valeur enregistrée ici <b>remplace celle du .env</b> et s'applique dès la requête suivante, pour
-        tout le monde. « ↩ .env » efface votre valeur et rend la main au fichier. Chaque réglage a ses bornes.
+        tout le monde. « Rétablir .env » efface votre valeur et rend la main au fichier. Chaque réglage a ses bornes.
       </p>
 
       <?php foreach (REGLAGES_GROUPES as $groupe => $titre_groupe): ?>
@@ -339,7 +339,7 @@ function admin_oui_non(bool $oui, string $quoi): string
             <span class="admin-badge admin-source" data-source="<?= e($v['source']) ?>"><?= e($etiquettes_source[$v['source']]) ?></span>
             <button type="submit" class="btn btn-primary admin-enregistrer" disabled>Enregistrer</button>
             <button type="button" class="btn btn-ghost admin-revenir" aria-label="Revenir à la valeur du .env : <?= e($v['libelle']) ?>"
-                    <?= $v['source'] === 'base' ? '' : 'disabled' ?>>↩ .env</button>
+                    <?= $v['source'] === 'base' ? '' : 'disabled' ?>>Rétablir .env</button>
           </form>
         <?php endforeach; ?>
         </div>

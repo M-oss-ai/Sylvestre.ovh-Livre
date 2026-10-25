@@ -292,7 +292,7 @@ try {
    le jour ou le SMTP est en panne, et un accent mal rendu y est un
    moindre mal.
 
-   ⚠️ L'alignement des colonnes se calcule en CARACTERES : sprintf()
+   ATTENTION : L'alignement des colonnes se calcule en CARACTERES : sprintf()
    et str_pad() comptent les octets, si bien que chaque « e » accentue
    decalait sa colonne d'un cran vers la gauche.
    --------------------------------------------------------------------- */

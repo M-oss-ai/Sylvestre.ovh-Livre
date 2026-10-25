@@ -1899,7 +1899,7 @@ window.Bibliotheque = (() => {
       majApercu();
       // Le numéro est annoncé : la règle « prochain tome à emprunter »
       // surprendrait sinon quelqu'un qui vient de taper 10.
-      $coverStatus.textContent = "Image du tome " + r.tome + " reprise ✅";
+      $coverStatus.textContent = "Image du tome " + r.tome + " reprise";
     } catch (err) {
       $coverStatus.textContent = err.message;
     } finally {
@@ -1931,7 +1931,7 @@ window.Bibliotheque = (() => {
       $fImageFile.value = "";
       $fCoverRemoved.value = "0";
       majApercu();
-      $coverStatus.textContent = "Image dissociée de MangaDex ✅ — Enregistrez pour confirmer.";
+      $coverStatus.textContent = "Image dissociée de MangaDex — Enregistrez pour confirmer.";
     } catch (err) {
       $coverStatus.textContent = err.message;
     } finally {
@@ -2129,7 +2129,7 @@ window.Bibliotheque = (() => {
     $fImageFile.value = "";
     $fCoverRemoved.value = "0";
     majApercu();
-    $coverStatus.textContent = "Couverture sélectionnée ✅";
+    $coverStatus.textContent = "Couverture sélectionnée";
   });
 
   /* ---------------- Nouveaux tomes ----------------

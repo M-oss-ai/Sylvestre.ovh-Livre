@@ -170,7 +170,7 @@ window.Parametres = (() => {
   /** Le Profil vient d'être enregistré : la page reprend ce qui compte. */
   function profilEnregistre(r) {
     photoEnAttente = r.photo ? { type: "url", value: r.photo, existante: true } : null;
-    $fallback.textContent = r.initiales || "🙂";
+    $fallback.textContent = r.initiales || "?";
     majApercuPhoto();
     $photoStatus.textContent = "";
     $emailPwd.value = "";
@@ -679,7 +679,7 @@ window.Parametres = (() => {
     // d'interrogation partait seul a la ligne.
     $confirmTitle.textContent = titre.replace(/ ([?!:;])/g, " $1");
     if (texte) {
-      $confirmText.textContent = (destructif ? "⚠️ " : "") + texte;
+      $confirmText.textContent = texte;
       $confirmText.classList.remove("hidden");
     } else {
       $confirmText.classList.add("hidden");

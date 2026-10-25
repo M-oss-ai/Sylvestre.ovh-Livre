@@ -77,8 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // mots de passe voit une navigation réussie — c'est ce qui
             // déclenche sa proposition d'enregistrement.
             flash((int) $moi['sans_mot_de_passe'] === 1
-                ? 'Mot de passe défini ✅ — il vous sera demandé après Google, à chaque connexion.'
-                : 'Mot de passe modifié ✅ — les autres appareils ont été déconnectés.');
+                ? 'Mot de passe défini — il vous sera demandé après Google, à chaque connexion.'
+                : 'Mot de passe modifié — les autres appareils ont été déconnectés.');
             header('Location: parametres.php#securite');
             exit;
         }
@@ -167,9 +167,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
             }
             flash($email_change
-                ? "Profil enregistré ✅ — un lien de confirmation a été envoyé à votre nouvelle adresse. "
+                ? "Profil enregistré — un lien de confirmation a été envoyé à votre nouvelle adresse. "
                   . "Votre adresse actuelle reste active jusqu'au clic."
-                : 'Profil enregistré ✅');
+                : 'Profil enregistré');
             header('Location: parametres.php#profil');
             exit;
         }
@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             oublier_confirmation();   // elle ne sert qu'une fois
             journal_securite('mot_de_passe_supprime', ['utilisateur' => (int) $moi['id']]);
             avertir_mot_de_passe_supprime((string) $moi['email'], (string) $moi['identifiant']);
-            flash('Mot de passe supprimé ✅ — vous vous connectez désormais avec Google seul.');
+            flash('Mot de passe supprimé — vous vous connectez désormais avec Google seul.');
             header('Location: parametres.php#securite');
             exit;
         }
@@ -259,7 +259,7 @@ if ($par_google && $confirme) {
 }
 
 /**
- * « ✅ Identité confirmée : il vous reste 9 min 58 s pour … », et de quoi
+ * « Identité confirmée : il vous reste 9 min 58 s pour … », et de quoi
  * y renoncer. Le bouton se rattache par « form » au formulaire caché
  * #annuler-confirmation-form : ce bloc peut se trouver DANS un autre
  * formulaire (le Profil), qui ne peut pas en contenir un second.
@@ -268,7 +268,7 @@ function bloc_confirme(?array $confirme, string $pour): string
 {
     $n = (int) ($confirme['restant'] ?? 0);
     return '<div class="bloc-confirme" data-fin-confirmation>'
-        . '<p class="hint confirmation-active">✅ Identité confirmée : il vous reste '
+        . '<p class="hint confirmation-active">Identité confirmée : il vous reste '
         . '<b class="delai" data-restant="' . $n . '">' . $n . ' secondes</b> pour ' . e($pour) . '.</p>'
         . '<button type="submit" form="annuler-confirmation-form" class="btn btn-ghost small">Annuler</button>'
         . '</div>';
@@ -315,7 +315,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
 <title>Paramètres — Ma Bibliothèque Manga</title>
 <meta name="description" content="Gérez votre profil, votre mot de passe et vos données.">
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <!-- L'application installable (écran d'accueil) : indispensable aux notifications sur
      iPhone, qui n'en propose qu'à un site ajouté à l'écran d'accueil. -->
 <link rel="manifest" href="manifest.webmanifest">
@@ -346,7 +346,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
 
   <!-- ---------------- Profil ---------------- -->
   <section class="settings-card" id="profil">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">👤</span> Profil</h2>
+    <h2 class="settings-card-title">Profil</h2>
 
     <?php if (isset($erreurs_profil['photo'])): ?>
       <div class="alert alert-error" role="alert"><?= e($erreurs_profil['photo']) ?></div>
@@ -357,7 +357,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
         <img id="settings-avatar-preview" class="settings-avatar-img<?= $photo === '' ? ' hidden' : '' ?>"
              <?= $photo !== '' ? 'src="' . e($photo) . '"' : '' ?> alt="Photo de profil">
         <span id="settings-avatar-fallback" class="settings-avatar-fallback<?= $photo !== '' ? ' hidden' : '' ?>"><?= e(initiales($moi)) ?></span>
-        <span class="avatar-edit-badge" aria-hidden="true">✏️</span>
+        <span class="avatar-edit-badge" aria-hidden="true">✎</span>
       </div>
       <div class="profile-avatar-actions">
         <!-- Une étiquette, et pas seulement un texte indicatif : celui-ci
@@ -370,7 +370,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
         <?= champ_erreur($erreurs_profil, 'photo_url', 'a-image-url') ?>
         <div class="cover-actions-buttons">
           <label class="btn btn-ghost small file-label">
-            📁 Choisir un fichier
+            Choisir un fichier
             <input id="a-image-file" name="photo_fichier" type="file" accept="image/*" class="visually-hidden" form="profil-form">
           </label>
           <button type="button" id="remove-photo" class="btn btn-ghost small danger-text">Retirer</button>
@@ -412,7 +412,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
              montre l'adresse ACTIVE, et ce bloc celle qui attend. -->
         <div id="email-attente" class="email-attente<?= $attente_email ? '' : ' hidden' ?>">
           <p>
-            ✉️ Changement vers <b id="email-attente-adresse"><?= e($attente_email['adresse'] ?? '') ?></b>
+            Changement vers <b id="email-attente-adresse"><?= e($attente_email['adresse'] ?? '') ?></b>
             en attente : cliquez sur le lien envoyé à cette adresse (valable jusqu'au
             <span id="email-attente-expire"><?= e($attente_email['expire'] ?? '') ?></span>).
             D'ici là, votre adresse actuelle reste celle du compte.
@@ -444,7 +444,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
           <span class="hint">(requis si vous changez d'identifiant ou d'adresse)</span></label>
         <div class="password-wrap">
           <input id="a-email-password" name="mot_de_passe" type="password" autocomplete="current-password"<?= champ_aria($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>>
-          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-email-password" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-email-password" aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?php endif; ?>
         <?= champ_erreur($erreurs_profil, 'mot_de_passe', 'a-email-password') ?>
@@ -474,7 +474,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
 
     <?php if (!$moi['email_verifie']): ?>
       <div class="settings-divider"></div>
-      <p class="hint">⚠️ Adresse e-mail non vérifiée.</p>
+      <p class="hint">Adresse e-mail non vérifiée.</p>
       <button id="btn-renvoyer-verification" type="button" class="btn btn-ghost full">Renvoyer l'e-mail de confirmation</button>
     <?php endif; ?>
   </section>
@@ -483,7 +483,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
        « #securite » dans l'action : après un envoi refusé, la page revient
        sur CETTE carte, où l'erreur s'affiche — et non tout en haut. -->
   <section class="settings-card" id="securite">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔒</span> Sécurité</h2>
+    <h2 class="settings-card-title">Sécurité</h2>
 
     <?php if ($par_google): ?>
       <!-- Compte créé avec Google : il le reste (il ne se délie pas, et un
@@ -536,7 +536,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
         <label for="a-current">Mot de passe actuel</label>
         <div class="password-wrap">
           <input id="a-current" name="mot_de_passe_actuel" type="password" autocomplete="current-password" required<?= champ_aria($erreurs_mdp, 'actuel', 'a-current') ?>>
-          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-current" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-current" aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'actuel', 'a-current') ?>
       </div>
@@ -549,7 +549,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
                  maxlength="<?= MDP_MAX ?>"
                  <?= attributs_regles_mdp() ?>
                  data-identifiant-valeur="<?= e($moi['identifiant']) ?>"<?= champ_aria($erreurs_mdp, 'nouveau', 'a-new') ?>>
-          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-new" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-new" aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'nouveau', 'a-new') ?>
       </div>
@@ -559,7 +559,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
         <div class="password-wrap">
           <input id="a-new2" name="mot_de_passe_confirmation" type="password" autocomplete="new-password" required
                  maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs_mdp, 'confirmation', 'a-new2') ?>>
-          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-new2" aria-label="Afficher le mot de passe">👁️</button>
+          <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="a-new2" aria-label="Afficher le mot de passe">Afficher</button>
         </div>
         <?= champ_erreur($erreurs_mdp, 'confirmation', 'a-new2') ?>
       </div>
@@ -600,7 +600,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
          si le navigateur sait faire (js/settings.js). -->
     <div class="settings-divider"></div>
     <div class="cles-acces" id="cles-acces">
-      <h3 class="settings-sous-titre">🔑 Clés d'accès</h3>
+      <h3 class="settings-sous-titre">Clés d'accès</h3>
       <p class="hint">Une clé d'accès, gardée par votre gestionnaire de mots de passe ou par cet appareil,
         vous connecte sans taper de mot de passe : sur la page de connexion, choisissez « Se connecter
         avec une clé d'accès ». L'ajouter demande de confirmer votre identité.</p>
@@ -631,26 +631,37 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
           <input id="cle-nom" type="text" maxlength="<?= CLE_NOM_MAX ?>" autocomplete="off"
                  placeholder="Par exemple : mon téléphone">
         </div>
-        <button type="button" id="btn-ajouter-cle" class="btn btn-ghost full hidden">🔑 Ajouter une clé d'accès</button>
+        <button type="button" id="btn-ajouter-cle" class="btn btn-ghost full hidden">Ajouter une clé d'accès</button>
       <?php else: ?>
         <p class="hint">Limite de <?= CLE_ACCES_MAX ?> clés atteinte : retirez-en une pour en ajouter une autre.</p>
       <?php endif; ?>
       <p class="hint hidden" id="cles-non-supporte">Ce navigateur ne gère pas les clés d'accès.</p>
     </div>
 
+    <!-- Jetons d'API : pour qu'une application personnelle (de serveur à
+         serveur) lise et modifie la bibliothèque. Page à part, sans JavaScript :
+         voir jeton-api.php. -->
+    <div class="settings-divider"></div>
+    <div class="jetons-api" id="jetons-api">
+      <h3 class="settings-sous-titre">Jetons d'API</h3>
+      <p class="hint">Un jeton permet à votre propre application de lire et modifier vos séries, sans jamais
+        les supprimer. Le créer demande de confirmer votre identité.</p>
+      <a href="jeton-api.php" class="btn btn-ghost full">Gérer mes jetons d'API</a>
+    </div>
+
     <div class="settings-divider"></div>
 
     <form method="post" action="deconnexion.php">
       <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-      <button type="submit" class="btn btn-ghost full">🚪 Se déconnecter</button>
+      <button type="submit" class="btn btn-ghost full">Se déconnecter</button>
     </form>
   </section>
 
   <!-- ---------------- Forfait ---------------- -->
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🎫</span> Forfait</h2>
+    <h2 class="settings-card-title">Forfait</h2>
     <?php if ($bloque): ?>
-      <p class="hint"><b>Bloqué 🔒</b> — consultation seule (<?= $nb_series ?> série(s)).</p>
+      <p class="hint"><b>Bloqué</b> — consultation seule (<?= $nb_series ?> série(s)).</p>
       <?php if (trim((string) $moi['raison_blocage']) !== ''): ?>
         <p class="hint">Raison : <b><?= e(trim((string) $moi['raison_blocage'])) ?></b></p>
       <?php endif; ?>
@@ -661,7 +672,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
         <a href="mailto:<?= e(ADMIN_EMAIL) ?>"><?= e(ADMIN_EMAIL) ?></a>.
       </p>
     <?php elseif ($moi['forfait'] === 'illimite'): ?>
-      <p class="hint"><b>Illimité ✨</b> — aucune limite de séries pour ce compte (<?= $nb_series ?> actuellement).</p>
+      <p class="hint"><b>Illimité</b> — aucune limite de séries pour ce compte (<?= $nb_series ?> actuellement).</p>
     <?php else: ?>
       <p class="hint">
         <b>Standard</b> — <?= $nb_series ?> / <?= MAX_SERIES_PAR_UTILISATEUR ?> séries utilisées.
@@ -699,7 +710,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
        permet : sans JavaScript, il ne servirait à rien. -->
   <?php if (!$bloque && push_actif()): ?>
   <section class="settings-card" id="notifications">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🔔</span> Notifications</h2>
+    <h2 class="settings-card-title">Notifications</h2>
 
     <label class="bascule" for="push-actif">
       <input type="checkbox" id="push-actif" class="bascule-case" disabled
@@ -738,7 +749,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
     $filtrer = (int) ($moi['filtre_sensible'] ?? 1) === 1;
   ?>
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🛡️</span> Images sensibles</h2>
+    <h2 class="settings-card-title">Images sensibles</h2>
 
     <label class="bascule" for="filtre-sensible">
       <input type="checkbox" id="filtre-sensible" class="bascule-case"
@@ -773,7 +784,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
   <?php endif; ?>
   <!-- ---------------- Données ---------------- -->
   <section class="settings-card" id="donnees">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">💾</span> Données</h2>
+    <h2 class="settings-card-title">Données</h2>
     <p class="hint">
       <b><?= $nb_series ?></b> série(s) enregistrée(s) dans votre bibliothèque.
       Membre depuis le <?= e(date('d/m/Y', strtotime((string) $moi['cree_le']))) ?>.
@@ -783,10 +794,10 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
       <form method="post" action="api.php">
         <input type="hidden" name="action" value="donnees.exporter">
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-        <button type="submit" id="btn-export-all" class="btn btn-ghost">⬇️ Exporter mes données</button>
+        <button type="submit" id="btn-export-all" class="btn btn-ghost">Exporter mes données</button>
       </form>
       <label class="btn btn-ghost file-label<?= $bloque ? ' btn-inactif' : '' ?>"<?= $bloque ? ' aria-disabled="true"' : '' ?>>
-        ⬆️ Importer
+        Importer
         <input id="btn-import-all" type="file" accept="application/json,.json" class="visually-hidden"<?= $bloque ? ' disabled' : '' ?>>
       </label>
     </div>
@@ -806,19 +817,19 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
     </p>
     <?php endif; ?>
 
-    <button id="btn-clear-library" type="button" class="btn btn-danger full"<?= $bloque ? ' disabled' : '' ?>>🗑️ Vider ma bibliothèque</button>
+    <button id="btn-clear-library" type="button" class="btn btn-danger full"<?= $bloque ? ' disabled' : '' ?>>Vider ma bibliothèque</button>
     <p class="hint">Supprime toutes vos séries. Votre compte est conservé.</p>
 
     <div class="settings-divider"></div>
 
-    <button id="btn-delete-account" type="button" class="btn btn-danger full">⚠️ Supprimer mon compte</button>
+    <button id="btn-delete-account" type="button" class="btn btn-danger full">Supprimer mon compte</button>
     <p class="hint">Supprime définitivement le compte et l'intégralité de la bibliothèque associée.</p>
   </section>
 
   <?php if (est_admin($moi)): ?>
   <!-- ---------------- Administration (comptes `admin` seulement) ---------------- -->
   <section class="settings-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">🛠️</span> Administration</h2>
+    <h2 class="settings-card-title">Administration</h2>
     <p class="hint">Vous êtes administrateur : la liste des comptes, leurs forfaits, les blocages.</p>
     <a class="btn btn-primary full" href="admin.php">Ouvrir l'administration</a>
   </section>
@@ -826,7 +837,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
 
   <!-- ---------------- À propos ---------------- -->
   <section class="settings-card about-card">
-    <h2 class="settings-card-title"><span class="settings-icon" aria-hidden="true">📚</span> À propos</h2>
+    <h2 class="settings-card-title">À propos</h2>
     <p class="hint">
       <b>Ma Bibliothèque Manga</b> — chaque compte possède sa propre bibliothèque : suivez le
       tome en cours de chaque série, repérez d'un coup d'œil le prochain tome à emprunter grâce
@@ -864,7 +875,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
           <label for="confirm-password">Mot de passe actuel</label>
           <div class="password-wrap">
             <input id="confirm-password" type="password" autocomplete="current-password">
-            <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="confirm-password" aria-label="Afficher le mot de passe">👁️</button>
+            <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="confirm-password" aria-label="Afficher le mot de passe">Afficher</button>
           </div>
           <p class="hint confirm-oubli"><a href="mot-de-passe-oublie.php">Mot de passe oublié&nbsp;?</a></p>
         </div>
@@ -876,7 +887,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
            lire avant tout le reste. La classe (alerte ou simple info) est
            posée par js/settings.js selon l'action. -->
       <p id="confirm-text" class="alert" role="alert">Cette action est définitive.</p>
-      <p class="hint confirmation-active">✅ Identité confirmée : il vous reste
+      <p class="hint confirmation-active">Identité confirmée : il vous reste
         <b id="confirm-delai" class="delai"></b> pour confirmer.</p>
       <!-- Dernière occasion de sauvegarder, dans la fenêtre même qui efface :
            un « pensez à exporter » ne servait à rien sans le bouton à côté.
@@ -884,7 +895,7 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
       <form id="confirm-export" method="post" action="api.php" class="confirm-export hidden">
         <input type="hidden" name="action" value="donnees.exporter">
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
-        <button type="submit" class="btn btn-ghost full">⬇️ Exporter d'abord mes <?= $nb_series ?> série(s)</button>
+        <button type="submit" class="btn btn-ghost full">Exporter d'abord mes <?= $nb_series ?> série(s)</button>
       </form>
     </div>
 

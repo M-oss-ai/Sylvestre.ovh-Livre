@@ -102,7 +102,7 @@ Tous les codes HTTP ≥ 400 ont le même corps :
   "erreur": {
     "code": "validation",
     "message": "Données invalides.",
-    "champs": { "statut": "Doit être l'une de : cours, envie, termine, abandon." }
+    "champs": { "statut": "Doit être l'une de : cours, attente, envie, termine, abandon." }
   }
 }
 ```
@@ -160,7 +160,7 @@ Stricte : un champ inconnu, un mauvais type ou une valeur hors borne est
 | `titre` | texte, 1 à 190 caractères (obligatoire à la création) |
 | `auteur` | texte, 0 à 190 caractères (c'est le « sous-titre / auteur » de la fiche) ; `""` pour l'effacer |
 | `tome_lu` | **entier** de 0 à 9999 ; `0` = série non commencée. Un nombre en texte (`"3"`) est refusé |
-| `statut` | `cours`, `envie`, `termine` ou `abandon` — voir ci-dessous |
+| `statut` | `cours`, `attente`, `envie`, `termine` ou `abandon` — voir ci-dessous |
 | `favori` | booléen `true` / `false` (une **valeur**, pas une bascule : répéter est sans effet) |
 
 Les retours à la ligne et caractères de contrôle d'un texte sont remplacés
@@ -171,11 +171,12 @@ par un espace ou supprimés, comme sur le site ; les espaces autour sont retiré
 | Code | Libellé affiché |
 |---|---|
 | `cours` | En cours |
+| `attente` | En attente |
 | `envie` | Envie |
 | `termine` | Terminée |
 | `abandon` | Abandonnée |
 
-« En attente » n'existe pas dans le site : l'API le refuse (`422`).
+Ce sont **exactement** les statuts du site : l'API en lit la liste, une valeur inconnue est refusée (`422`). Le statut `attente` (« En attente ») signale une série arrivée au dernier tome paru ; le site le pose et le lève tout seul (vérification des nouveautés), et l'API peut aussi le poser ou le retirer à la main.
 La liste est aussi dans la réponse de `GET /moi`.
 
 ### L'objet série
@@ -229,7 +230,7 @@ curl -s "$API/moi" -H "Authorization: Bearer $LBM_TOKEN"
     "series": 37,
     "series_max": 150,
     "tome_max": 9999,
-    "statuts": { "cours": "En cours", "envie": "Envie", "termine": "Terminée", "abandon": "Abandonnée" },
+    "statuts": { "cours": "En cours", "attente": "En attente", "envie": "Envie", "termine": "Terminée", "abandon": "Abandonnée" },
     "requetes": { "max": 60, "fenetre": 60 },
     "recherches_couverture": { "max": 30, "fenetre": 120 }
   }
@@ -247,7 +248,7 @@ Paramètres (tous facultatifs) :
 | Paramètre | Effet |
 |---|---|
 | `q` | texte cherché dans le **titre et l'auteur**, sans tenir compte de la casse ni des accents (`elan` trouve « Élan ») ; `%` et `_` sont du texte, pas des jokers |
-| `statut` | `cours`, `envie`, `termine` ou `abandon` |
+| `statut` | `cours`, `attente`, `envie`, `termine` ou `abandon` |
 | `favori` | `true`/`1` (favoris seulement) ou `false`/`0` (les autres) |
 | `limite` | taille de la page, 1 à 100 (défaut **50**) |
 | `decalage` | nombre de séries à sauter (défaut 0) |
@@ -349,7 +350,7 @@ renvoie les propositions.
 
 Le tome cherché est celui du site :
 
-- série `cours` ou `envie` → le **tome suivant** (`tome_lu + 1`) ;
+- série `cours`, `attente` ou `envie` → le **tome suivant** (`tome_lu + 1`) ;
 - série `termine` ou `abandon` → le tome qu'on en a (`tome_lu`) ;
 - jamais en dessous de 1.
 

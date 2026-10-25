@@ -129,7 +129,7 @@ $csrf = jeton_csrf();
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title><?= $bloquer ? "Bloquer le changement d'adresse" : 'Nouveau mot de passe' ?> — Ma Bibliothèque Manga</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icone-192.png">
 <link rel="stylesheet" href="<?= e(actif('css/style.css')) ?>">
 </head>
 <body class="auth-body">
@@ -137,7 +137,6 @@ $csrf = jeton_csrf();
 <main class="auth-wrap">
   <section class="auth-card">
     <div class="auth-head">
-      <p class="auth-logo" aria-hidden="true">📚</p>
       <h1><?= $bloquer ? "Bloquer le changement d'adresse" : 'Nouveau mot de passe' ?></h1>
       <?php if ($bloquer && !$reussi): ?>
         <p class="hint">Choisissez un nouveau mot de passe : le changement d'adresse sera annulé,
@@ -192,7 +191,7 @@ $csrf = jeton_csrf();
                    <?= attributs_regles_mdp() ?>
                    data-identifiant-valeur="<?= e((string) $compte['identifiant']) ?>"<?= champ_aria($erreurs, 'mot_de_passe', 'mot_de_passe') ?>>
             <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="mot_de_passe"
-                    aria-label="Afficher le mot de passe">👁️</button>
+                    aria-label="Afficher le mot de passe">Afficher</button>
           </div>
           <?= champ_erreur($erreurs, 'mot_de_passe', 'mot_de_passe') ?>
         </div>
@@ -203,7 +202,7 @@ $csrf = jeton_csrf();
             <input id="confirmation" name="confirmation" type="password" required
                    autocomplete="new-password" maxlength="<?= MDP_MAX ?>" placeholder="Retapez le mot de passe"<?= champ_aria($erreurs, 'confirmation', 'confirmation') ?>>
             <button type="button" class="icon-btn toggle-password" tabindex="-1" data-cible="confirmation"
-                    aria-label="Afficher le mot de passe">👁️</button>
+                    aria-label="Afficher le mot de passe">Afficher</button>
           </div>
           <?= champ_erreur($erreurs, 'confirmation', 'confirmation') ?>
         </div>
