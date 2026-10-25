@@ -41,15 +41,26 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   `email`        VARCHAR(190) NOT NULL,
   `email_verifie` TINYINT(1)  NOT NULL DEFAULT 0,
   `mot_de_passe` VARCHAR(255) NOT NULL,
-  `prenom`       VARCHAR(80)  NOT NULL DEFAULT '',
-  `nom`          VARCHAR(80)  NOT NULL DEFAULT '',
   `photo`        VARCHAR(500) NOT NULL DEFAULT '',
   -- Forfait du compte : « standard » = limité à MAX_SERIES_PAR_UTILISATEUR
-  -- (voir .env), « illimite » = pas de limite de séries. Pas de paiement en
-  -- ligne dans l'appli : le passage à l'illimité se fait manuellement en
+  -- (voir .env), « illimite » = pas de limite de séries, « bloque » =
+  -- consultation seule (ni création, ni modification, ni favori, ni tome,
+  -- ni import, ni suppression : voir ACTIONS_BLOQUEES dans fonctions.php).
+  -- Pas de paiement en ligne dans l'appli : un changement de forfait se fait
+  -- depuis admin.php (qui prévient l'intéressé par e-mail), ou à la main en
   -- base (l'utilisateur doit contacter l'administrateur, voir ADMIN_EMAIL) :
   --     UPDATE utilisateur SET forfait = 'illimite' WHERE identifiant = '...';
-  `forfait`      ENUM('standard','illimite') NOT NULL DEFAULT 'standard',
+  --     UPDATE utilisateur SET forfait = 'bloque'   WHERE identifiant = '...';
+  --     UPDATE utilisateur SET forfait = 'standard' WHERE identifiant = '...';
+  `forfait`      ENUM('standard','illimite','bloque') NOT NULL DEFAULT 'standard',
+  -- Administrateur : peut ouvrir admin.php. Une colonne à part du forfait :
+  -- on peut être bloqué ET administrateur. Le premier se pose à la main :
+  --     UPDATE utilisateur SET admin = 1 WHERE identifiant = '...';
+  `admin`        TINYINT(1)   NOT NULL DEFAULT 0,
+  -- Le motif saisi en bloquant le compte (repris dans l'e-mail), et la date.
+  -- Vides quand le compte n'est pas bloqué.
+  `raison_blocage` VARCHAR(500) NOT NULL DEFAULT '',
+  `bloque_le`    DATETIME     NULL DEFAULT NULL,
   -- Incrémenté à chaque changement de mot de passe. Une session PHP porte
   -- la valeur qu'elle a vue à la connexion : dès qu'elles diffèrent, la
   -- session est rejetée. C'est ce qui déconnecte RÉELLEMENT les autres
@@ -70,10 +81,17 @@ CREATE TABLE IF NOT EXISTS `utilisateur` (
   -- que l'utilisateur reactive le filtre, ce qui n'aurait aucun sens.
   `adulte_confirme` TINYINT(1) NOT NULL DEFAULT 0,
   `filtre_sensible` TINYINT(1) NOT NULL DEFAULT 1,
+  -- Identifiant du compte Google relié (revendication « sub » d'OpenID
+  -- Connect), NULL sinon. C'est lui, et non l'adresse, qui reconnaît le
+  -- compte Google : une adresse peut changer, le « sub » jamais.
+  -- Un compte créé par Google n'a pas de mot de passe : `mot_de_passe`
+  -- y vaut '' (chaîne vide), que password_verify() refuse toujours.
+  `google_sub`   VARCHAR(255) NULL DEFAULT NULL,
   `cree_le`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_utilisateur_identifiant` (`identifiant`),
   UNIQUE KEY `uk_utilisateur_email` (`email`),
+  UNIQUE KEY `uk_utilisateur_google` (`google_sub`),
   -- supprimer_image_locale() cherche « qui référence encore ce fichier ? » :
   -- sans cet index, c'est un parcours complet de la table à chaque
   -- suppression d'image (et il y en a une par série supprimée).
@@ -106,7 +124,7 @@ CREATE TABLE IF NOT EXISTS `jeton_action` (
   `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `utilisateur_id` INT UNSIGNED NOT NULL,
   `jeton_hash`     CHAR(64) NOT NULL,
-  `type`           ENUM('verification','reinit','changement_email','blocage_email') NOT NULL,
+  `type`           ENUM('verification','reinit','changement_email','blocage_email','suppression_admin') NOT NULL,
   `donnee`         VARCHAR(190) NULL,
   `expire`         DATETIME NOT NULL,
   `cree_le`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -131,7 +149,10 @@ CREATE TABLE IF NOT EXISTS `serie` (
   `titre`          VARCHAR(190) NOT NULL,
   `auteur`         VARCHAR(190) NOT NULL DEFAULT '',
   `tome_actuel`    INT UNSIGNED NOT NULL DEFAULT 0,
-  `statut`         ENUM('cours','envie','termine','abandon') NOT NULL DEFAULT 'cours',
+  -- « attente » : arrivé au dernier tome paru d'une série qui continue (voir la
+  -- migration 15). Ajouté EN FIN de liste : l'ordre d'affichage est celui de
+  -- STATUTS (includes/fonctions.php), pas celui de l'ENUM.
+  `statut`         ENUM('cours','envie','termine','abandon','attente') NOT NULL DEFAULT 'cours',
   `couverture`     VARCHAR(500) NOT NULL DEFAULT '',
   -- Serie correspondante chez MangaDex, une fois que l'utilisateur
   -- l'a designee. Tant qu'elle est renseignee, la couverture suit
@@ -144,6 +165,26 @@ CREATE TABLE IF NOT EXISTS `serie` (
   -- Serie mise en favori par son proprietaire. Un simple drapeau :
   -- l'ordre d'affichage n'en depend pas, seul le filtre s'en sert.
   `favori`         TINYINT(1)   NOT NULL DEFAULT 0,
+  -- Nouveaux tomes (voir includes/nouveautes.php et la migration 13) :
+  --   dernier_tome : le plus haut tome qui a une couverture chez MangaDex,
+  --                  tel qu'on l'a vu la dernière fois (0 = pas encore su) ;
+  --   verifie_le   : la dernière fois qu'on a interrogé MangaDex pour cette
+  --                  série (NULL = jamais) ;
+  --   nouveau_tome : le tome à emprunter dont l'arrivée n'a pas encore été
+  --                  annoncée à l'écran (0 = rien à annoncer).
+  `dernier_tome`   INT UNSIGNED NOT NULL DEFAULT 0,
+  `verifie_le`     DATETIME     NULL DEFAULT NULL,
+  `nouveau_tome`   INT UNSIGNED NOT NULL DEFAULT 0,
+  -- Etat de publication que MangaDex donne a la serie (migration 16) :
+  -- ongoing, completed, hiatus, cancelled, ou vide (pas encore su). Range
+  -- quand on arrive au dernier tome ; la carte en tire « Se termine au tome N »,
+  -- « Arretee au tome N », « En pause au tome N » ou « Tome N en attente ».
+  `publication`    VARCHAR(12)  NOT NULL DEFAULT '',
+  -- Migration 17 : le dernier volume que MangaDex DECLARE (lastVolume, rempli
+  -- pour une serie finie ; 0 sinon), et le moment ou l'etat de publication a ete
+  -- lu pour la derniere fois (NULL = jamais : le releve le lira).
+  `tome_final`     INT UNSIGNED NOT NULL DEFAULT 0,
+  `publication_le` DATETIME     NULL DEFAULT NULL,
   `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `maj_le`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -220,26 +261,11 @@ CREATE TABLE IF NOT EXISTS `session_persistante` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------
---  File de rattrapage des e-mails
---
---  L'envoi reste immédiat : c'est ce qui permet à un lien de
---  confirmation d'arriver en quelques secondes. Mais quand le serveur
---  SMTP ne répond pas, l'ancienne version perdait le message pour de
---  bon — l'utilisateur attendait un e-mail qui ne viendrait jamais.
---  Les envois ratés atterrissent ici, et purger.php les repasse.
---
---  Seuls les échecs y passent : cette table reste normalement vide.
+--  Ancienne file de rattrapage des e-mails, retirée : un envoi raté
+--  n'est plus retenté (un message à une adresse fausse, bloqué en tête,
+--  empêchait tous les suivants de partir). La table disparaît.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `mail_file` (
-  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `destinataire`   VARCHAR(190) NOT NULL,
-  `sujet`          VARCHAR(255) NOT NULL,
-  `corps`          TEXT NOT NULL,
-  `essais`         TINYINT UNSIGNED NOT NULL DEFAULT 0,
-  `cree_le`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_mail_file_cree` (`cree_le`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+DROP TABLE IF EXISTS `mail_file`;
 
 -- ---------------------------------------------------------------------
 --  Migrations — bases déjà installées
@@ -383,4 +409,361 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
               AND COLUMN_TYPE LIKE '%''blocage_email''%');
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `jeton_action` MODIFY COLUMN `type` ENUM(''verification'',''reinit'',''changement_email'',''blocage_email'') NOT NULL');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  7. Connexion avec Google (voir google.php).
+--
+--     `google_sub` : l'identifiant du compte Google relié, NULL sinon.
+--     L'index UNIQUE empêche deux comptes du site de se partager le même
+--     compte Google ; les NULL, eux, ne se gênent pas entre eux.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'google_sub');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `google_sub` VARCHAR(255) NULL DEFAULT NULL AFTER `filtre_sensible`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND INDEX_NAME = 'uk_utilisateur_google');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD UNIQUE KEY `uk_utilisateur_google` (`google_sub`)');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  8. Prénom et nom retirés : le site ne les demande plus (l'avatar par
+--     défaut prend les deux premières lettres de l'identifiant).
+--
+--     ⚠️ Irréversible : rejouer ce fichier EFFACE les prénoms et noms
+--     déjà enregistrés. Exporter la table avant, si on veut les garder.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'prenom');
+SET @sql := IF(@c = 0, 'DO 0', 'ALTER TABLE `utilisateur` DROP COLUMN `prenom`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'nom');
+SET @sql := IF(@c = 0, 'DO 0', 'ALTER TABLE `utilisateur` DROP COLUMN `nom`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  9. Clés d'accès (« passkeys », voir includes/cle_acces.php).
+--
+--     Une ligne par clé : la clé PUBLIQUE seulement (PEM) — la privée ne
+--     quitte jamais l'appareil ou le gestionnaire de mots de passe, rien
+--     ici ne permet de se connecter à sa place.
+--
+--     `cle_hash`  : empreinte sha256 de l'identifiant de la clé. C'est elle
+--                   qui se cherche (et que l'index UNIQUE protège : une même
+--                   clé ne sert pas deux comptes) ; l'identifiant brut, plus
+--                   long qu'un index n'en admet partout, n'est pas indexé.
+--     `cle_id`    : l'identifiant, en base64url, pour dire au navigateur
+--                   « cet appareil a déjà une clé de ce compte » à l'ajout.
+--     `compteur`  : le compteur de signatures de la dernière connexion ;
+--                   s'il recule, la clé a peut-être été copiée.
+--     `utilisee_le` : NULL tant que la clé n'a jamais servi.
+--
+--     ON DELETE CASCADE : les clés disparaissent avec le compte.
+CREATE TABLE IF NOT EXISTS `cle_acces` (
+  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `utilisateur_id` INT UNSIGNED NOT NULL,
+  `cle_hash`       CHAR(64)     NOT NULL,
+  `cle_id`         VARCHAR(700) NOT NULL,
+  `cle_publique`   TEXT         NOT NULL,
+  `compteur`       INT UNSIGNED NOT NULL DEFAULT 0,
+  `nom`            VARCHAR(60)  NOT NULL DEFAULT '',
+  `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `utilisee_le`    DATETIME     NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_cle_acces_hash` (`cle_hash`),
+  KEY `idx_cle_acces_utilisateur` (`utilisateur_id`),
+  CONSTRAINT `fk_cle_acces_utilisateur`
+    FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+--  10. Forfait « bloque » : consultation seule (voir ACTIONS_BLOQUEES,
+--      includes/fonctions.php). Une valeur de plus dans la liste du
+--      forfait : aucune donnée n'est touchée, chaque compte garde son
+--      forfait actuel.
+--
+--      ⚠️ À exécuter AVANT tout « UPDATE … SET forfait = 'bloque' ». Hors
+--      mode strict, une valeur absente de l'ENUM ne fait aucune erreur :
+--      MySQL range '' à la place, et le compte, loin d'être bloqué, resterait
+--      libre — sans qu'aucun message ne le dise.
+--
+--      MODIFY réécrit la liste entière des valeurs : on ne l'exécute que si
+--      la nouvelle manque, sur le même modèle que la migration 6.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'forfait'
+              AND COLUMN_TYPE LIKE '%''bloque''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` MODIFY COLUMN `forfait` ENUM(''standard'',''illimite'',''bloque'') NOT NULL DEFAULT ''standard''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  11. Page d'administration (admin.php).
+--
+--      `admin`          : le compte peut ouvrir admin.php. Une colonne à part
+--                         du forfait, exprès : on peut être bloqué ET admin
+--                         (le forfait dit ce qu'on fait de sa bibliothèque,
+--                         `admin` ce qu'on fait des autres comptes). À poser
+--                         À LA MAIN pour le premier administrateur :
+--                           UPDATE utilisateur SET admin = 1 WHERE identifiant = '...';
+--                         Les suivants se nomment depuis la page elle-même.
+--      `raison_blocage` : le motif saisi en bloquant le compte, repris dans
+--                         l'e-mail envoyé. Vide quand le compte n'est pas
+--                         bloqué.
+--      `bloque_le`      : depuis quand. NULL quand le compte n'est pas bloqué.
+--      jeton_action.type « suppression_admin » : le lien envoyé à ADMIN_EMAIL
+--                         pour CONFIRMER la suppression d'un compte depuis
+--                         admin.php (voir api.php, « admin.supprimer »).
+--
+--      Aucune donnée n'est touchée : chaque compte garde son forfait, et
+--      personne n'est administrateur tant qu'on ne l'a pas décidé.
+--      À exécuter AVANT d'ouvrir admin.php (même piège que la migration 10 :
+--      hors mode strict, une valeur absente d'un ENUM est rangée en '').
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'admin');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `admin` TINYINT(1) NOT NULL DEFAULT 0 AFTER `forfait`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'raison_blocage');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `raison_blocage` VARCHAR(500) NOT NULL DEFAULT '''' AFTER `admin`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'utilisateur' AND COLUMN_NAME = 'bloque_le');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `utilisateur` ADD COLUMN `bloque_le` DATETIME NULL DEFAULT NULL AFTER `raison_blocage`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'jeton_action' AND COLUMN_NAME = 'type'
+              AND COLUMN_TYPE LIKE '%''suppression_admin''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `jeton_action` MODIFY COLUMN `type` ENUM(''verification'',''reinit'',''changement_email'',''blocage_email'',''suppression_admin'') NOT NULL');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  12. Réglages modifiables depuis l'administration (voir
+--      includes/reglages.php et admin.php).
+--
+--      Une ligne par réglage CHANGÉ : le .env reste la valeur de départ, la
+--      table ne porte que l'écart, et « revenir au .env » efface la ligne.
+--      Liste fermée : config.php ne lit que les clés que reglages.php connaît,
+--      et ramène chaque valeur dans ses bornes.
+--
+--      `valeur`      : toujours en unité NATIVE (secondes, heures…), comme dans
+--                      le .env — la page convertit en jours ou en minutes.
+--      `modifie_par` : l'administrateur qui l'a changé. SET NULL à la
+--                      suppression de son compte : le réglage reste.
+--
+--      Table absente = aucune erreur : le .env gouverne seul, sans bruit.
+--      Tout est rejouable (« CREATE TABLE IF NOT EXISTS »), rien n'est touché.
+CREATE TABLE IF NOT EXISTS `reglage` (
+  `cle`         VARCHAR(64)  NOT NULL,
+  `valeur`      VARCHAR(190) NOT NULL,
+  `modifie_le`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `modifie_par` INT UNSIGNED NULL,
+  PRIMARY KEY (`cle`),
+  KEY `idx_reglage_modifie_par` (`modifie_par`),
+  CONSTRAINT `fk_reglage_utilisateur`
+    FOREIGN KEY (`modifie_par`) REFERENCES `utilisateur` (`id`)
+    ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ---------------------------------------------------------------------
+--  13. Nouveaux tomes (voir includes/nouveautes.php).
+--
+--      `serie.dernier_tome` : le plus haut tome qui a une couverture chez
+--                       MangaDex, tel qu'on l'a vu la dernière fois. 0 tant
+--                       qu'on ne le sait pas : la première vérification le
+--                       range sans rien annoncer. Une série dont le tome lu
+--                       atteint ce nombre est « à jour » : sa carte dit
+--                       « Tome N en attente » au lieu de « à emprunter ».
+--      `serie.verifie_le` : la dernière interrogation de MangaDex pour cette
+--                       série, pour ne pas la refaire à chaque page (voir
+--                       NOUVEAUTE_MINUTES). NULL = jamais.
+--      `serie.nouveau_tome` : le tome à emprunter dont l'arrivée n'a pas encore
+--                       été annoncée à l'écran. Le bandeau de la bibliothèque
+--                       le lit, et se vide d'un clic. 0 = rien à annoncer.
+--      (Une première version de cette migration ajoutait aussi la colonne
+--      `utilisateur.notif_tomes`, pour un e-mail : abandonnée au profit de la
+--      notification push, voir la migration 14.)
+--
+--      Aucune donnée n'est touchée : chaque série garde son tome, son statut
+--      et son image. À exécuter AVANT d'envoyer le code (pages et cron lisent
+--      ces colonnes), comme les migrations 10 et 11.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'dernier_tome');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `dernier_tome` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `favori`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'verifie_le');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `verifie_le` DATETIME NULL DEFAULT NULL AFTER `dernier_tome`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'nouveau_tome');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `nouveau_tome` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `verifie_le`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+
+-- ---------------------------------------------------------------------
+--  14. Notifications push (voir includes/push.php).
+--
+--      Une ligne par APPAREIL (un navigateur) qui a accepté les notifications :
+--      un compte peut en avoir plusieurs (téléphone, ordinateur).
+--
+--      `endpoint`      : l'adresse chez le service de notification du
+--                        navigateur (Google, Mozilla, Apple, Microsoft), où le
+--                        serveur POSTe le message. Fixée par le navigateur,
+--                        vérifiée à l'enregistrement (https, service connu).
+--      `endpoint_hash` : son empreinte sha256. C'est elle qui se cherche et que
+--                        l'index UNIQUE protège : un navigateur n'appartient
+--                        qu'à UN compte à la fois (le dernier qui l'a activé).
+--      `p256dh`, `auth`: les deux clés PUBLIQUES du navigateur, de quoi
+--                        chiffrer le message pour lui seul. Rien ici ne permet
+--                        de lire ni d'envoyer à sa place.
+--      `envoye_le`     : le dernier message accepté par le service. NULL = jamais.
+--
+--      ON DELETE CASCADE : les appareils disparaissent avec le compte.
+--      Une adresse que le service déclare périmée (404, 410) est effacée par
+--      le cron au premier envoi raté.
+--
+--      Rien n'est supprimé : une base qui aurait joué la première version de la
+--      migration 13 garde sa colonne `utilisateur.notif_tomes`, inutilisée
+--      (on ne prévient plus par e-mail). Elle ne gêne rien ; la retirer est
+--      facultatif : ALTER TABLE `utilisateur` DROP COLUMN `notif_tomes`;
+--      Tout est rejouable.
+CREATE TABLE IF NOT EXISTS `abonnement_push` (
+  `id`             INT UNSIGNED  NOT NULL AUTO_INCREMENT,
+  `utilisateur_id` INT UNSIGNED  NOT NULL,
+  `endpoint_hash`  CHAR(64)      NOT NULL,
+  `endpoint`       VARCHAR(1000) NOT NULL,
+  `p256dh`         VARCHAR(100)  NOT NULL,
+  `auth`           VARCHAR(40)   NOT NULL,
+  `cree_le`        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `envoye_le`      DATETIME      NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_abonnement_push_hash` (`endpoint_hash`),
+  KEY `idx_abonnement_push_utilisateur` (`utilisateur_id`),
+  CONSTRAINT `fk_abonnement_push_utilisateur`
+    FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ---------------------------------------------------------------------
+--  15. Statut « En attente » (valeur `attente` de serie.statut).
+--
+--      Une série arrivée au dernier tome paru d'une série qui continue (en
+--      cours de publication, ou en pause chez MangaDex) passe d'elle-même en
+--      « En attente », et repasse « En cours » dès qu'un tome de plus sort
+--      (voir includes/nouveautes.php). On peut aussi le choisir à la main.
+--
+--      Une valeur de plus dans la liste : aucune donnée n'est touchée, chaque
+--      série garde son statut actuel. La valeur est ajoutée EN FIN de liste, ce
+--      qui ne réécrit rien.
+--
+--      ⚠️ À exécuter AVANT d'envoyer le code (même piège que la migration 10) :
+--      hors mode strict, une valeur absente de l'ENUM ne fait aucune erreur,
+--      MySQL range '' à la place — et la série perdrait son statut sans un mot.
+--      Le code relit d'ailleurs ce qu'il vient d'écrire et le dit au journal.
+--
+--      MODIFY réécrit la liste entière des valeurs : on ne l'exécute que si
+--      la nouvelle manque, sur le même modèle que les migrations 6 et 10.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'statut'
+              AND COLUMN_TYPE LIKE '%''attente''%');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` MODIFY COLUMN `statut` ENUM(''cours'',''envie'',''termine'',''abandon'',''attente'') NOT NULL DEFAULT ''cours''');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  16. État de publication d'une série (`serie.publication`).
+--
+--      L'état que MangaDex donne à la série — ongoing (en cours), completed
+--      (finie), hiatus (en pause), cancelled (arrêtée) — est rangé quand on
+--      arrive au dernier tome connu (voir includes/nouveautes.php). La carte en
+--      tire sa mention : « Se termine au tome N », « Arrêtée au tome N »,
+--      « En pause au tome N » ou « Tome N en attente ».
+--
+--      Une colonne texte plutôt qu'un ENUM : la valeur est contrôlée par le code
+--      (quatre mots, ou vide), et un ENUM rangerait '' sans un mot hors mode
+--      strict (voir la migration 15).
+--
+--      Aucune donnée n'est touchée : chaque série garde son tome, son statut et
+--      son image. Les séries déjà « En attente » apprennent leur état au prochain
+--      relevé (une seule fois) ; celles déjà « Terminée » n'ont pas de mention
+--      tant qu'on ne le sait pas. ⚠️ À exécuter AVANT d'envoyer le code : pages et
+--      cron lisent cette colonne.
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'publication');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `publication` VARCHAR(12) NOT NULL DEFAULT '''' AFTER `nouveau_tome`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+
+-- ---------------------------------------------------------------------
+--  17. Mention de la couverture « même au tome 2 » (`serie.tome_final`,
+--      `serie.publication_le`).
+--
+--      La couverture dit « Tome 44 en attente », « En pause au tome 43 »,
+--      « Se termine au tome 50 » ou « Arrêtée au tome 43 » (voir carte.php),
+--      quel que soit le tome lu. Il faut donc connaître ces deux choses pour
+--      TOUTE série liée à MangaDex, pas seulement celles arrivées au bout :
+--
+--      `serie.tome_final`     : le dernier volume que MangaDex DÉCLARE
+--                       (lastVolume). Rempli pour une série finie, 0 sinon. C'est
+--                       lui qui donne le « 50 » de « Se termine au tome 50 » quand
+--                       les dernières couvertures ne sont pas encore ajoutées.
+--      `serie.publication_le` : le moment où l'état de publication
+--                       (`serie.publication`, migration 16) a été lu pour la
+--                       dernière fois. NULL = jamais : le relevé le lira, une fois,
+--                       puis le relira tous les NOUVEAUTE_PUBLICATION_JOURS jours.
+--
+--      Aucune donnée n'est touchée : chaque série garde son tome, son statut et
+--      son image. ⚠️ À exécuter AVANT d'envoyer le code : pages et cron lisent ces
+--      colonnes. Dès l'envoi, chaque série liée sera relue UNE fois (un appel à
+--      MangaDex chacune, étalés sur les visites et les passages du cron).
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'tome_final');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `tome_final` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `publication`');
+PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'serie' AND COLUMN_NAME = 'publication_le');
+SET @sql := IF(@c > 0, 'DO 0',
+  'ALTER TABLE `serie` ADD COLUMN `publication_le` DATETIME NULL DEFAULT NULL AFTER `tome_final`');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;

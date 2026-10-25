@@ -12,38 +12,26 @@ require __DIR__ . '/../lanceur.php';
 
 groupe('initiales() — l avatar par défaut');
 
-test('l identifiant donne les deux initiales', function () {
-    egale('MB', initiales(['identifiant' => 'mbonvin']), 'la forme habituelle');
+test('les deux premières lettres de l identifiant', function () {
+    /* Le site ne demande plus ni prénom ni nom : l avatar par défaut
+       vient de l identifiant, le seul nom qu ait un compte. */
+    egale('LE', initiales(['identifiant' => 'lecteur92']), 'deux lettres');
 });
 
-test('un identifiant d une lettre donne une initiale', function () {
-    egale('M', initiales(['identifiant' => 'm']), 'une seule lettre');
-});
-
-test('le résultat est en majuscules', function () {
-    egale('MB', initiales(['identifiant' => 'mb']), 'saisie en minuscules');
-});
-
-test('les accents sont conservés et mis en majuscule', function () {
+test('le résultat est en majuscules, accents compris', function () {
     /* mb_strtoupper() et non strtoupper() : ce dernier laisserait « é »
-       intact et l avatar afficherait « éO » au lieu de « ÉÔ ». */
-    egale('ÉÔ', initiales(['identifiant' => 'éôte']), 'É et Ô');
+       intact et l avatar afficherait « éV » au lieu de « ÉV ». */
+    egale('ÉV', initiales(['identifiant' => 'éva']), 'É majuscule');
 });
 
-test('un identifiant non latin n est pas tronqué au milieu d un caractère', function () {
+test('un prénom ou un nom encore présents sont ignorés', function () {
+    egale('LE', initiales(['prenom' => 'Marc', 'nom' => 'Bonvin', 'identifiant' => 'lecteur92']),
+        'seul l identifiant compte');
+});
+
+test('un caractère non latin n est pas coupé au milieu', function () {
     // mb_substr() compte des caractères, pas des octets.
-    egale('荒川', initiales(['identifiant' => '荒川']), 'des idéogrammes');
-});
-
-test('sans nom ni prénom, on retombe sur l identifiant', function () {
-    egale('LE', initiales(['identifiant' => 'lecteur92']), 'les deux premières lettres');
-});
-
-test('les espaces autour de l identifiant ne comptent pas', function () {
-    /* Sans le trim(), un prénom fait d un seul espace produirait une
-       initiale vide au lieu de laisser la place à l identifiant. */
-    egale('LE', initiales(['identifiant' => '   lecteur92']),
-        'les espaces sont retirés');
+    egale('荒川', initiales(['identifiant' => '荒川弘']), 'des idéogrammes');
 });
 
 test('un identifiant d une seule lettre ne casse rien', function () {
@@ -105,10 +93,11 @@ test('le drapeau Secure suit la présence de HTTPS', function () {
     }
 });
 
-groupe('STATUTS — les cinq états d une série');
+groupe('STATUTS — les états d une série');
 
-test('les cinq statuts sont définis', function () {
-    egale(['cours', 'attente', 'envie', 'termine', 'abandon'], array_keys(STATUTS), 'les clés attendues');
+test('les cinq statuts sont définis, « En attente » juste après « En cours »', function () {
+    egale(['cours', 'attente', 'envie', 'termine', 'abandon'], array_keys(STATUTS), 'les clés attendues, dans l ordre des filtres');
+    egale('En attente', STATUTS['attente'], 'le libellé');
 });
 
 test('chaque statut a un libellé lisible', function () {
@@ -121,7 +110,7 @@ test('les libellés restent assez courts pour la pastille', function () {
     /* Ils s affichent dans la pastille posée sur la couverture, large
        d une poignée de caractères. « À commencer / envie » y tenait sur
        trois lignes et recouvrait l image. Le plus long aujourd hui,
-       « Abandonnée », fait dix caractères : douze laisse de la marge
+       « Abandonnée » et « En attente » font dix caractères : douze laisse de la marge
        sans rouvrir la porte à une phrase entière. */
     foreach (STATUTS as $cle => $libelle) {
         vrai(mb_strlen($libelle, 'UTF-8') <= 12,

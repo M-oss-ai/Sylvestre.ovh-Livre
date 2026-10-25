@@ -74,7 +74,26 @@ groupe('valider_profil() — la forme de l adresse');
 test('une adresse invalide est refusée', function () {
     vrai(erreur_parle_de(valider_profil('lecteur', 'pas-une-adresse', 1), 'e-mail'), 'sans arobase');
     vrai(erreur_parle_de(valider_profil('lecteur', 'a@', 1), 'e-mail'), 'tronquée');
-    vrai(isset(valider_profil('lecteur', '', 1)['email']), 'vide : l erreur est rangée sous le champ e-mail');
+});
+
+test('un champ vide dit seulement qu il est obligatoire', function () {
+    /* Plus de « * » dans les formulaires : c est à l envoi, et pour ce
+       champ seulement, qu on apprend qu il fallait le remplir. */
+    $erreurs = valider_profil('', '', 1);
+    egale(MESSAGE_CHAMP_OBLIGATOIRE, $erreurs['identifiant'] ?? null, 'identifiant vide');
+    egale(MESSAGE_CHAMP_OBLIGATOIRE, $erreurs['email'] ?? null, 'adresse vide');
+    egale('Ce champ est obligatoire.', MESSAGE_CHAMP_OBLIGATOIRE, 'le texte même');
+});
+
+groupe('forme_identifiant() et forme_email()');
+
+test('vide, mal formé, ou bon', function () {
+    egale(MESSAGE_CHAMP_OBLIGATOIRE, forme_identifiant(''), 'identifiant vide');
+    vrai(str_contains(forme_identifiant('ab'), '3 à 30'), 'trop court : la règle est dite');
+    egale('', forme_identifiant('lecteur-92'), 'accepté');
+    egale(MESSAGE_CHAMP_OBLIGATOIRE, forme_email(''), 'adresse vide');
+    vrai(str_contains(forme_email('pas-une-adresse'), 'pas valide'), 'mal formée');
+    egale('', forme_email('a@exemple.test'), 'acceptée');
 });
 
 test('une saisie invalide n atteint jamais la base', function () {
@@ -133,14 +152,14 @@ test('un chemin hors uploads/ ne supprime rien', function () {
     /* La fonction reçoit des chemins venus de la base. Si le filtre
        tombait, un « ../includes/config.php » arrivé là par un autre
        chemin ferait supprimer un fichier du projet. */
-    $cible = CHEMIN_PROJET . '/tests/.cible-a-ne-pas-supprimer.tmp';
+    $cible = CHEMIN_SITE . '/.cible-a-ne-pas-supprimer.tmp';
     file_put_contents($cible, 'ce fichier doit survivre');
 
     try {
         foreach ([
-            'tests/.cible-a-ne-pas-supprimer.tmp',
-            '../tests/.cible-a-ne-pas-supprimer.tmp',
-            'uploads/../tests/.cible-a-ne-pas-supprimer.tmp',
+            '.cible-a-ne-pas-supprimer.tmp',
+            '../site/.cible-a-ne-pas-supprimer.tmp',
+            'uploads/../.cible-a-ne-pas-supprimer.tmp',
             '/etc/passwd',
             'includes/config.php',
         ] as $chemin) {

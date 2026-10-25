@@ -20,7 +20,7 @@ require __DIR__ . '/../lanceur.php';
 groupe('avertir_compte_supprime() — le câblage');
 
 test('la fonction existe avec la signature attendue', function () {
-    /* api.php l appelle avec (email, identifiant, acces). Une signature qui
+    /* api.php l appelle avec (email, identifiant, accès). Une signature qui
        changerait sans que l appel suive ferait tomber la suppression de
        compte en erreur 500 — au pire moment, puisque les données sont
        déjà effacées à cet instant. */
@@ -29,7 +29,7 @@ test('la fonction existe avec la signature attendue', function () {
     egale(3, $r->getNumberOfParameters(), 'trois paramètres');
     egale('email', $r->getParameters()[0]->getName(), 'le destinataire en premier');
     egale('identifiant', $r->getParameters()[1]->getName(), 'l identifiant ensuite');
-    egale('acces', $r->getParameters()[2]->getName(), 'puis la manière dont on entre dans le compte');
+    egale('acces', $r->getParameters()[2]->getName(), 'puis comment le compte s ouvrait');
 });
 
 test('un envoi est tenté vers une adresse valide', function () {
@@ -62,6 +62,6 @@ test('l appel ne lève jamais d exception', function () {
        le compte vient pourtant d être correctement effacé — et lui
        laisserait croire que l opération a échoué. */
     avertir_compte_supprime('titulaire@exemple.test', 'marco', 'email');
-    avertir_compte_supprime('', '', 'email');
+    avertir_compte_supprime('', '', '');
     vrai(true, 'aucune exception sur un cas normal ni sur des chaînes vides');
 });

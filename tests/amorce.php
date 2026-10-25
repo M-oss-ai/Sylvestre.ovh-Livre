@@ -23,6 +23,10 @@
 
 declare(strict_types=1);
 
+/* Deux racines. CHEMIN_PROJET est celle du dépôt : livre.sql, README.md,
+   CLAUDE.md, tests/, .env. CHEMIN_SITE est celle de ce qui MONTE sur le
+   serveur (pages, includes/, js/, css/, uploads/) : c'est là que les tests
+   cherchent les fonctions et les sources. */
 define('CHEMIN_PROJET', dirname(__DIR__));
 define('CHEMIN_SITE', CHEMIN_PROJET . '/site');
 
@@ -96,6 +100,11 @@ $configuration_de_test = [
     'SMTP_USER'           => '',
     'SMTP_PASSWORD'       => '',
     'SMTP_TIMEOUT'        => '1',
+
+    // Garde-fou : la vraie clé privée du .env ne signe rien en test (les
+    // cas qui ont besoin de clés posent les leurs avant d'inclure l'amorce).
+    'VAPID_PUBLIC'        => '',
+    'VAPID_PRIVATE'       => '',
 
     // Valeurs fixes, pour que les tests ne dépendent pas de votre .env.
     'APP_URL'             => 'https://exemple.test/bibliotheque',

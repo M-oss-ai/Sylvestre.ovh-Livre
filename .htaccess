@@ -1,0 +1,23 @@
+# =====================================================================
+# DÉVELOPPEMENT LOCAL SEULEMENT. Ce fichier est à la racine du dépôt, hors
+# de site/ : il ne monte jamais sur le serveur.
+#
+# XAMPP sert tout htdocs/Livre, pas seulement site/. Sans ceci, le .env
+# (mots de passe de la base et du SMTP), les tests, le schéma SQL et .git/
+# seraient lisibles à l'adresse http://localhost/Livre/… — et depuis le
+# réseau, tant qu'Apache écoute ailleurs que sur la boucle locale.
+# Seul site/ est public, ici comme en ligne.
+# =====================================================================
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # L'adresse nue mène au site. REQUEST_URI et non « site/ » seul : une
+    # cible relative serait préfixée du chemin DISQUE du dossier (sans
+    # RewriteBase), et sous Windows la redirection partirait vers
+    # http://hôte/C:/xampp/…
+    RewriteRule ^$ %{REQUEST_URI}site/ [R=302,L]
+
+    # Tout le reste, hors de site/ : introuvable.
+    RewriteRule ^(?!site(/|$)) - [R=404,L]
+</IfModule>

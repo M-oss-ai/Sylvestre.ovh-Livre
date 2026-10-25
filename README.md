@@ -22,8 +22,10 @@ pas de Composer, pas de framework.
    puis redémarrez Apache. Sans GD, les images sont stockées à leur
    taille d'origine : l'application marche, mais elle est bien plus lourde.
 3. phpMyAdmin → onglet **SQL** → collez `livre.sql` → **Exécuter**.
-4. Copiez `.env.example` en `.env` et adaptez les valeurs.
-5. Ouvrez <http://localhost/Livre/> et créez votre compte.
+4. Copiez `.env.example` en `.env` **à la racine du dépôt, à côté de
+   `site/`** (pas dedans), et adaptez les valeurs. En local, `APP_URL` vaut
+   `http://localhost/Livre/site`.
+5. Ouvrez <http://localhost/Livre/site/> et créez votre compte.
 
 `livre.sql` peut être rejoué sur une base existante : tout est en
 `CREATE TABLE IF NOT EXISTS`. Sauvegardez d'abord.
@@ -32,10 +34,17 @@ pas de Composer, pas de framework.
 
 ## Mise en ligne chez OVH
 
+**Ce qui monte, c'est le contenu de `site/`, sans `uploads/`**, dans `www/`
+(les images des utilisateurs restent sur le serveur). `livre.sql`, `tests/`,
+les `.md`, `.env` et `.env.example` sont à la racine du dépôt, hors de `site/` :
+ils ne partent jamais, il n'y a rien à nettoyer après. Le `.env` du serveur ne
+peut pas être écrasé par un envoi. `.ovhconfig`, resté à la racine, est posé
+une fois sur le serveur et n'est renvoyé que s'il change.
+
 | # | À faire | Pourquoi |
 |---|---|---|
 | 1 | `.ovhconfig` : `app.engine.version=8.2`, `environment=production` | Fixe la version de PHP |
-| 2 | Placez `.env` **au-dessus de `www/`** | Hors de portée du web même si un `.htaccess` est ignoré. `config.php` le cherche là en premier |
+| 2 | Placez `.env` **au-dessus de `www/`** | Hors de portée du web même si un `.htaccess` est ignoré. `config.php` le cherche là en premier (en local, c'est la racine du dépôt, au-dessus de `site/`) |
 | 3 | Renseignez **`APP_URL`** (`https://votredomaine.fr`, sans `/` final) | Les liens de confirmation en dépendent |
 | 4 | Changez **tous** les mots de passe (base, SMTP) | Ceux du développement ne doivent jamais servir |
 | 5 | Générez **`CRON_TOKEN`** et **`UPLOAD_SECRET`** (chaînes aléatoires) | Voir `.env.example` |
@@ -60,6 +69,8 @@ curl -H "X-Cron-Token: VOTRE_CRON_TOKEN" https://votredomaine.fr/purger.php
 
 Elle supprime les jetons expirés, les compteurs de tentatives périmés,
 les images orphelines, et rejoue les e-mails qui n'étaient pas partis.
+Elle revérifie aussi chez MangaDex les séries « à jour » et envoie les
+notifications push des nouveaux tomes (voir « Fin de série et nouveaux tomes »).
 
 Elle envoie un **rapport d'activité** à `ADMIN_EMAIL` : nombre de
 comptes et de séries, nouveautés de la période, tentatives de connexion
@@ -95,20 +106,13 @@ l'affiche ainsi :
 | 1 à 47 heures | `depuis 1 heure`, `depuis 47 heures` |
 | 48 heures et plus | `depuis 2 jours`, `depuis 7 j et 5 heures` |
 
-**Une anomalie n'attend pas l'échéance** (e-mail perdu, file d'envoi
-bloquée) : le rapport part tout de suite, avec `[ANOMALIE]` dans le
+**Une anomalie n'attend pas l'échéance** : le rapport part tout de suite, avec `[ANOMALIE]` dans le
 sujet, sans décaler le suivant. Un rapport dû mais qui n'a pas pu partir
 (SMTP en panne) est retenté au passage suivant.
 
 Plafond de 720 heures (30 jours) : la purge efface au-delà les compteurs
 de tentatives de connexion, et la rubrique sécurité ne couvrirait plus
 la période annoncée.
-
-Ce rapport part en envoi **direct**, sans passer par la file de
-rattrapage : un rapport est périssable, le suivant arrive au passage
-suivant. L'empiler ferait grossir la file d'un message par exécution
-le jour où le SMTP tombe, en noyant les e-mails d'utilisateurs
-qu'elle doit justement rejouer.
 
 Il est aussi écrit sur la sortie standard. **Réglez l'envoi du journal
 OVH sur « uniquement en cas d'erreur »** : vous disposez ainsi d'un
@@ -119,10 +123,7 @@ quand le rapport ne peut pas vous parvenir autrement.
 Le script se termine avec un code de retour non nul, et écrit sur la
 sortie d'erreur, uniquement quand quelque chose mérite votre attention :
 
-- des e-mails ont été définitivement abandonnés après plusieurs essais ;
-- la file n'est toujours pas vide après le passage, ce qui signifie que
-  le serveur SMTP refuse — donc plus aucune inscription ni
-  réinitialisation n'aboutit ;
+- la table `rapport_cron` manque (`livre.sql` pas rejoué) ;
 - le script n'a pas pu s'exécuter du tout, typiquement parce que la base
   de données est injoignable. Il se terminait auparavant en **succès**
   dans ce cas, après avoir écrit une page d'erreur HTML dans le journal
@@ -132,8 +133,8 @@ sortie d'erreur, uniquement quand quelque chose mérite votre attention :
 
 Le silence devient alors une information : tout va bien. Sans ce code de
 retour, le réglage « uniquement en cas d'erreur » ne produirait jamais
-aucun message, et une file bloquée pourrait grossir des semaines sans
-que personne ne le sache.
+aucun message, et un problème pourrait durer des semaines sans que
+personne ne le sache.
 
 Le silence ne dit en revanche pas si la tâche s'est bien exécutée : pour
 ça, le manager OVH affiche la date du dernier passage de chaque tâche
@@ -143,9 +144,15 @@ planifiée.
 
 ```bash
 curl -I https://votredomaine.fr/livre.sql        # doit répondre 404
+curl -I https://votredomaine.fr/tests/lancer.php # doit répondre 404
 curl -I https://votredomaine.fr/.env             # doit répondre 403 ou 404
 curl -sI https://votredomaine.fr/js/app.js | grep -i 'content-encoding\|cache-control'
 ```
+
+Les deux premières ne sont plus bloquées par le `.htaccess` : ces fichiers ne
+sont simplement pas dans `site/`. Un `200` veut dire qu'un **reste d'un ancien
+envoi complet** traîne sur le serveur — `tests/` (du PHP que n'importe qui peut
+exécuter), `livre.sql`, `README.md`, `CLAUDE.md` : à supprimer tout de suite.
 
 La dernière doit montrer `gzip` et `max-age=31536000`. Sinon, Apache sert
 vos `.js` sous un type que le `.htaccess` ne couvre pas.
@@ -157,24 +164,115 @@ stockées telles quelles et le gain de poids disparaît.
 
 ## Configuration
 
-Tout se règle dans `.env`, documenté dans `.env.example`. Les plus
-importantes :
+Tout se règle dans `.env`, documenté dans `.env.example`. Trente-sept de ces valeurs
+peuvent aussi se changer depuis l'administration (carte « Réglages ») : la valeur
+saisie dans la page remplace alors celle du `.env`. Les plus importantes :
 
 | Variable | Rôle |
 |---|---|
 | `APP_URL` | Adresse publique. Sert à fabriquer les liens des e-mails |
 | `DB_*` · `SMTP_*` | Base de données et compte d'envoi |
 | `CRON_TOKEN` | Jeton exigé par `purger.php` en HTTP |
-| `CRON_HEURES` · `RAPPORT_HEURES` | Espacement du cron réglé chez l'hébergeur, et tous les combien d'heures part son rapport (24 et 168 : cron quotidien, rapport hebdomadaire) |
+| `CRON_HEURES` · `RAPPORT_HEURES` | Espacement du cron réglé chez l'hébergeur (1 à 168 h), et tous les combien d'heures part son rapport (24 et 168 : cron quotidien, rapport hebdomadaire ; jusqu'à 720 h) |
 | `UPLOAD_SECRET` | Sel des noms de fichiers envoyés |
 | `MAX_UTILISATEURS` · `MAX_SERIES_PAR_UTILISATEUR` | Quotas |
 | `MAX_APPAREILS` | Appareils mémorisés par compte illimité |
+| `MDP_MIN` · `MDP_MAJ` · `MDP_MINUSCULE` · `MDP_CHIFFRE` · `MDP_SPE` | Politique de mot de passe : longueur minimale (8, **de 1 à 200**), puis une majuscule, une minuscule, un chiffre, un caractère spécial (**1 = exigé, 0 = non** ; seul « 0 » desserre une règle). Modifiables depuis l'administration. Ne touchent que les nouveaux mots de passe |
+| `SERIES_PAGES_MAX` | Séries affichées par page dans la bibliothèque (30, de 1 à 100), puis un bouton « Afficher plus ». **0 : pas de pages**, toutes les séries sur une seule page. Modifiable depuis l'administration |
 | `ASSETS_VERSION` | Version des URL `css/` et `js/`. À incrémenter au déploiement |
 | `COUVERTURE_CANDIDATS` · `COUVERTURE_MAX_SERIES` | Séries examinées / proposées à la recherche de couverture |
 | `COUVERTURE_QUOTA` · `COUVERTURE_FENETRE` | Recherches autorisées par compte et par tranche |
 | `COUVERTURE_ESPACEMENT` · `COUVERTURE_FILE_MAX` | Cadence des appels sortants et attente tolérée |
 | `COUVERTURE_CONTENU_ADULTE` | Autorise les séries classées « erotica ». Bloqué par défaut |
+| `VAPID_PUBLIC` · `VAPID_PRIVATE` | Clés des notifications push, à générer une fois (`php outils/vapid.php`). Vides : pas de notifications. **La privée est un secret** |
+| `PUSH_TTL` · `PUSH_TIMEOUT` | Durée de garde d'un message non remis (86 400 s, de 60 à 2 419 200), délai d'un envoi (5 s, de 1 à 20) |
+| `NOUVEAUTE_PUBLICATION_JOURS` | Jours entre deux lectures de l'état de publication d'une série, affiché sur la couverture (7, de 1 à 90) |
+| `NOUVEAUTE_MINUTES` · `NOUVEAUTE_MAX_VISITE` · `NOUVEAUTE_MAX_CRON` | Nouveaux tomes : minutes minimales entre deux vérifications d'une même série (60, de 60 à 10 080 ; modifiable depuis l'administration), séries vérifiées au plus par arrivée sur la page et par passage du cron (**0 = sans limite**, c'est la valeur par défaut : le relevé s'arrête alors à son budget de temps) |
 | `LEGAL_*` | Mentions légales |
+| `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | « Continuer avec Google ». Vides : pas de bouton |
+| `CLE_ACCES_MAX` · `CLE_ACCES_DEFI_DUREE` | Clés d'accès : nombre par compte (10, plafond 50) et validité du défi envoyé au navigateur (300 s, entre 60 et 900) |
+| `CONFIRMATION_DUREE` | Temps laissé, après avoir prouvé son identité (Google, ou mot de passe pour un compte e-mail), pour valider l'action à risque choisie (une seule) |
+| `ADMIN_SUPPRESSION_DUREE` | Validité du lien de confirmation envoyé à `ADMIN_EMAIL` quand on demande la suppression d'un compte depuis l'administration (3600 s, entre 300 et 86400) |
+
+---
+
+## Connexion avec Google
+
+Sur la page de connexion comme sur celle d'inscription, on choisit
+d'abord **comment** : « Continuer avec Google » ou « avec une adresse
+e-mail » ; le formulaire ne vient qu'ensuite. Le site ne voit jamais
+le mot de passe Google : la personne s'identifie **chez Google**, qui
+renvoie ensuite vers `google.php` avec un code à usage unique ; le
+serveur échange ce code contre un jeton qui dit qui elle est
+(OpenID Connect, flux par code avec PKCE — détails dans
+`includes/google.php`).
+
+**Deux sortes de comptes, qui ne se relient pas** : un compte créé avec
+une adresse e-mail ne s'associe jamais à Google, et un compte créé avec
+Google ne s'en délie jamais.
+
+| Situation | Ce qui se passe |
+|---|---|
+| Compte créé avec ce compte Google | Il s'ouvre |
+| Le même, avec un mot de passe | `google-mot-de-passe.php` le demande d'abord ; le compte s'ouvre ensuite |
+| Adresse d'un compte créé avec une adresse e-mail | Refus : « connectez-vous avec votre identifiant et votre mot de passe » |
+| Adresse inconnue | `google-inscription.php` : on choisit son identifiant (proposé d'après l'adresse), et si on veut un mot de passe |
+| Adresse d'un compte e-mail jamais confirmé | Comme une adresse inconnue : ce compte jamais activé cède la place, Google ayant prouvé à qui est l'adresse |
+
+L'adresse du compte est celle de Google, déjà vérifiée : aucun e-mail de
+confirmation à attendre. Elle se change ensuite dans les Paramètres, avec
+le lien de confirmation habituel.
+
+Pour **chaque action à risque** (supprimer le compte, vider, changer
+d'adresse ou d'identifiant, définir ou changer son mot de passe), les
+Paramètres demandent de prouver son identité dans une même fenêtre,
+qu'on se connecte avec une adresse e-mail ou avec Google : un compte
+e-mail y retape son mot de passe, un compte Google s'y reconnecte
+(Google, puis son mot de passe s'il en a un). Il reste ensuite
+`CONFIRMATION_DUREE` secondes pour cliquer « Confirmer », pour
+cette action-là et une seule fois : une autre action demande de prouver
+son identité à nouveau. Se connecter au site ne dispense de rien.
+
+Son mot de passe est **facultatif**, et c'est une seconde clé : s'il en a
+un (choisi à la création ou dans Paramètres › Sécurité), il est demandé
+**après** Google, à chaque connexion. Il ne suffit jamais seul : le
+formulaire « adresse e-mail » renvoie un compte Google vers Google. On
+peut le supprimer (un avis part par e-mail) pour revenir à Google seul.
+« Mot de passe oublié » reste la porte de secours.
+
+**Mise en place** — dans la console Google Cloud : « API et services »
+› « Écran de consentement OAuth » (nom de l'application, adresse de
+contact), puis « Identifiants » › « Créer des identifiants » › « ID
+client OAuth », type « Application Web », URI de redirection autorisé
+`https://livre.sylvestre.ovh/google.php` (et
+`http://localhost/Livre/site/google.php` pour l'essai en local). Recopier
+l'ID client et le secret dans `GOOGLE_CLIENT_ID` et
+`GOOGLE_CLIENT_SECRET`. Laissés vides, le bouton n'apparaît pas.
+
+---
+
+## Clés d'accès
+
+Se connecter **sans rien taper**, avec son gestionnaire de mots de passe
+(Bitwarden, 1Password, Proton Pass…) ou son appareil : la page de
+connexion propose « Se connecter avec une clé d'accès », et le champ
+identifiant liste les clés du site quand on le touche.
+
+- **Ajouter une clé** : Paramètres › Sécurité › « Ajouter une clé
+  d'accès ». Comme toute action à risque, il faut d'abord prouver son
+  identité (mot de passe retapé, ou reconnexion à Google) ; l'identité ne
+  vaut que pour cet ajout. Un e-mail prévient le titulaire.
+- **Ce que le site garde** : la clé **publique**, un nom, deux dates. La clé
+  privée ne quitte jamais l'appareil ou le gestionnaire : une fuite de la
+  base ne permet de se connecter à la place de personne.
+- **Retirer une clé** : Paramètres › Sécurité. « Mot de passe oublié » les
+  retire **toutes** (une clé posée par un intrus ne survit pas à la reprise
+  en main du compte).
+- **Compatibilité** : ES256 et RS256 (tous les gestionnaires, Windows
+  Hello, iCloud, Google). Sans prise en charge du navigateur, le bouton
+  n'apparaît pas.
+- **Mise en ligne** : rejouer `livre.sql` (nouvelle table `cle_acces`) et
+  envoyer les fichiers. Aucun réglage obligatoire dans le `.env`.
 
 ---
 
@@ -189,7 +287,7 @@ Les filtres **se cumulent** et **survivent au rechargement** :
 
 | Filtre | Valeurs |
 |---|---|
-| Statut | En cours · Envie · Terminée · Abandonnée |
+| Statut | En cours · En attente · Envie · Terminée · Abandonnée |
 | Favoris | oui / non |
 | Type d'image | Pas d'image · MangaDex · Importée · Lien |
 
@@ -210,6 +308,44 @@ se partagent pas leurs filtres. Il peut être indisponible — navigation privé
 stockage bloqué — et la page s'affiche alors sans filtre, ce qui est
 le bon défaut.
 
+### Le total et le tri
+
+Sous les filtres, une ligne dit **« 42 séries · 318 tomes lus »** : le nombre de séries, et le total des
+tomes lus — la somme du « Vous avez lu le tome x » de chaque série. Elle se met à jour à chaque série qui
+bouge (→, ←, création, suppression), sans appel au serveur, et disparaît tant qu'il n'y a aucune série.
+
+**« Trier par »** est une rangée de boutons **dans la barre des filtres** : comme eux, elle tient sur une ligne qui
+coulisse sur le côté, et suit le défilement de la page (voir plus bas). Trois boutons — **Plus récent**,
+**Tome**, **Tomes restants**. Le bouton choisi est allumé et porte une **flèche** : **↑ du plus petit au plus grand**,
+**↓ du plus grand au plus petit**. **Recliquer le bouton allumé inverse le sens.** Aucun texte d'explication : l'ordre se
+lit dans l'infobulle du bouton (survol, ou lecteur d'écran).
+
+| Bouton | Au premier clic | En recliquant |
+|---|---|---|
+| Plus récent ↓ | les dernières séries modifiées en premier (l'ordre du serveur, le défaut) | **Plus ancien ↑** : les plus anciennes en premier |
+| Tome ↓ | le tome lu le plus haut en premier | Tome ↑ : le plus bas en premier |
+| Tomes restants ↑ | le moins de tomes à lire en premier : les séries presque finies, « à jour » (0) tout en tête | Tomes restants ↓ : le plus de tomes à lire en premier |
+
+Les **tomes restants** sont ceux que MangaDex connaît (le plus haut tome connu, ou le dernier volume déclaré
+pour une série finie) et que vous n'avez pas lus. Pour une série qui continue, c'est donc le dernier tome
+**paru** : la vraie fin, personne ne la connaît encore. Quand on ne sait pas — série pas liée à MangaDex, ou
+lue plus loin que MangaDex ne connaît — la série vient **en dernier**, quel que soit le sens. Sous ce tri, chaque
+carte dit « il en reste N » ou « à jour » sous « Vous avez lu le tome x » ; le reste du temps, elle ne prend pas
+la place. Le tri se combine avec les filtres et la recherche (la pertinence passe d'abord), se **mémorise avec
+les filtres** (ce n'est pas un filtre : « Toutes » ne le remet pas à zéro) et ramène en haut de la liste.
+
+**L'ordre ne bouge que quand vous le demandez.** Modifier une série (→, ←, la fiche, l'étoile) ne la déplace pas, même
+si son nouveau tome devrait la mener ailleurs : elle ne la quitte pas des yeux. Elle prend sa vraie place quand vous
+changez le tri, un filtre ou la recherche, ou quand vous rechargez la page — sous « Plus récent », elle passe alors
+devant. Une série créée se met en tête.
+
+**La barre des filtres suit le défilement.** Elle remonte et redescend exactement de la distance dont vous faites
+défiler la page : en descendant beaucoup puis en remontant un peu, vous ne voyez d'abord que « Trier par », les filtres
+reviennent en remontant davantage. Arrêtée en route, elle reste à moitié visible.
+
+**Sur téléphone, taper dans la recherche cache la barre**, pour que les séries tiennent au-dessus du clavier. Elle
+revient dès que vous quittez le champ ; faire défiler la page ferme le clavier, donc la barre revient quand vous
+remontez.
 ### Une série qu'on modifie ne disparaît pas sous vos yeux
 
 Retirer une série des favoris pendant que le filtre « Favoris » est
@@ -251,8 +387,32 @@ carte puis sort de la grille. Chaque carte en ajoutait cinq : il
 fallait 780 appuis pour traverser 150 séries. Un lien « Aller aux
 séries », premier arrêt de la page, évite l'en-tête et les filtres.
 
+Sur ordinateur, un clic sur une carte hors de ses boutons (le titre,
+l'auteur…) la sélectionne, un second clic ou un clic ailleurs la
+désélectionne. **Suppr** (ou Retour arrière) propose de supprimer la
+carte sélectionnée — celle aussi qu'on a atteinte aux flèches — dans la
+même fenêtre de confirmation que la fiche, « Annuler » en premier. La
+sélection passe ensuite à la carte voisine.
+
+Suppr fait de même dans la fiche d'une série, sauf dans un champ, où la
+touche efface du texte. Sur ordinateur, cette fiche s'ouvre donc sur son
+titre, et non plus dans le champ Titre : Tab y mène. Une nouvelle série
+garde le curseur dans le Titre.
+
+Un clic **à côté de la fiche** (sur le fond sombre) ne fait rien : ni fermeture, ni question, même si la fiche a
+été modifiée — un clic qui dérape ne fait pas perdre la saisie. On quitte la fiche par « ✕ », « Annuler » ou Échap
+(qui demande confirmation quand la fiche a changé).
+
 `carte.php` pose `tabindex="-1"` partout, `js/app.js` rend le sien à la
 carte active — et le garde à la carte qui la remplace après une action.
+
+### Actualiser l'application installée
+
+Une application ajoutée à l'écran d'accueil n'a ni barre d'adresse ni bouton « actualiser » : on
+**tire la page vers le bas depuis le haut**, comme dans un navigateur. Un rond descend avec le doigt et
+se dore quand c'est assez ; on lâche, la page se recharge. En deçà, il remonte et rien ne se passe. Le geste
+n'existe que dans l'application installée (un onglet de navigateur le fait déjà), sur la bibliothèque, les
+Paramètres et l'administration, et jamais depuis un champ, une fenêtre ouverte ou une liste déjà défilée.
 
 ### Limite de séries
 
@@ -270,6 +430,52 @@ L'import **n'ajoute que les séries absentes** : une série déjà présente
 elle récupère seulement l'image ou l'étoile qui lui manquent. Réimporter
 le même fichier ne change donc rien. Le résultat reste affiché dans la
 page.
+
+---
+
+## Administration
+
+Une page réservée aux comptes **administrateurs** : `admin.php`. Elle liste tous
+les comptes (image, identifiant, adresse et si elle est confirmée, forfait, date
+d'inscription, nombre de séries), avec une recherche et des colonnes triables.
+Les mots « admin », « Google », « non confirmé », « bloqué », « sans image » et
+« sans série » tiennent lieu de filtres : taper « non confirmé » suffit. L'image de
+chaque compte s'affiche en vignette dans la première colonne, « Image » ; un clic l'agrandit.
+
+**Le premier administrateur se nomme à la main**, une fois la migration 11 de
+`livre.sql` rejouée :
+
+```sql
+UPDATE utilisateur SET admin = 1 WHERE identifiant = 'votre_identifiant';
+```
+
+Les suivants se nomment depuis la page. Être administrateur est **indépendant du
+forfait** : on peut être bloqué et administrateur.
+
+- **Changer le forfait** d'un compte envoie un e-mail à la personne.
+  *Bloqué* demande une raison, qui figure dans l'e-mail, sur sa bibliothèque et dans
+  ses Paramètres, et qui est conservée avec le compte. *Illimité* envoie un message
+  pour des amis (la dynastie sylvestrique). Pas d'e-mail à une adresse jamais
+  confirmée ; un envoi raté ne défait pas le changement, la page le dit.
+- **Nommer ou révoquer** un administrateur. Jamais soi-même : un autre doit le faire,
+  il en reste donc toujours un.
+- **Réglages** : trente-sept valeurs du `.env` — quotas, recherche de couverture, durées, politique de mot
+  de passe, freins anti-force-brute — se changent depuis la page, sans renvoyer de fichier. Une valeur
+  enregistrée **remplace celle du `.env`** et s'applique dès la requête suivante, pour tout le
+  monde ; « ↩ .env » l'efface. Chaque réglage a ses bornes (3 à 20 tentatives et 60 à 600 s de
+  blocage pour les freins, 0 à 365 jours pour les sessions, 1 à 168 h pour `CRON_HEURES`…).
+  Chaque ligne dit son nom dans le `.env`, et d'où vient sa valeur (« modifié », « .env » ou « défaut »).
+  Les lignes alternent deux nuances pour se lire d'un coup d'œil, et **chaque groupe** (Quotas, Recherche de
+  couverture, Durées, Freins) **se replie** d'un clic sur son titre — une flèche vers le bas à droite quand il est
+  ouvert, un « > » quand il est replié ; votre navigateur s'en souvient.
+  Les secrets, l'adresse du site, `ADMIN_EMAIL`, les mots de passe et les images restent dans
+  le `.env`. Il faut avoir rejoué `livre.sql` (migration 12, la table `reglage`) ; sans elle, la
+  carte le dit et le `.env` gouverne seul.
+- **Supprimer un compte** n'efface rien tout de suite : un e-mail part vers
+  `ADMIN_EMAIL`, avec un lien valable `ADMIN_SUPPRESSION_DUREE` secondes. Le lien ouvre
+  une page de confirmation ; le compte, sa bibliothèque et ses images ne sont effacés
+  qu'au bouton « Supprimer définitivement ». Pas son propre compte, ni celui d'un
+  administrateur (lui retirer d'abord ses droits).
 
 ---
 
@@ -332,7 +538,7 @@ plus empruntée plus loin que le tome qu'on en a.
 
 | Statut | Tome cherché | Pourquoi |
 |---|---|---|
-| **En cours** · **Envie** | `tome_actuel + 1` | le prochain à emprunter |
+| **En cours** · **En attente** · **Envie** | `tome_actuel + 1` | le prochain à emprunter (pour « En attente », il n'est pas encore paru) |
 | **Terminée** · **Abandonnée** | `tome_actuel` | le tome réel, celui qu'on possède |
 
 Le tome cherché ne descend jamais sous 1 : une série terminée dont le
@@ -409,8 +615,9 @@ font pas le même travail :
   N secondes » plutôt que de retenir un processus PHP.
 - **Un quota par compte**, annoncé et sans escalade :
   `COUVERTURE_QUOTA` recherches par tranche de `COUVERTURE_FENETRE`
-  secondes. Le forfait illimité n'a **pas** de quota : seule la file
-  d'attente ci-dessus l'espace, comme tout le monde. Dépasser n'entraîne
+  secondes (`COUVERTURE_QUOTA_ILLIMITE` pour le forfait illimité). **0 ou
+  une ligne absente = sans limite** : seule la file d'attente ci-dessus
+  espace alors les recherches. Dépasser n'entraîne
   aucune sanction — seulement l'attente de la tranche suivante, et une
   recherche qui n'est pas partie est rendue. La règle est dite **avant**
   la première recherche (sous le bouton, et dans Paramètres › Forfait),
@@ -422,6 +629,131 @@ unique, souvent déclenché en avançant simplement d'un tome. Le faire
 payer au tarif d'une recherche bloquerait la recherche manuelle de
 quelqu'un qui ne fait que rattraper sa série. La file d'attente, elle,
 s'applique : c'est elle qui protège l'adresse du serveur.
+
+### Fin de série et nouveaux tomes
+
+Une série liée à MangaDex sait aussi **où elle en est** (`includes/nouveautes.php`).
+
+**Au dernier tome.** En avançant d'un tome, si le tome suivant n'a pas de
+couverture, le serveur demande à MangaDex le plus haut tome illustré et l'état
+de publication de la série :
+
+| La série est… | Au dernier tome |
+|---|---|
+| `completed` | passe **« Terminée »**, prend la couverture du dernier tome ; la carte dit **« Se termine au tome N »** |
+| `cancelled` | passe **« Terminée »**, prend la couverture du dernier tome ; la carte dit **« Arrêtée au tome N »** |
+| `ongoing` | passe **« En attente »** ; la carte dit **« Tome N en attente »** (N : le tome pas encore paru) au lieu de « à emprunter » |
+| `hiatus` | passe **« En attente »** ; la carte dit **« En pause au tome N »** |
+
+**« En attente » est un vrai statut**, avec son filtre, son compteur et sa couleur. Il se pose
+tout seul (au dernier tome d'une série qui continue, ou au relevé pour les séries qui étaient
+déjà au bout avant cette fonction), se lève tout seul — la série repasse « En cours » quand un
+tome de plus sort — et se choisit aussi à la main dans la fiche.
+
+**« ← » depuis « En attente » ou « Terminée »** : quitter le dernier tome connu remet la série
+« En cours ». Un statut choisi à la main au milieu des tomes (on attend l'édition française, on a
+lâché) ne bouge pas. Une série « Terminée » ou « Abandonnée » ne cherche jamais de nouveau tome.
+
+**La mention** que porte chaque série liée à MangaDex (quand elle n'a pas de numéro de tome — « En cours de
+publication », « En pause », « Série terminée », « Série arrêtée » —, elle est suivie d'un **ⓘ** : un clic ouvre
+une petite bulle, à droite du ⓘ, qui résume ce qu'elle veut dire et d'où elle vient. La bulle ne prend aucune place dans
+la carte (elle peut passer sur la carte voisine) et disparaît d'un clic ailleurs, d'Échap ou en faisant défiler la
+page — un clic SUR la bulle ne la ferme pas, on peut en sélectionner et en copier le texte ; « Tome 44 en attente » et les autres se comprennent seules, sans ⓘ), sous « Vous avez lu le tome x » et avant les
+boutons : « Tome 44 en attente » (en cours de publication), « En pause au tome 43 », « Se termine au
+tome 50 », « Arrêtée au tome 43 ». Elle décrit la série, pas la lecture : on la voit même au tome 2, et
+quel que soit le statut (« Terminée », « Abandonnée » et « Envie » aussi). Si vous avez lu plus de tomes
+que MangaDex n'en connaît, elle dit « MangaDex s'arrête au tome 3 ». La couverture ne garde que « Tome N à
+emprunter ». L'état de publication et le dernier volume déclaré sont rangés dans `serie.publication`,
+`serie.tome_final` et `serie.publication_le` (migrations 16 et 17), lus une fois puis relus chaque semaine ;
+les cartes se mettent à jour d'elles-mêmes pendant que le relevé lit.
+**MangaDex est en retard ? La personne a le dernier mot.** Les couvertures et l'état sont saisis par des
+bénévoles ; rien ne dit « MangaDex est à jour ». Si la personne a lu plus de tomes que MangaDex n'en
+connaît (HORION : lu le 5, MangaDex en a 3), le site ne change pas son statut, ne dit rien sur la
+couverture, et « → » remet « En cours » une série « En attente » qui dépasse MangaDex. Le relevé ne
+remet pas « En attente » une série qu'on a remise « En cours ».
+
+Le dernier tome est le plus haut de deux sources : la dernière couverture, et le
+« dernier volume » que MangaDex déclare pour une série finie. Si des tomes
+existent plus loin (il manque seulement la couverture du suivant, ce qui est
+courant), rien ne change. Ce que MangaDex ne dit pas clairement n'est jamais
+deviné.
+
+**Un tome de plus.** Une série « à jour » est revérifiée : à chaque **arrivée sur
+la bibliothèque** (en arrière-plan, après l'affichage de la page — MangaDex ne
+la retarde jamais) et à chaque **passage du cron**. Seules sont concernées les
+séries dont le tome lu est le **dernier connu** : si vous en êtes au tome 1 et que
+le tome 5 sort, rien ne vous est dit — il vous en reste quatre à lire avant. Si
+MangaDex illustre un tome de plus que celui où vous êtes arrivé au bout :
+
+- la série prend la couverture du nouveau tome et **remonte en tête** (sa date de
+  modification passe à maintenant) ;
+- un **bandeau** l'annonce sur la bibliothèque : « Un nouveau tome est disponible
+  pour la série « X » (tome N). » ; « OK » le vide, et avancer d'un tome efface
+  l'annonce de cette série ;
+- le cron envoie **une notification push par compte**, quel que soit le nombre de
+  séries, sur chacun de ses appareils enregistrés (voir plus bas). **Aucun e-mail**
+  n'est envoyé pour les nouveaux tomes. Un compte bloqué n'est jamais vérifié.
+
+La première vérification d'une série ne fait qu'apprendre le nombre de tomes :
+elle n'annonce rien, sinon toutes les séries d'avant la fonction annonceraient
+tout ce qui est paru depuis toujours.
+
+Chaque vérification est un appel à MangaDex, donc une part du débit partagé :
+`NOUVEAUTE_MINUTES` espace deux vérifications d'une même série, et
+`NOUVEAUTE_MAX_VISITE` / `NOUVEAUTE_MAX_CRON` peuvent borner leur nombre
+(0, la valeur par défaut, ou ligne absente : sans limite, le temps seul
+décide). Les plus anciennement vérifiées passent d'abord. La file d'attente décrite
+plus haut s'applique, et le relevé s'arrête plutôt que d'insister quand elle
+refuse un appel, quand MangaDex ne répond plus trois fois de suite, ou quand son
+temps est épuisé.
+
+### Notifications push
+
+Le navigateur prévient même **site fermé** : sur le téléphone ou l'ordinateur, une
+notification « Nouveau tome disponible — « Berserk » : tome 44 ». Une seule par
+passage et par compte, qui en remplace une précédente restée à l'écran ; un clic
+ouvre la bibliothèque. Elle part du **cron** : elle arrive donc au plus tard au
+passage suivant (`CRON_HEURES`), et un cron plus fréquent la rapproche.
+
+**Mise en place, une seule fois :**
+
+1. Sur un poste qui a PHP, générez les clés du site : `php outils/vapid.php`
+   (sous XAMPP : `C:/xampp/php/php.exe outils/vapid.php`).
+2. Recopiez `VAPID_PUBLIC` et `VAPID_PRIVATE` dans le `.env` **local et celui du
+   serveur**. La clé privée est un secret, comme `CRON_TOKEN`. Régénérer la paire
+   oblige chaque appareil à réactiver ses notifications.
+3. Rejouez `livre.sql` (migration 14 : la table `abonnement_push`).
+4. Chaque personne active les notifications **sur chaque appareil**, dans
+   Paramètres › Notifications : le navigateur demande l'autorisation, et un
+   bouton envoie une notification d'essai. Sans clés dans le `.env`, la carte
+   n'apparaît pas et rien ne part — le reste du site ne change pas.
+
+**Sur iPhone et iPad**, Safari n'accepte les notifications que d'un site **ajouté à
+l'écran d'accueil** et ouvert depuis son icône (Partager › Sur l'écran d'accueil) ;
+dans un onglet, la carte l'explique. C'est pour cela que le site porte un manifeste
+(`manifest.webmanifest`) et ses icônes (`img/`, refaites par `php outils/icones.php`).
+
+**Comment c'est fait** — sans aucune bibliothèque (`includes/push.php`) : le
+chiffrement du message (RFC 8291, `aes128gcm`) et l'identification du site (VAPID,
+RFC 8292) n'utilisent que `openssl` et `hash` de PHP. Le chiffrement est testé
+contre l'exemple de la RFC elle-même, octet pour octet. Le service worker
+(`sw.js`) ne fait qu'afficher les messages : aucun cache, aucune interception des
+requêtes.
+
+**Ce qui borne l'envoi :**
+
+- l'adresse d'un abonnement vient du **navigateur d'un utilisateur** et le serveur y
+  POSTe : seules les adresses des vrais services sont acceptées (https, port 443,
+  Google, Mozilla, Apple, Microsoft), sinon ce serait un moyen de faire appeler
+  n'importe quoi par le serveur ;
+- `MAX_APPAREILS` appareils par compte (30, le même réglage que les connexions mémorisées), appliqué dans l'`INSERT` ;
+  `PUSH_TTL` (86 400 s : un message non remis est gardé un jour) et `PUSH_TIMEOUT` (5 s) ;
+- un navigateur n'appartient qu'à **un** compte à la fois : celui qui l'active en dernier
+  le reprend, pour que personne ne reçoive les notifications d'un autre sur un poste
+  partagé ;
+- un appareil que le service déclare périmé (404, 410) est effacé par le cron ;
+- « Retirer tous mes appareils » règle le cas d'un appareil perdu ;
+- un compte bloqué ne peut ni ajouter d'appareil ni envoyer d'essai (il peut en retirer).
 
 ### Contenu sensible
 
@@ -438,25 +770,38 @@ configuration.
 
 ## Les fichiers
 
+Les chemins sont ceux de `site/` (le dossier qui monte sur le serveur), sauf
+`livre.sql`, `.env`, `.env.example` et `tests/`, à la racine du dépôt.
+
 | Fichier | Rôle |
 |---|---|
-| `livre.sql` | Schéma complet, rejouable (migration 4 : `serie.mangadex_id`) |
+| `livre.sql` | Schéma complet, rejouable (migrations 13 à 17 : nouveaux tomes, appareils de notification, statut « En attente », état de publication) |
 | `.env` · `.env.example` | Configuration / exemple commenté |
 | `.user.ini` | Réglages PHP (erreurs, sessions, envois) |
 | `includes/config.php` | `.env`, constantes, connexion PDO, erreurs |
 | `includes/fonctions.php` | En-têtes, session, `e()`, CSRF, limiteur, comptes |
 | `includes/images.php` | Validation, redimension, ré-encodage |
-| `includes/mailer.php` | SMTP, file de rattrapage, jetons |
+| `includes/mailer.php` | SMTP, jetons |
 | `includes/carte.php` | Gabarit d'une carte — **le seul endroit** où ce HTML est écrit |
+| `includes/couvertures.php` · `includes/nouveautes.php` | Client MangaDex ; fin de série et nouveaux tomes (chargé aussi par `purger.php`) |
+| `includes/push.php` · `sw.js` · `js/push.js` · `manifest.webmanifest` · `img/` | Notifications push : chiffrement et envoi (chargé aussi par `purger.php`), service worker, logique du navigateur, application installable |
+| `outils/` (racine du dépôt) | `vapid.php` (clés des notifications) et `icones.php` : ne montent jamais sur le serveur |
 | `index.php` | La bibliothèque : grille, recherche, filtres, modales |
 | `api.php` | Actions AJAX + export JSON |
 | `inscription.php` · `connexion.php` · `deconnexion.php` | Comptes |
+| `google.php` · `includes/google.php` | « Continuer avec Google » : départ, retour, décision |
+| `google-inscription.php` | Création d'un compte Google : choix de l'identifiant, mot de passe facultatif |
+| `google-mot-de-passe.php` | Seconde étape d'une connexion Google, pour un compte qui a un mot de passe |
+| `connexion-cle.php` · `includes/cle_acces.php` · `js/cle-acces.js` | Clés d'accès : l'appel de la connexion, la vérification (CBOR, signature), le bouton |
 | `mot-de-passe-oublie.php` · `reinitialiser-mot-de-passe.php` · `verifier-email.php` | Récupération et confirmation |
 | `parametres.php` | Profil · Sécurité · Forfait · Données |
+| `admin.php` · `includes/admin.php` · `js/admin.js` | Administration (comptes `admin` seulement) : la liste, les forfaits, les droits, la suppression confirmée par e-mail, les réglages |
+| `includes/reglages.php` | La liste fermée des réglages modifiables depuis l'administration, leurs bornes, leur validation |
 | `mentions-legales.php` | Mentions légales et confidentialité |
 | `purger.php` | Entretien de la base, lancé par le cron |
-| `js/*.js` · `css/style.css` | Navigateur |
-| `uploads/` | Images envoyées (exécution de code interdite) |
+| `js/*.js` · `css/style.css` | Navigateur (`js/double-appui.js` : un clic posé sur le document, qui empêche Safari de zoomer au double-appui ; chargé par toutes les pages) |
+| `uploads/` | Images envoyées (exécution de code interdite) ; seul son `.htaccess` est au dépôt |
+| `.htaccess` (racine du dépôt) | Développement local seulement : ne laisse voir que `site/`, ne monte jamais |
 | `tests/` | Tests unitaires — voir `tests/LISEZMOI.md` |
 
 ---
@@ -497,7 +842,7 @@ sous leur champ, la navigation au clavier dans la grille, le défilement
 qui cache et ramène les filtres, les textes des quotas.
 
 Ce qui demande la base de données — limiteur anti force brute, jetons,
-sessions persistantes, file d'e-mails, cloisonnement par compte — n'est
+sessions persistantes, cloisonnement par compte — n'est
 pas couvert. `tests/LISEZMOI.md` en donne la liste exacte.
 
 ---
@@ -599,8 +944,8 @@ passe oublié, renvoi de confirmation) : une attaque distribuée le
 contourne par construction. La limite d'envoi journalière de la boîte OVH
 est donc la seule borne réelle, et une fois atteinte plus rien ne part —
 ni inscription, ni réinitialisation, ni avis de sécurité. Surveillez le
-journal d'erreurs de l'hébergement. Un envoi raté part en file et le cron
-le rejoue.
+journal d'erreurs de l'hébergement. Un envoi raté n'est pas retenté :
+la page le dit, et l'on recommence.
 
 **Liens des e-mails** — l'adresse vient de `APP_URL`, **jamais** de
 l'en-tête `Host`, qui est choisi par le client. Sinon, un attaquant peut
@@ -669,7 +1014,7 @@ Chez OVH : Hébergements → Statistiques et logs.
   Levenshtein court-circuitée quand les longueurs sont trop éloignées.
 - Index couvrant `(utilisateur_id, maj_le)` pour l'affichage, et index sur
   `couverture` / `photo` pour le nettoyage des images.
-- L'envoi SMTP est borné à 5 s. Au-delà, le message part en file : un
+- L'envoi SMTP est borné à 5 s. Au-delà, il échoue : un
   serveur de messagerie lent ne doit pas immobiliser les quelques
   processus PHP d'un hébergement mutualisé.
 
@@ -684,5 +1029,16 @@ Chez OVH : Hébergements → Statistiques et logs.
 - **Pas d'écran de gestion des appareils.** Le nombre de jetons est
   plafonné, mais on ne peut pas révoquer un appareil précis — seulement
   tous, en changeant de mot de passe.
-- **Passage au forfait illimité manuel**, en base :
+- **Changement de forfait manuel**, en base — il n'y a pas de paiement en
+  ligne :
   `UPDATE utilisateur SET forfait = 'illimite' WHERE identifiant = '...';`
+  Le forfait **`bloque`** met un compte en consultation seule : il lit, cherche,
+  filtre, exporte et gère son compte (ou le supprime), mais ne peut plus créer,
+  modifier, mettre en favori, changer de tome, importer, supprimer une série,
+  vider sa bibliothèque ni chercher une couverture. Le serveur refuse ces
+  actions (403) quoi que le navigateur affiche, et le compte voit un bandeau
+  qui le dit.
+  `UPDATE utilisateur SET forfait = 'bloque' WHERE identifiant = '...';`
+  (puis `'standard'` pour le rétablir). **La migration 10 de `livre.sql` doit
+  avoir été jouée avant** : sans elle, MySQL range une chaîne vide et le compte
+  reste libre, sans erreur.

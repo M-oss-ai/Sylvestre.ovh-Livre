@@ -117,12 +117,25 @@ test('un titre vide est ignoré au profit du suivant', function () {
 
 groupe('couverture_quota() — le barème par compte');
 
-test('le forfait illimité n a pas de quota de recherche', function () {
-    /* Illimité veut dire illimité : 0, rien n est décompté (api.php ne
-       compte que si le quota est positif). Seule la file d attente vers
-       MangaDex espace ses recherches, comme celles de tout le monde. */
-    egale(0, couverture_quota(['forfait' => 'illimite']), 'aucun quota');
-    vrai(COUVERTURE_ESPACEMENT >= 100, 'la file d attente, elle, reste en place');
+test('le forfait illimité reçoit son propre réglage', function () {
+    egale(COUVERTURE_QUOTA_ILLIMITE, couverture_quota(['forfait' => 'illimite']), 'COUVERTURE_QUOTA_ILLIMITE');
+});
+
+groupe('couverture_quota_illimite() — 0 ou absent veut dire illimité');
+
+test('un nombre donne un plafond, jamais sous le standard', function () {
+    egale(120, couverture_quota_illimite(30, 120), 'le réglage tel quel');
+    egale(30, couverture_quota_illimite(30, 5), 'relevé au quota ordinaire');
+    egale(5000, couverture_quota_illimite(30, 99999), 'plafonné');
+});
+
+test('0, négatif ou ligne absente : sans limite', function () {
+    egale(0, couverture_quota_illimite(30, 0), '0, ou ligne commentée (env rend le défaut 0)');
+    egale(0, couverture_quota_illimite(30, -4), 'négatif');
+});
+
+test('un standard sans limite rend l illimité sans limite', function () {
+    egale(0, couverture_quota_illimite(0, 120), 'sinon l illimité serait plus bridé que le standard');
 });
 
 test('les autres forfaits reçoivent le quota ordinaire', function () {
@@ -137,6 +150,22 @@ test('un forfait absent reçoit le quota ordinaire, pas le plus généreux', fun
     egale(COUVERTURE_QUOTA, couverture_quota([]), 'clé « forfait » absente');
 });
 
+groupe('secondes_lisibles() — énoncer la règle');
+
+test('les minutes rondes s écrivent en minutes', function () {
+    /* « 30 recherches par 2 minutes » se vérifie de tête ; « par 120
+       secondes » demande une division avant de savoir si c est
+       raisonnable. */
+    egale('2 minutes', secondes_lisibles(120), 'le réglage par défaut');
+    egale('1 minute', secondes_lisibles(60), 'au singulier');
+    egale('5 minutes', secondes_lisibles(300), 'une tranche plus longue');
+});
+
+test('ce qui ne tombe pas juste reste en secondes', function () {
+    egale('90 secondes', secondes_lisibles(90), 'pas un compte rond de minutes');
+    egale('45 secondes', secondes_lisibles(45), 'moins d une minute');
+    egale('1 seconde', secondes_lisibles(1), 'au singulier');
+});
 
 groupe('couverture_titres_connus() — toutes les écritures d une série');
 

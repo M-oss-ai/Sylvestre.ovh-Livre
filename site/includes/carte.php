@@ -24,22 +24,6 @@ const ETOILE_SVG = '<svg class="etoile" viewBox="0 0 24 24" aria-hidden="true" f
     . 'l5.46 4.73L5.82 21z"/></svg>';
 
 /**
- * La série est-elle « En attente » : arrivée au dernier tome paru d'une série
- * qui continue ? Le tome suivant n'existe pas encore : la carte dit « Tome N en
- * attente » au lieu de « à emprunter » (serie_fin_etiquette()).
- *
- * C'est le STATUT qui le dit, et rien d'autre : posé tout seul quand on arrive
- * au bout (includes/nouveautes.php), levé tout seul quand un tome de plus sort,
- * et que la personne peut aussi choisir à la main dans la fiche. Une série
- * « En cours » dont on ne sait pas encore qu'elle est au bout garde son
- * libellé habituel : on ne prétend rien qu'on ne sache.
- */
-function serie_a_venir(array $s): bool
-{
-    return ($s['statut'] ?? '') === 'attente';
-}
-
-/**
  * La mention qu'une série liée à MangaDex porte dans sa carte, entre « Vous avez
  * lu le tome x » et les boutons — ou '' quand on ne sait encore rien d'elle
  * (demande de l'utilisateur : toute série liée à MangaDex a son message, même au

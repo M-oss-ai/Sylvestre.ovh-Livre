@@ -9,8 +9,8 @@
 
      - Les réglages du .env deviennent des CONSTANTES (MDP_MIN,
        IP_ENTETE, ASSETS_VERSION…). Une constante ne se redéfinit pas :
-       vérifier qu'un MDP_MIN de 3 est bien relevé à 8 exige donc un
-       processus dont l'environnement porte « MDP_MIN=3 » dès le départ.
+       vérifier qu'une LIMITEUR_FENETRE de 10 est bien relevée à 60 exige donc
+       un processus dont l'environnement porte « LIMITEUR_FENETRE=10 » dès le départ.
      - ip_client() garde son résultat dans un « static » pour ne pas le
        recalculer : le premier appel fige la valeur pour toute la durée
        du processus.

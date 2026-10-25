@@ -13,8 +13,12 @@
 
 declare(strict_types=1);
 
-putenv('MDP_MIN=3');                   // en dessous, la politique ne protège plus rien
-putenv('MDP_MAX=2');                   // un maximum sous le minimum : incohérent
+putenv('MDP_MIN=0');                   // le plancher est 1 (l'ancien 8 est levé à la demande de l'utilisateur)
+putenv('MDP_MAX=0');                   // un maximum sous le minimum : incohérent
+putenv('MDP_MAJ=');                    // vide : la classe reste exigée (seul « 0 » la désactive)
+putenv('MDP_MINUSCULE=non');           // un mot, une faute de frappe : exigée
+putenv('MDP_CHIFFRE=false');           // idem
+putenv('MDP_SPE=0');                   // le seul cas qui desserre : un « 0 »
 putenv('LIMITEUR_FENETRE=10');
 putenv('LIMITEUR_BLOCAGE_MAX=1');
 putenv('LIMITEUR_OUBLI=5');
@@ -40,23 +44,47 @@ putenv('REMEMBER_DUREE_VIP=-99');
 putenv('QUOTA_BASE_MO=-5');
 putenv('CRON_HEURES=0');                  // 0 h : aucun passage ne serait jamais « à l heure »
 putenv('RAPPORT_HEURES=-3');
+putenv('CLE_ACCES_MAX=0');                // 0 clé : la fonction deviendrait muette sans le dire
+putenv('CLE_ACCES_DEFI_DUREE=1');         // 1 s : on n'aurait pas le temps de choisir sa clé
+putenv('ADMIN_SUPPRESSION_DUREE=1');     // 1 s : le lien de confirmation serait mort avant d'être lu
+putenv('SERIES_PAGES_MAX=-5');            // jamais un nombre négatif : lu comme 0, une seule page
+putenv('NOUVEAUTE_MINUTES=0');            // 0 min : MangaDex interrogé à chaque page, pour chaque série
+putenv('NOUVEAUTE_PUBLICATION_JOURS=0');  // 0 jour : l'état de publication relu à chaque passage, pour toutes les séries
+putenv('NOUVEAUTE_MAX_VISITE=0');         // 0 : sans limite de nombre (le budget de temps garde)
+putenv('NOUVEAUTE_MAX_CRON=-5');          // jamais un nombre négatif : lu comme 0
+putenv('PUSH_TTL=0');                     // un message non remis serait jeté à l'instant
+putenv('PUSH_TIMEOUT=0');                 // un envoi qui échoue avant d'avoir commencé
 putenv('APP_URL=https://exemple.test/bibliotheque/');   // avec un / final
 
 require __DIR__ . '/../lanceur.php';
 
 groupe('Politique de mot de passe');
 
-test('MDP_MIN est réglable jusqu à 1', function () {
-    /* Le plancher de 8 a été levé à la demande de l utilisateur (voir
-       config.php) : la valeur du .env est donc respectée. */
-    egale(3, MDP_MIN, 'le .env demandait 3');
+test('MDP_MIN ne descend jamais sous 1', function () {
+    /* Le plancher est 1 depuis que l'utilisateur a demandé « de 1 à 200 »
+       (il était de 8). 0 ou un nombre négatif ne désarme rien de plus : 1. */
+    egale(1, MDP_MIN, 'le .env demandait 0');
 });
 
 test('MDP_MAX reste au-dessus de MDP_MIN', function () {
     // Un maximum inférieur au minimum rendrait TOUT mot de passe invalide :
     // plus personne ne pourrait s'inscrire ni changer de mot de passe.
     vrai(MDP_MAX > MDP_MIN, 'le maximum dépasse le minimum');
-    egale(4, MDP_MAX, 'le .env demandait 2, on obtient MDP_MIN + 1');
+    egale(2, MDP_MAX, 'le .env demandait 0, on obtient MDP_MIN + 1');
+});
+
+test('le texte d aide ne peut pas mentir sur la règle appliquée', function () {
+    /* Le message de longueur est construit à partir de MDP_MIN, jamais
+       écrit en dur : il suit donc toujours la règle réellement appliquée.
+       (Un seul espace : zéro caractère utile, sous le minimum de 1.) */
+    contient('au moins ' . MDP_MIN . ' caractères', implode(' ', valider_mot_de_passe(' ')), 'le message cite le vrai minimum');
+});
+
+test('seul « 0 » desserre une classe : vide, un mot ou une faute de frappe la laissent exigée', function () {
+    vrai(MDP_MAJ, 'MDP_MAJ vide : exigée');
+    vrai(MDP_MINUSCULE, 'MDP_MINUSCULE=non : exigée');
+    vrai(MDP_CHIFFRE, 'MDP_CHIFFRE=false : exigé');
+    faux(MDP_SPE, 'MDP_SPE=0 : seul cas qui desserre');
 });
 
 groupe('Limiteur anti force brute');
@@ -150,4 +178,66 @@ test('APP_URL perd son slash final', function () {
         url_publique('inscription.php'),
         'le lien construit est propre'
     );
+});
+
+groupe('Clés d\'accès');
+
+test('CLE_ACCES_MAX ne descend jamais sous 1', function () {
+    egale(1, CLE_ACCES_MAX, 'le .env demandait 0');
+});
+
+test('CLE_ACCES_DEFI_DUREE ne descend jamais sous une minute', function () {
+    egale(60, CLE_ACCES_DEFI_DUREE, 'le .env demandait 1 seconde');
+});
+
+groupe('Bibliothèque par pages');
+
+test('SERIES_PAGES_MAX : un nombre négatif vaut 0 (pas de pages), jamais une valeur étrange', function () {
+    /* Exception voulue au plancher, comme les quotas de recherche : 0 veut dire
+       « toutes les séries sur une seule page ». Le réglage ne protège rien. */
+    egale(0, SERIES_PAGES_MAX, 'le .env demandait -5');
+});
+
+groupe('Nouveaux tomes');
+
+test('NOUVEAUTE_MINUTES ne descend jamais sous 60 minutes', function () {
+    /* À 0, chaque arrivée sur la bibliothèque interrogerait MangaDex pour
+       chaque série à jour : le débit que tous les comptes se partagent. */
+    egale(60, NOUVEAUTE_MINUTES, 'le .env demandait 0');
+});
+
+test('NOUVEAUTE_PUBLICATION_JOURS ne descend jamais sous 1 jour', function () {
+    /* À 0, chaque passage relirait l'état de publication de TOUTES les séries
+       liées : un appel de plus chacune, à chaque fois. */
+    egale(1, NOUVEAUTE_PUBLICATION_JOURS, 'le .env demandait 0');
+});
+
+test('NOUVEAUTE_MAX_VISITE et NOUVEAUTE_MAX_CRON : 0 et les nombres négatifs valent « sans limite »', function () {
+    /* Exception voulue au plancher, comme les quotas de recherche : c'est le
+       budget de temps du relevé qui le garde (nouveautes_verifier()). */
+    egale(0, NOUVEAUTE_MAX_VISITE, 'le .env demandait 0');
+    egale(0, NOUVEAUTE_MAX_CRON, 'le .env demandait -5 : jamais un nombre négatif');
+});
+
+groupe('Notifications push');
+
+test('il n\'y a plus de PUSH_MAX_APPAREILS : les notifications suivent MAX_APPAREILS', function () {
+    faux(defined('PUSH_MAX_APPAREILS'), 'une seule limite d\'appareils');
+    vrai(MAX_APPAREILS >= 1, 'et elle ne descend jamais sous 1 : plus personne ne pourrait activer ses notifications');
+});
+
+test('PUSH_TTL ne descend jamais sous une minute, PUSH_TIMEOUT sous une seconde', function () {
+    egale(60, PUSH_TTL, 'le .env demandait 0');
+    egale(1, PUSH_TIMEOUT, 'le .env demandait 0');
+});
+
+test('sans clés VAPID dans le .env, les notifications sont absentes — et c\'est tout', function () {
+    egale('', VAPID_PUBLIC, 'aucune clé publique par défaut');
+    egale('', VAPID_PRIVATE, 'aucune clé privée par défaut');
+});
+
+groupe('Administration');
+
+test('ADMIN_SUPPRESSION_DUREE ne descend jamais sous 5 minutes', function () {
+    egale(300, ADMIN_SUPPRESSION_DUREE, 'le .env demandait 1 seconde : le temps d\'ouvrir sa boîte mail');
 });
