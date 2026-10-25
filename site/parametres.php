@@ -638,6 +638,17 @@ $appareils_push = push_actif() ? push_compter($pdo, (int) $moi['id']) : 0;
       <p class="hint hidden" id="cles-non-supporte">Ce navigateur ne gère pas les clés d'accès.</p>
     </div>
 
+    <!-- Jetons d'API : pour qu'une application personnelle (de serveur à
+         serveur) lise et modifie la bibliothèque. Page à part, sans JavaScript :
+         voir jeton-api.php. -->
+    <div class="settings-divider"></div>
+    <div class="jetons-api" id="jetons-api">
+      <h3 class="settings-sous-titre">🔌 Jetons d'API</h3>
+      <p class="hint">Un jeton permet à votre propre application de lire et modifier vos séries, sans jamais
+        les supprimer. Le créer demande de confirmer votre identité.</p>
+      <a href="jeton-api.php" class="btn btn-ghost full">Gérer mes jetons d'API</a>
+    </div>
+
     <div class="settings-divider"></div>
 
     <form method="post" action="deconnexion.php">
