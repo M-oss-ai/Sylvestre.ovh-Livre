@@ -675,6 +675,21 @@ function couverture_quota(array $utilisateur): int
 }
 
 /**
+ * Ce compte peut-il se voir proposer des séries « erotica » ?
+ *
+ * Trois conditions, toutes nécessaires : le site l'autorise, l'utilisateur
+ * a déclaré sa majorité, et il a effectivement désactivé le filtre. La
+ * déclaration seule ne suffit pas — on peut être majeur et vouloir garder
+ * le filtre. Une seule définition pour api.php et l'API JSON.
+ */
+function couverture_adulte_autorise(array $utilisateur): bool
+{
+    return COUVERTURE_CONTENU_ADULTE
+        && (int) ($utilisateur['adulte_confirme'] ?? 0) === 1
+        && (int) ($utilisateur['filtre_sensible'] ?? 1) === 0;
+}
+
+/**
  * Compte une recherche pour ce compte et dit s'il peut la faire.
  * Retourne 0 si oui, sinon le nombre de secondes avant la tranche
  * suivante — une information, pas une sanction : rien ne s'aggrave, rien

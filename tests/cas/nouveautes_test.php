@@ -629,6 +629,8 @@ test('livre.sql : migration 16, rejouable, une colonne texte contrôlée par le 
     $sql = source('livre.sql');
     contient("`publication`    VARCHAR(12)  NOT NULL DEFAULT ''", $sql, 'le schéma neuf');
     $m16 = substr($sql, (int) strpos($sql, '--  16. État de publication'));
+    $m16 = strstr($m16, "
+-- ----", true) ?: $m16;   // jusqu'à la migration suivante
     vrai($m16 !== '', 'la migration 16 existe');
     contient("TABLE_NAME = 'serie' AND COLUMN_NAME = 'publication'", $m16, 'elle interroge information_schema');
     contient("'DO 0'", $m16, 'et ne fait rien si la colonne est là');
@@ -642,6 +644,8 @@ test('livre.sql : migration 15, rejouable, l\'ENUM porte « attente » en fin de
     $sql = source('livre.sql');
     contient("`statut`         ENUM('cours','envie','termine','abandon','attente') NOT NULL DEFAULT 'cours'", $sql, 'le schéma neuf');
     $m15 = substr($sql, (int) strpos($sql, '--  15. Statut'));
+    $m15 = strstr($m15, "
+-- ----", true) ?: $m15;   // jusqu'à la migration suivante
     vrai($m15 !== '', 'la migration 15 existe');
     contient("COLUMN_NAME = 'statut'", $m15, 'elle interroge information_schema');
     contient("LIKE '%''attente''%'", $m15, 'elle ne s\'exécute que si la valeur manque');
@@ -657,6 +661,8 @@ test('livre.sql : migration 17, rejouable, deux colonnes qui ne touchent aucune 
     contient("`tome_final`     INT UNSIGNED NOT NULL DEFAULT 0", $sql, 'le schéma neuf : le dernier volume déclaré');
     contient("`publication_le` DATETIME     NULL DEFAULT NULL", $sql, 'le schéma neuf : le moment de la lecture');
     $m17 = substr($sql, (int) strpos($sql, '--  17. Mention de la couverture'));
+    $m17 = strstr($m17, "
+-- ----", true) ?: $m17;   // jusqu'à la migration suivante
     vrai($m17 !== '', 'la migration 17 existe');
     foreach (['tome_final', 'publication_le'] as $colonne) {
         contient("TABLE_NAME = 'serie' AND COLUMN_NAME = '" . $colonne . "'", $m17, 'elle interroge information_schema pour ' . $colonne);

@@ -1003,9 +1003,7 @@ switch ($action) {
            l'utilisateur a déclaré sa majorité, et il a effectivement
            désactivé le filtre. La déclaration seule ne suffit pas — on
            peut être majeur et vouloir garder le filtre. */
-        $adulte = COUVERTURE_CONTENU_ADULTE
-            && (int) ($moi['adulte_confirme'] ?? 0) === 1
-            && (int) ($moi['filtre_sensible'] ?? 1) === 0;
+        $adulte = couverture_adulte_autorise($moi);
         $resultats = chercher_couvertures($titre, $tome, $adulte);
 
         /* Une liste vide peut vouloir dire deux choses très différentes :

@@ -75,7 +75,10 @@ const REMEMBER_SURSIS = 60; // secondes
 /** Refus d'une adresse d'image (voir url_image_refusee), partout le même. */
 const MESSAGE_URL_IMAGE_REFUSEE = "Seules les adresses d'image en https:// sont acceptées.";
 
-if (session_status() === PHP_SESSION_NONE) {
+/* L'API JSON (api/index.php) s'authentifie par jeton, de serveur à
+   serveur : elle ne doit ni ouvrir de session ni déposer de cookie. Elle
+   définit SANS_SESSION avant d'inclure ce fichier ; aucune page ne le fait. */
+if (!defined('SANS_SESSION') && session_status() === PHP_SESSION_NONE) {
     /* use_strict_mode : PHP refuse un identifiant de session qu'il n'a pas
        lui-même émis. Sans ça, un attaquant peut déposer un cookie de
        session de son choix sur le navigateur de la victime (via un
@@ -109,7 +112,9 @@ if (session_status() === PHP_SESSION_NONE) {
     header_remove('Expires');
 }
 
-verifier_session_persistante();
+if (!defined('SANS_SESSION')) {
+    verifier_session_persistante();
+}
 
 /* ---------------------------------------------------------------------
    3. Échappement — la protection contre les injections HTML / XSS

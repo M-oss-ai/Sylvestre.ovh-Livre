@@ -767,3 +767,45 @@ SET @c := (SELECT COUNT(*) FROM information_schema.COLUMNS
 SET @sql := IF(@c > 0, 'DO 0',
   'ALTER TABLE `serie` ADD COLUMN `publication_le` DATETIME NULL DEFAULT NULL AFTER `tome_final`');
 PREPARE requete FROM @sql; EXECUTE requete; DEALLOCATE PREPARE requete;
+
+-- ---------------------------------------------------------------------
+--  18. Jetons de l'API JSON (api/index.php)
+--
+--     Une ligne = un jeton, donc plusieurs jetons peuvent être valides en
+--     même temps : c'est ce qui permet de changer de jeton sans coupure
+--     (on en crée un second, on met l'application à jour, on révoque
+--     l'ancien).
+--
+--     Le jeton n'est PAS stocké : uniquement son empreinte sha256, comme
+--     pour jeton_action. Il n'est montré qu'une fois, à la création.
+--
+--     `expire` est vide (jamais) par défaut ; la colonne existe pour qu'on
+--     puisse un jour imposer une durée sans changer le schéma.
+--     `revoque_le` : un jeton révoqué est refusé, mais sa ligne reste, pour
+--     que la liste de jeton-api.php dise ce qui s'est passé.
+--
+--     `essais` et `fenetre_fin` portent le comptage des requêtes de la
+--     tranche en cours (même principe que recherche_couverture) : le frein
+--     est PAR JETON, sans table de plus.
+--
+--     Table nouvelle : « IF NOT EXISTS » la laisse intacte si elle existe,
+--     et rien d'existant n'est modifié ni supprimé.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `jeton_api` (
+  `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `utilisateur_id` INT UNSIGNED NOT NULL,
+  `jeton_hash`     CHAR(64)     NOT NULL,
+  `nom`            VARCHAR(60)  NOT NULL DEFAULT '',
+  `expire`         DATETIME     NULL,
+  `dernier_usage`  DATETIME     NULL,
+  `revoque_le`     DATETIME     NULL,
+  `essais`         INT UNSIGNED NOT NULL DEFAULT 0,
+  `fenetre_fin`    DATETIME     NULL,
+  `cree_le`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_jeton_api_hash` (`jeton_hash`),
+  KEY `idx_jeton_api_utilisateur` (`utilisateur_id`),
+  CONSTRAINT `fk_jeton_api_utilisateur`
+    FOREIGN KEY (`utilisateur_id`) REFERENCES `utilisateur` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

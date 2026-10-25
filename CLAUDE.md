@@ -31,7 +31,7 @@ paquets, et le code doit rester déployable par simple copie de fichiers.
 ## Commandes
 
 ```bash
-php tests/lancer.php              # toute la suite (1285 tests : 1033 PHP en 60 fichiers, 252 JavaScript)
+php tests/lancer.php              # toute la suite (1391 tests : 1139 PHP en 67 fichiers, 252 JavaScript)
 php tests/lancer.php mot_de_passe # les fichiers dont le nom contient ce motif
 php tests/lancer.php javascript   # le JavaScript seul, dans Edge ou Chrome sans fenêtre
 php tests/cas/carte_test.php      # un seul fichier, pratique pour déboguer
@@ -116,6 +116,12 @@ comptes `admin`, voir « Règles tacites »).
 `utilisateur_id`.
 
 `purger.php` est la tâche planifiée : ménage des tables et rapport d'activité envoyé à `ADMIN_EMAIL`.
+
+`api/index.php` est l'**API JSON** de serveur à serveur (`/api/v1/…`, voir
+`API.md` et `openapi.yaml`). Elle n'a rien à voir avec `api.php` : pas de
+session, pas de CSRF, un jeton `Authorization: Bearer`. Sa logique vit dans
+`includes/api_v1.php`. `jeton-api.php` est la page où l'on crée et révoque
+les jetons.
 
 ### Le client
 
@@ -1135,6 +1141,23 @@ l'id posé en `data-compte` sur `<body>`. Une clé commune faisait ouvrir
 qui l'empêche de revenir du cache par « Précédent » après une
 déconnexion (voir « pageshow » dans `js/commun.js`).
 
+**L'API JSON n'ouvre jamais de session.** `api/index.php` définit
+`SANS_SESSION` avant d'inclure `fonctions.php`, qui saute alors
+`session_start()` et la reconnexion par cookie. Aucune page ne le définit :
+`tests/cas/api_sans_session_test.php` garde les deux côtés. Ses jetons sont
+stockés hachés (`jeton_api`), jamais en clair, et jamais écrits au journal.
+
+**L'API n'expose aucune suppression, et n'accepte pour couverture qu'une
+image `uploads.mangadex.org/covers/<uuid>/…`** (`api_couverture_url_acceptee`).
+Ce n'est pas un oubli : un jeton volé ne doit pouvoir ni vider la
+bibliothèque ni faire afficher une adresse choisie par un tiers. Une route
+`DELETE` ou une URL libre se décide avec le propriétaire, pas en passant.
+
+**Les entrées de l'API sont strictes, celles du site corrigent.** Le site
+rabote un titre trop long ou ramène un statut inconnu à « En cours » ; l'API
+répond `422` avec un message par champ. Un programme doit apprendre qu'il se
+trompe. Les statuts viennent de `STATUTS` : ne pas en ajouter un côté API.
+
 ## Les trois freins, et pourquoi ils ne se ressemblent pas
 
 Les confondre a déjà coûté cher. Ils ne protègent pas les mêmes choses.
@@ -1144,6 +1167,13 @@ Les confondre a déjà coûté cher. Ils ne protègent pas les mêmes choses.
 | `limiteur_echec` / `tentative_ip` | les **comptes**, contre la force brute | Compte des **échecs**, double la peine à chaque récidive |
 | `mangadex_attendre_son_tour()` | l'**adresse IP du serveur**, face à MangaDex | File d'attente (`flock`, 250 ms). Ne compte personne, ne sanctionne personne |
 | `couverture_quota()` / `couverture_consommer()` | l'**équité entre comptes** | Règle fixe et annoncée : `COUVERTURE_QUOTA` recherches / 2 min (30), `COUVERTURE_QUOTA_ILLIMITE` en forfait `illimite` (120). **0 ou ligne absente = sans limite** : rien n'est décompté ni annoncé. Aucune escalade |
+
+L'API JSON en ajoute deux, sur le même principe : un compteur de requêtes
+**par jeton** (`API_REQUETES_MAX` par `API_FENETRE` s, sans sanction : colonnes
+`essais`/`fenetre_fin` de `jeton_api`) et un limiteur d'**échecs** par adresse
+IP pour les jetons refusés (`limiteur_echec('api_jeton')`, qui double — c'est de
+la force brute). Sa Recherche auto réutilise `couverture_consommer()` : le
+quota est celui du compte, partagé avec le site.
 
 Le limiteur à peine doublante convient à des mots de passe essayés au
 hasard. L'appliquer à l'usage normal d'une fonctionnalité revient à
@@ -1155,7 +1185,7 @@ recommencer.
 Neuf tables (`utilisateur.google_sub` relie un compte Google, `cle_acces` garde les clés
 publiques des clés d'accès — jamais une clé privée) : `utilisateur`, `serie`, `jeton_action`,
 `session_persistante`, `tentative_ip`, `cle_acces`,
-`recherche_couverture`, `rapport_cron` (une seule ligne : la date du
+`recherche_couverture`, `jeton_api` (les jetons de l'API JSON : une ligne par jeton, empreinte sha256, révocable, plusieurs valides à la fois pour changer de jeton sans coupure, migration 18 : à jouer AVANT le code), `rapport_cron` (une seule ligne : la date du
 dernier rapport du cron), `reglage` (une ligne par réglage changé depuis `admin.php`,
 migration 12 : le `.env` reste la valeur de départ). Migration 13 (nouveaux tomes) :
 `serie.dernier_tome`, `serie.verifie_le`, `serie.nouveau_tome`,
@@ -1219,6 +1249,9 @@ du dépôt, hors de `site/`, donc jamais envoyés. `tests/cas/structure_test.php
 refuse tout fichier de développement dans `site/` (un `.md`, un `.env`, un
 dossier `tests` ou `.git`…) : c'est lui, et non plus le `.htaccess`, qui
 garantit que rien d'inutile n'arrive en ligne.
+Le dossier `site/api/` part **avec son `.htaccess`** (caché : il réécrit `/api/v1/…`
+vers `index.php` et transmet l'en-tête `Authorization` que PHP en FPM ne reçoit
+pas toujours). `openapi.yaml` et `API.md` restent à la racine du dépôt.
 
 **Le `.env` n'est plus une exception à surveiller.** Il vit AU-DESSUS de
 `site/` — la racine du dépôt en local, au-dessus de `www/` chez OVH —
@@ -1267,6 +1300,15 @@ ou écrit dans `uploads/` passe par `CHEMIN_SITE`.
 Le périmètre est celui des **fonctions pures** : rien qui exige la base
 ou le réseau. `tests/LISEZMOI.md` tient la liste de ce qui est couvert,
 de ce qui ne l'est pas, et pourquoi.
+
+**Seule exception : l'API JSON**, dont `tests/cas/api_v1_http_test.php`
+parle à un vrai serveur (le serveur intégré de PHP, routé par
+`tests/serveur_api.php`) devant une base jetable **`Livre_test`**, créée et
+remplie par `tests/base_de_test.php` à partir de `livre.sql` (qu'il rejoue
+donc à chaque fois : c'est aussi un test du fichier). Le nom est écrit en
+dur : ces tests ne touchent jamais à `Livre`. L'appel réel à MangaDex n'y
+est pas : on vérifie ce qui le précède (jeton, corps, quota) et ce qui le
+suit (choix de la couverture).
 
 Le JavaScript se teste **dans un navigateur**, pas avec Node (que le
 projet n'a pas) : `tests/js/banc.html` charge `commun.js` et `app.js`
